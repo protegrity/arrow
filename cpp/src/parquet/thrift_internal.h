@@ -232,6 +232,11 @@ static inline AadMetadata FromThrift(format::AesGcmCtrV1 aesGcmCtrV1) {
                      aesGcmCtrV1.supply_aad_prefix};
 }
 
+static inline AadMetadata FromThrift(format::ExternalV1 externalV1) {
+  return AadMetadata{externalV1.aad_prefix, externalV1.aad_file_unique,
+                     externalV1.supply_aad_prefix};
+}
+
 static inline EncryptionAlgorithm FromThrift(format::EncryptionAlgorithm encryption) {
   EncryptionAlgorithm encryption_algorithm;
 
@@ -241,7 +246,11 @@ static inline EncryptionAlgorithm FromThrift(format::EncryptionAlgorithm encrypt
   } else if (encryption.__isset.AES_GCM_CTR_V1) {
     encryption_algorithm.algorithm = ParquetCipher::AES_GCM_CTR_V1;
     encryption_algorithm.aad = FromThrift(encryption.AES_GCM_CTR_V1);
-  } else {
+  } else if (encryption.__isset.EXTERNAL_V1) {
+    encryption_algorithm.algorithm = ParquetCipher::EXTERNAL_V1;
+    encryption_algorithm.aad = FromThrift(encryption.EXTERNAL_V1);
+  }
+  else {
     throw ParquetException("Unsupported algorithm");
   }
   return encryption_algorithm;
@@ -382,11 +391,25 @@ static inline format::AesGcmCtrV1 ToAesGcmCtrV1Thrift(AadMetadata aad) {
   return aesGcmCtrV1;
 }
 
+static inline format::ExternalV1 ToExternalV1Thrift(AadMetadata aad) {
+  format::ExternalV1 externalV1;
+   // aad_file_unique is always set
+  externalV1.__set_aad_file_unique(aad.aad_file_unique);
+  externalV1.__set_supply_aad_prefix(aad.supply_aad_prefix);
+  if (!aad.aad_prefix.empty()) {
+    externalV1.__set_aad_prefix(aad.aad_prefix);
+  } 
+  return externalV1;
+}
+
 static inline format::EncryptionAlgorithm ToThrift(EncryptionAlgorithm encryption) {
   format::EncryptionAlgorithm encryption_algorithm;
   if (encryption.algorithm == ParquetCipher::AES_GCM_V1) {
     encryption_algorithm.__set_AES_GCM_V1(ToAesGcmV1Thrift(encryption.aad));
-  } else {
+  } else if (encryption.algorithm == ParquetCipher::EXTERNAL_V1) {
+    encryption_algorithm.__set_EXTERNAL_V1(ToExternalV1Thrift(encryption.aad));
+  } 
+  else {
     encryption_algorithm.__set_AES_GCM_CTR_V1(ToAesGcmCtrV1Thrift(encryption.aad));
   }
   return encryption_algorithm;

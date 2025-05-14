@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <iostream>
 #include <ostream>
 #include <string>
 #include <unordered_map>
@@ -660,6 +661,7 @@ uint32_t SerializedFile::ParseUnencryptedFileMetadata(
   }
   uint32_t read_metadata_len = metadata_len;
   // The encrypted read path falls through to here, so pass in the decryptor
+  std::cout << "Parsing unencrypted file metadata" << std::endl;
   file_metadata_ = FileMetaData::Make(metadata_buffer->data(), &read_metadata_len,
                                       properties_, std::move(file_decryptor));
   return read_metadata_len;
@@ -687,6 +689,7 @@ SerializedFile::ParseMetaDataOfEncryptedFileWithEncryptedFooter(
       FileCryptoMetaData::Make(crypto_metadata_buffer->data(), &crypto_metadata_len);
   // Handle AAD prefix
   EncryptionAlgorithm algo = file_crypto_metadata->encryption_algorithm();
+  std::cout << "Reading file crypto metadata!! Algorithm: " << algo.algorithm << std::endl;
   std::string file_aad = HandleAadPrefix(file_decryption_properties, algo);
   *file_decryptor = std::make_shared<InternalFileDecryptor>(
       file_decryption_properties, file_aad, algo.algorithm,
