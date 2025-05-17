@@ -25,6 +25,7 @@
 #include "parquet/encryption/file_key_unwrapper.h"
 #include "parquet/encryption/file_system_key_material_store.h"
 #include "parquet/encryption/key_toolkit_internal.h"
+#include <iostream>
 
 namespace parquet::encryption {
 
@@ -32,6 +33,7 @@ void CryptoFactory::RegisterKmsClientFactory(
     std::shared_ptr<KmsClientFactory> kms_client_factory) {
   key_toolkit_->RegisterKmsClientFactory(std::move(kms_client_factory));
 }
+
 
 std::shared_ptr<FileEncryptionProperties> CryptoFactory::GetFileEncryptionProperties(
     const KmsConnectionConfig& kms_connection_config,
@@ -82,6 +84,13 @@ std::shared_ptr<FileEncryptionProperties> CryptoFactory::GetFileEncryptionProper
   properties_builder.footer_key_metadata(footer_key_metadata);
   properties_builder.algorithm(encryption_config.encryption_algorithm);
 
+  //if (!encryption_config.host.empty()) {
+  //  // *** NEW: set the host attribute from EncryptionConfiguration ***
+  //  // Assuming EncryptionConfiguration has a 'host' std::string member
+  //  std::cout << "[TRACE] host attribute was loaded: " << encryption_config.host << std::endl;
+  //  properties_builder.host(encryption_config.host.empty() ? "" : encryption_config.host);
+  //}
+
   if (!encryption_config.uniform_encryption) {
     ColumnPathToEncryptionPropertiesMap encrypted_columns =
         GetColumnEncryptionProperties(dek_length, column_key_str, &key_wrapper);
@@ -97,6 +106,83 @@ std::shared_ptr<FileEncryptionProperties> CryptoFactory::GetFileEncryptionProper
   }
   return properties_builder.build();
 }
+
+
+std::shared_ptr<FileEncryptionProperties> CryptoFactory::GetFileServiceEncryptionProperties(
+    const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,
+    const ::parquet::encryption::EncryptionConfiguration& encryption_config,
+    const ::parquet::encryption::ServiceEncryptionConfig& service_encryption_config,
+    const ::parquet::encryption::ExternalClient& external_client, const std::string& file_path,
+    const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
+  if (!encryption_config.uniform_encryption && encryption_config.column_keys.empty()) {
+    throw ParquetException("Either column_keys or uniform_encryption must be set");
+  } else if (encryption_config.uniform_encryption &&
+             !encryption_config.column_keys.empty()) {
+    throw ParquetException("Cannot set both column_keys and uniform_encryption");
+  }
+  const std::string& footer_key_id = encryption_config.footer_key;
+  const std::string& column_key_str = encryption_config.column_keys;
+
+  std::shared_ptr<FileKeyMaterialStore> key_material_store = nullptr;
+  if (!encryption_config.internal_key_material) {
+    try {
+      key_material_store =
+          FileSystemKeyMaterialStore::Make(file_path, file_system, false);
+    } catch (ParquetException& e) {
+      std::stringstream ss;
+      ss << "Failed to get key material store.\n" << e.what() << "\n";
+      throw ParquetException(ss.str());
+    }
+  }
+
+  FileKeyWrapper key_wrapper(key_toolkit_.get(), kms_connection_config,
+                             key_material_store, encryption_config.cache_lifetime_seconds,
+                             encryption_config.double_wrapping);
+
+  int32_t dek_length_bits = encryption_config.data_key_length_bits;
+  if (!internal::ValidateKeyLength(dek_length_bits)) {
+    std::ostringstream ss;
+    ss << "Wrong data key length : " << dek_length_bits;
+    throw ParquetException(ss.str());
+  }
+
+  int dek_length = dek_length_bits / 8;
+
+  std::string footer_key(dek_length, '\0');
+  RandBytes(reinterpret_cast<uint8_t*>(footer_key.data()), footer_key.size());
+
+  std::string footer_key_metadata =
+      key_wrapper.GetEncryptionKeyMetadata(footer_key, footer_key_id, true);
+
+  FileEncryptionProperties::Builder properties_builder =
+      FileEncryptionProperties::Builder(footer_key);
+  properties_builder.footer_key_metadata(footer_key_metadata);
+  properties_builder.algorithm(encryption_config.encryption_algorithm);
+
+  //if (!encryption_config.host.empty()) {
+  //  // *** NEW: set the host attribute from EncryptionConfiguration ***
+  //  // Assuming EncryptionConfiguration has a 'host' std::string member
+  //  std::cout << "[TRACE] host attribute was loaded: " << encryption_config.host << std::endl;
+  //  properties_builder.host(encryption_config.host.empty() ? "" : encryption_config.host);
+  //}
+
+  if (!encryption_config.uniform_encryption) {
+    ColumnPathToEncryptionPropertiesMap encrypted_columns =
+        GetColumnEncryptionProperties(dek_length, column_key_str, &key_wrapper);
+    properties_builder.encrypted_columns(encrypted_columns);
+
+    if (encryption_config.plaintext_footer) {
+      properties_builder.set_plaintext_footer();
+    }
+  }
+
+  if (key_material_store != nullptr) {
+    key_material_store->SaveMaterial();
+  }
+  return properties_builder.build();
+}
+
+
 
 ColumnPathToEncryptionPropertiesMap CryptoFactory::GetColumnEncryptionProperties(
     int dek_length, const std::string& column_keys, FileKeyWrapper* key_wrapper) {

@@ -84,6 +84,20 @@ PyCryptoFactory::SafeGetFileEncryptionProperties(
       this->GetFileEncryptionProperties(kms_connection_config, encryption_config));
 }
 
+arrow::Result<std::shared_ptr<::parquet::FileEncryptionProperties>>
+PyCryptoFactory::SafeGetFileServiceEncryptionProperties(
+    const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,
+    const ::parquet::encryption::EncryptionConfiguration& encryption_config,
+    const ::parquet::encryption::ServiceEncryptionConfig& service_encryption_config,
+    const ::parquet::encryption::ExternalClient& external_client) {
+  PARQUET_CATCH_AND_RETURN(
+      this->GetFileServiceEncryptionProperties(
+          kms_connection_config,
+          encryption_config,
+          service_encryption_config,
+          external_client));
+}
+
 arrow::Result<std::shared_ptr<::parquet::FileDecryptionProperties>>
 PyCryptoFactory::SafeGetFileDecryptionProperties(
     const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,

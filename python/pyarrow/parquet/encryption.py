@@ -17,7 +17,8 @@
 # specific language governing permissions and limitations
 # under the License.
 from pyarrow._parquet_encryption import (CryptoFactory,   # noqa
-                                         ExternalEncryptionConfiguration,
+                                         ExternalClient,
+                                         ServiceEncryptionConfig,
                                          EncryptionConfiguration,
                                          DecryptionConfiguration,
                                          KmsConnectionConfig,

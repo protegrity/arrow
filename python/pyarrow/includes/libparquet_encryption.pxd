@@ -67,6 +67,20 @@ ctypedef void CallbackCreateKmsClient(
 
 cdef extern from "parquet/encryption/crypto_factory.h" \
         namespace "parquet::encryption" nogil:
+    cdef cppclass CServiceEncryptionConfig\
+            " parquet::encryption::ServiceEncryptionConfig":
+        CServiceEncryptionConfig(const c_string& user_id) except +
+        c_string user_id
+
+cdef extern from "parquet/encryption/crypto_factory.h" \
+        namespace "parquet::encryption" nogil:
+    cdef cppclass CExternalClient\
+            " parquet::encryption::ExternalClient":
+        CExternalClient(const c_string& host) except +
+        c_string host
+
+cdef extern from "parquet/encryption/crypto_factory.h" \
+        namespace "parquet::encryption" nogil:
     cdef cppclass CEncryptionConfiguration\
             " parquet::encryption::EncryptionConfiguration":
         CEncryptionConfiguration(const c_string& footer_key) except +
@@ -124,33 +138,16 @@ cdef extern from "arrow/python/parquet_encryption.h" \
             SafeGetFileEncryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CEncryptionConfiguration& encryption_config)
+        CResult[shared_ptr[CFileEncryptionProperties]] \
+            SafeGetFileServiceEncryptionProperties(
+            const CKmsConnectionConfig& kms_connection_config,
+            const CEncryptionConfiguration& encryption_config,
+            const CServiceEncryptionConfig& service_encryption_config,
+            const CExternalClient& external_client)
         CResult[shared_ptr[CFileDecryptionProperties]] \
             SafeGetFileDecryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CDecryptionConfiguration& decryption_config)
-
-
-
-cdef extern from "parquet/encryption/crypto_factory.h" \
-        namespace "parquet::encryption" nogil:
-    cdef cppclass CExternalEncryptionConfiguration\
-            " parquet::encryption::ExternalEncryptionConfiguration":
-        CExternalEncryptionConfiguration(const c_string& footer_key) except +
-        c_string footer_key
-        c_string column_keys
-        ParquetCipher encryption_algorithm
-        c_bool plaintext_footer
-        c_bool double_wrapping
-        double cache_lifetime_seconds
-        c_bool internal_key_material
-        int32_t data_key_length_bits
-
-        c_string host
-        c_string certificate_authority_location
-        c_string client_certificate_location
-        c_string client_key_location
-        int32_t connection_pool_size
-        c_bool run_locally
 
     cdef cppclass CDecryptionConfiguration\
             " parquet::encryption::DecryptionConfiguration":

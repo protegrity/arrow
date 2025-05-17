@@ -28,19 +28,6 @@ class FooKmsClient(ppe.KmsClient):
 def kms_client_factory(kms_connection_config):
     return FooKmsClient(kms_connection_config)
 
-def get_kms_connection_config():
-    return ppe.KmsConnectionConfig(
-        custom_kms_conf={
-            "footer_master_key_id": "012footer_secret",
-            "master_key1": "column_secret001",
-            "master_key2": "column_secret002"
-        }
-    )
-
-#from pyarrow._parquet_encryption import (
-#    ExternalEncryptionConfiguration
-#)
-
 # Step 1: Create Arrow arrays and schema
 data = {
     "column1": pa.array([1, 2, 3], type=pa.int32()),
@@ -50,7 +37,7 @@ data = {
 table = pa.table(data)
 
 # Step 2: Create the external encryption configuration
-config = ppe.ExternalEncryptionConfiguration(
+config = ppe.EncryptionConfiguration(
     footer_key=b"footer_master_key_id",
     column_keys={
         "master_key1": ["column1", "column2"],
@@ -62,43 +49,62 @@ config = ppe.ExternalEncryptionConfiguration(
     cache_lifetime=timedelta(minutes=5),
     internal_key_material=True,
     data_key_length_bits=256,
-
-    # External config fields
-    host=b"https://kms.example.com",
-    certificate_authority_location=b"/certs/ca.pem",
-    client_certificate_location=b"/certs/client.pem",
-    client_key_location=b"/certs/client.key",
-    connection_pool_size=4,
-    run_locally=False
+)
+external_encryption_config = ppe.ServiceEncryptionConfig(
+#    service_encryption_algorithm="AES_GCM_V1",
+#    ext_column_keys={
+#      'NumericID001': ['CustomerID'],
+#      'EmailAddress001': ['PersonalEmail']
+#    },
+    user_id='GRM_009',
+#    application_context={
+#        "column_schema":{
+#            "database": "public",
+#            "schema": "Federation",
+#            "table": "Demo"
+#        },
+#        location={
+#            "country": get_country_from_user_call()
+#            "region": get_region_from_user_call()
+#            "lat": get_lat_from_user_call()
+#            "lon": get_long_from_user_call()
+#        }
+#    }
 )
 
 # Step 3: Get encryption properties
+external_connection_config = ppe.ExternalClient(   
+    host="https://kms.example.com",
+    #certificate_authority_location=b"/certs/ca.pem",
+    #client_certificate_location=b"/certs/client.pem",
+    #client_key_location=b"/certs/client.key",
+    #connection_pool_size=4,
+    #run_locally=False
+)
 
 crypto_factory = ppe.CryptoFactory(kms_client_factory)
-file_encryption_props = crypto_factory.file_encryption_properties(get_kms_connection_config(), config)
-
-print("-------------------------------------")
-print(type(config))
-print(config)
+kms_connection_config = ppe.KmsConnectionConfig(
+        custom_kms_conf={
+            "footer_master_key_id": "012footer_secret",
+            "master_key1": "column_secret001",
+            "master_key2": "column_secret002"
+        }
+    )
+#file_encryption_props = crypto_factory.file_encryption_properties(kms_connection_config, config)
+file_encryption_props = crypto_factory.external_file_encryption_properties(kms_connection_config, config, external_encryption_config, external_connection_config)
 
 # Step 4: Write encrypted Parquet file
 output_path = "sample17.parquet"
 with pq.ParquetWriter(output_path, table.schema, encryption_properties=file_encryption_props) as writer:
     writer.write_table(table)
 
-print(f"Encrypted file written to: {output_path}")
+# Step 1: Create the decryption properties from the factory
+file_decryption_props = crypto_factory.file_decryption_properties(kms_connection_config)
 
-
-# Step 1: Recreate the same decryption config used for encryption
-decryption_config = config
-
-# Step 2: Create the decryption properties from the factory
-file_decryption_props = crypto_factory.file_decryption_properties(decryption_config)
-
-# Step 3: Read the encrypted Parquet file
+# Step 2: Read the encrypted Parquet file
 input_path = "sample17.parquet"
 table = pq.read_table(input_path, decryption_properties=file_decryption_props)
 
-# Step 4: Print the contents of the table
+# Step 3: Print the contents of the table
 for column_name in table.column_names:
     print(f"{column_name}: {table[column_name].to_pylist()}")
