@@ -420,7 +420,7 @@ int32_t AesDecryptorImpl::GcmDecrypt(span<const uint8_t> ciphertext, span<const 
 
   // Finalization
   if (1 != EVP_DecryptFinal_ex(ctx.get(), plaintext.data() + len, &len)) {
-    throw ParquetException("Failed decryption finalization");
+    throw ParquetException("");
   }
 
   plaintext_len += len;
@@ -578,6 +578,71 @@ void RandBytes(unsigned char* buf, size_t num) {
 }
 
 void EnsureBackendInitialized() { openssl::EnsureInitialized(); }
+
+ExternalEncryptorImpl::ExternalEncryptorImpl(ParquetCipher::type alg_id, int32_t key_len,
+                                             bool metadata, bool write_length) 
+        : aes_encryptor_{std::unique_ptr<AesEncryptorImpl>(
+            new AesEncryptorImpl(alg_id, key_len, metadata, write_length))} {
+  std::cout << "Created ExternalEncryptorImpl" << std::endl;
+}
+
+std::unique_ptr<ExternalEncryptorImpl> ExternalEncryptorImpl::Make(ParquetCipher::type alg_id,
+                                                                   int32_t key_len, bool metadata, 
+                                                                   bool write_length) {
+  return std::make_unique<ExternalEncryptorImpl>(alg_id, key_len, metadata, write_length);
+}
+
+int32_t ExternalEncryptorImpl::Encrypt(span<const uint8_t> plaintext, span<const uint8_t> key,
+                                       span<const uint8_t> aad, span<uint8_t> ciphertext) {
+  ConstructExternalCall();
+  return aes_encryptor_->Encrypt(plaintext, key, aad, ciphertext);
+}
+
+int32_t ExternalEncryptorImpl::SignedFooterEncrypt(span<const uint8_t> footer, 
+                                                   span<const uint8_t> key,
+                                                   span<const uint8_t> aad,
+                                                   span<const uint8_t> nonce,
+                                                   span<uint8_t> encrypted_footer) {
+  return aes_encryptor_->SignedFooterEncrypt(footer, key, aad, nonce, encrypted_footer);
+}
+
+int32_t ExternalEncryptorImpl::CiphertextLength(int64_t plaintext_len) const {
+  return aes_encryptor_->CiphertextLength(plaintext_len);
+}
+
+void ExternalEncryptorImpl::ConstructExternalCall() {
+  std::cout << "Here I would call the external encryption service. Hold for params." << std::endl;
+}
+
+ExternalDecryptorImpl::ExternalDecryptorImpl(ParquetCipher::type alg_id, int32_t key_len,
+                                             bool metadata, bool contains_length)
+        : aes_decryptor_{std::unique_ptr<AesDecryptorImpl>(
+            new AesDecryptorImpl(alg_id, key_len, metadata, contains_length))} {
+  std::cout << "Created ExternalDecryptorImpl" << std::endl;
+}
+
+std::unique_ptr<ExternalDecryptorImpl> ExternalDecryptorImpl::Make(ParquetCipher::type alg_id,
+                                            int32_t key_len, bool metadata){
+  return std::make_unique<ExternalDecryptorImpl>(alg_id, key_len, metadata);
+}
+
+int32_t ExternalDecryptorImpl::Decrypt(span<const uint8_t> ciphertext, span<const uint8_t> key,
+                                       span<const uint8_t> aad, span<uint8_t> plaintext) {
+  ConstructExternalCall();
+  return aes_decryptor_->Decrypt(ciphertext, key, aad, plaintext);
+}
+
+int32_t ExternalDecryptorImpl::PlaintextLength(int32_t ciphertext_len) const {
+  return aes_decryptor_->PlaintextLength(ciphertext_len);
+}
+
+int32_t ExternalDecryptorImpl::CiphertextLength(int32_t plaintext_len) const {
+  return aes_decryptor_->CiphertextLength(plaintext_len);
+}
+
+void ExternalDecryptorImpl::ConstructExternalCall() {
+  std::cout << "Here I would call the external decryption service. Hold for params." << std::endl;
+}
 
 #undef ENCRYPT_INIT
 #undef DECRYPT_INIT

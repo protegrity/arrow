@@ -120,7 +120,7 @@ def get_encryption_config(plaintext_footer=True):
             "orderid_key": ["orderId"],
             "productid_key": ["productId"]
         },
-        encryption_algorithm = "AES_GCM_V1",
+        encryption_algorithm = "EXTERNAL_V1",
         cache_lifetime=datetime.timedelta(minutes=2.0),
         data_key_length_bits = 128,
         plaintext_footer=plaintext_footer

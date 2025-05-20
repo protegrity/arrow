@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include <iostream>
 #include "parquet/encryption/internal_file_decryptor.h"
 
 #include "arrow/util/logging.h"
@@ -25,10 +26,10 @@
 namespace parquet {
 
 // Decryptor
-Decryptor::Decryptor(std::unique_ptr<encryption::DecryptorInterface> aes_decryptor,
+Decryptor::Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor_interface,
                      const std::string& key, const std::string& file_aad,
                      const std::string& aad, ::arrow::MemoryPool* pool)
-    : decryptor_interface_(std::move(aes_decryptor)),
+    : decryptor_interface_(std::move(decryptor_interface)),
       key_(key),
       file_aad_(file_aad),
       aad_(aad),
@@ -58,7 +59,9 @@ InternalFileDecryptor::InternalFileDecryptor(
       file_aad_(file_aad),
       algorithm_(algorithm),
       footer_key_metadata_(footer_key_metadata),
-      pool_(pool) {}
+      pool_(pool) {
+        std::cout << "Created an InternalFileDecryptor!! Algorithm [" << algorithm << "]" << std::endl;
+      }
 
 std::string InternalFileDecryptor::GetFooterKey() {
   std::unique_lock lock(mutex_);
@@ -92,6 +95,15 @@ std::string InternalFileDecryptor::GetFooterKey() {
   return footer_key;
 }
 
+std::unique_ptr<encryption::DecryptorInterface> GetDecryptorImpl(ParquetCipher::type algorithm, 
+                                                     int32_t key_len, bool metadata) {
+  std::cout << "Getting DecryptionImpl with algorithm [" << algorithm << "]" << std::endl;
+  if (algorithm == ParquetCipher::type::EXTERNAL_V1) {
+    return encryption::ExternalDecryptorImpl::Make(algorithm, key_len, metadata);
+  }
+  return encryption::AesDecryptorImpl::Make(algorithm, key_len, metadata);
+}
+
 std::unique_ptr<Decryptor> InternalFileDecryptor::GetFooterDecryptor() {
   std::string aad = encryption::CreateFooterAad(file_aad_);
   return GetFooterDecryptor(aad, true);
@@ -102,8 +114,8 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetFooterDecryptor(
   std::string footer_key = GetFooterKey();
 
   auto key_len = static_cast<int32_t>(footer_key.size());
-  auto aes_decryptor = encryption::AesDecryptorImpl::Make(algorithm_, key_len, metadata);
-  return std::make_unique<Decryptor>(std::move(aes_decryptor), footer_key, file_aad_, aad,
+  auto decryptor_impl = GetDecryptorImpl(algorithm_, key_len, metadata);
+  return std::make_unique<Decryptor>(std::move(decryptor_impl), footer_key, file_aad_, aad,
                                      pool_);
 }
 
@@ -133,8 +145,8 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetColumnDecryptor(
     const std::string& aad, bool metadata) {
   std::string column_key = GetColumnKey(column_path, column_key_metadata);
   auto key_len = static_cast<int32_t>(column_key.size());
-  auto aes_decryptor = encryption::AesDecryptorImpl::Make(algorithm_, key_len, metadata);
-  return std::make_unique<Decryptor>(std::move(aes_decryptor), column_key, file_aad_, aad,
+  auto decryptor_impl = GetDecryptorImpl(algorithm_, key_len, metadata);
+  return std::make_unique<Decryptor>(std::move(decryptor_impl), column_key, file_aad_, aad,
                                      pool_);
 }
 
@@ -152,8 +164,8 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
 
   return [this, aad, metadata, column_key = std::move(column_key)]() {
     auto key_len = static_cast<int32_t>(column_key.size());
-    auto aes_decryptor = encryption::AesDecryptorImpl::Make(algorithm_, key_len, metadata);
-    return std::make_unique<Decryptor>(std::move(aes_decryptor), column_key, file_aad_,
+    auto decryptor_impl = GetDecryptorImpl(algorithm_, key_len, metadata);
+    return std::make_unique<Decryptor>(std::move(decryptor_impl), column_key, file_aad_,
                                        aad, pool_);
   };
 }

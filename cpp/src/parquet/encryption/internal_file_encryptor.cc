@@ -138,7 +138,11 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetMetaEncryptor(
   auto key_len = static_cast<int32_t>(key_size);
   int index = MapKeyLenToEncryptorArrayIndex(key_len);
   if (meta_encryptor_[index] == nullptr) {
-    meta_encryptor_[index] = encryption::AesEncryptorImpl::Make(algorithm, key_len, true);
+    if (algorithm == ParquetCipher::type::EXTERNAL_V1) {
+      meta_encryptor_[index] = encryption::ExternalEncryptorImpl::Make(algorithm, key_len, true);
+    } else {
+      meta_encryptor_[index] = encryption::AesEncryptorImpl::Make(algorithm, key_len, true);
+    }
   }
   return meta_encryptor_[index].get();
 }
@@ -148,7 +152,11 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
   auto key_len = static_cast<int32_t>(key_size);
   int index = MapKeyLenToEncryptorArrayIndex(key_len);
   if (data_encryptor_[index] == nullptr) {
-    data_encryptor_[index] = encryption::AesEncryptorImpl::Make(algorithm, key_len, false);
+    if (algorithm == ParquetCipher::type::EXTERNAL_V1) {
+      data_encryptor_[index] = encryption::ExternalEncryptorImpl::Make(algorithm, key_len, false);
+    } else {
+      data_encryptor_[index] = encryption::AesEncryptorImpl::Make(algorithm, key_len, false);
+    }
   }
   return data_encryptor_[index].get();
 }

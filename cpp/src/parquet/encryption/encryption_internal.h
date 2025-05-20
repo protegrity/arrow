@@ -80,7 +80,8 @@ class AesCryptoContext {
      length_buffer_length_ = include_length ? kBufferSizeLength : 0;
      ciphertext_size_delta_ = length_buffer_length_ + kNonceLength;
  
-     if (ParquetCipher::AES_GCM_V1 != alg_id && ParquetCipher::AES_GCM_CTR_V1 != alg_id) {
+     if (ParquetCipher::AES_GCM_V1 != alg_id && ParquetCipher::AES_GCM_CTR_V1 != alg_id
+         && ParquetCipher::EXTERNAL_V1 != alg_id) {
        std::stringstream ss;
        ss << "Crypto algorithm " << alg_id << " is not supported";
        throw ParquetException(ss.str());
@@ -91,7 +92,7 @@ class AesCryptoContext {
        throw ParquetException(ss.str());
      }
  
-     if (metadata || (ParquetCipher::AES_GCM_V1 == alg_id)) {
+     if (metadata || (ParquetCipher::AES_GCM_V1 == alg_id) || (ParquetCipher::EXTERNAL_V1 == alg_id)) {
        aes_mode_ = kGcmMode;
        ciphertext_size_delta_ += kGcmTagLength;
      } else {
@@ -165,6 +166,29 @@ class PARQUET_EXPORT AesEncryptorImpl : public AesCryptoContext, public Encrypto
 };
 
 
+class PARQUET_EXPORT ExternalEncryptorImpl : public EncryptorInterface {
+  public:
+    explicit ExternalEncryptorImpl(ParquetCipher::type alg_id, int32_t key_len, bool metadata,
+                                   bool write_length);
+
+    static std::unique_ptr<ExternalEncryptorImpl> Make(ParquetCipher::type alg_id, int32_t key_len,
+                                                       bool metadata, bool write_length = true);
+ 
+    int32_t Encrypt(span<const uint8_t> plaintext, span<const uint8_t> key,
+                    span<const uint8_t> aad, span<uint8_t> ciphertext) override;
+
+    int32_t SignedFooterEncrypt(span<const uint8_t> footer, span<const uint8_t> key,
+                                span<const uint8_t> aad, span<const uint8_t> nonce,
+                                span<uint8_t> encrypted_footer) override;
+
+    [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override;
+  
+  private:
+      void ConstructExternalCall();
+      std::unique_ptr<AesEncryptorImpl> aes_encryptor_;
+};
+
+
 class PARQUET_EXPORT DecryptorInterface {
   public:
     virtual ~DecryptorInterface() = default;
@@ -232,6 +256,26 @@ class PARQUET_EXPORT AesDecryptorImpl : public AesCryptoContext, public Decrypto
    int32_t CtrDecrypt(span<const uint8_t> ciphertext, span<const uint8_t> key,
                       span<uint8_t> plaintext);
  };
+
+class PARQUET_EXPORT ExternalDecryptorImpl : public DecryptorInterface {
+  public:
+    explicit ExternalDecryptorImpl(ParquetCipher::type alg_id, int32_t key_len, bool metadata,
+                                   bool contains_length = true);
+
+    static std::unique_ptr<ExternalDecryptorImpl> Make(ParquetCipher::type alg_id, int32_t key_len,
+                                                       bool metadata);
+
+    int32_t Decrypt(span<const uint8_t> ciphertext, span<const uint8_t> key,
+                    span<const uint8_t> aad, span<uint8_t> plaintext) override;
+
+    [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override;
+
+    [[nodiscard]] int32_t CiphertextLength(int32_t plaintext_len) const override;
+
+  private:
+    void ConstructExternalCall();
+    std::unique_ptr<AesDecryptorImpl> aes_decryptor_;
+};
 
 std::string CreateModuleAad(const std::string& file_aad, int8_t module_type,
                             int16_t row_group_ordinal, int16_t column_ordinal,
