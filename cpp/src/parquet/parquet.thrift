@@ -1237,22 +1237,9 @@ struct AesGcmCtrV1 {
   3: optional bool supply_aad_prefix
 }
 
-struct ExternalV1 {
-  /** AAD prefix **/
-  1: optional binary aad_prefix
-
-  /** Unique file identifier part of AAD suffix **/
-  2: optional binary aad_file_unique
-
-  /** In files encrypted with AAD prefix without storing it,
-   * readers must supply the prefix **/
-  3: optional bool supply_aad_prefix
-}
-
 union EncryptionAlgorithm {
   1: AesGcmV1 AES_GCM_V1
   2: AesGcmCtrV1 AES_GCM_CTR_V1
-  3: ExternalV1 EXTERNAL_V1
 }
 
 /**
