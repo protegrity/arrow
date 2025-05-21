@@ -116,18 +116,18 @@ struct PARQUET_EXPORT EncryptionConfiguration {
 };
 
 
-struct PARQUET_EXPORT ServiceEncryptionConfig {
-  explicit ServiceEncryptionConfig(const std::string& user_id)
+struct PARQUET_EXPORT ExternalEncryptionConfig {
+  explicit ExternalEncryptionConfig(const std::string& user_id)
       : user_id(user_id) {}
 
   std::string user_id;
 };
 
 struct PARQUET_EXPORT ExternalClient {
-  explicit ExternalClient(const std::string& host)
-      : host(host) {}
+  explicit ExternalClient(const std::string& dir_path)
+      : dir_path(dir_path) {}
 
-  std::string host;
+  std::string dir_path;
 };
 
 
@@ -157,11 +157,11 @@ class PARQUET_EXPORT CryptoFactory {
       const EncryptionConfiguration& encryption_config, const std::string& file_path = "",
       const std::shared_ptr<::arrow::fs::FileSystem>& file_system = NULLPTR);
   
-  std::shared_ptr<::parquet::FileEncryptionProperties> GetFileServiceEncryptionProperties(
-    const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,
-    const ::parquet::encryption::EncryptionConfiguration& encryption_config,
-    const ::parquet::encryption::ServiceEncryptionConfig& service_encryption_config,
-    const ::parquet::encryption::ExternalClient& external_client, const std::string& file_path = "",
+  std::shared_ptr<ServiceFileEncryptionProperties> GetFileServiceEncryptionProperties(
+    const KmsConnectionConfig& kms_connection_config,
+    const EncryptionConfiguration& encryption_config,
+    const ExternalEncryptionConfig& service_encryption_config,
+    const ExternalClient& external_client, const std::string& file_path = "",
     const std::shared_ptr<::arrow::fs::FileSystem>& file_system = NULLPTR);
 
   /// Get decryption properties for a Parquet file.

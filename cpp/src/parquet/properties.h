@@ -34,6 +34,9 @@
 #include "parquet/schema.h"
 #include "parquet/type_fwd.h"
 #include "parquet/types.h"
+#include <iostream>
+#include <typeinfo>
+
 
 namespace parquet {
 
@@ -696,6 +699,14 @@ class PARQUET_EXPORT WriterProperties {
       for (const auto& item : page_index_enabled_)
         get(item.first).set_page_index_enabled(item.second);
 
+      // Before creating WriterProperties:
+      if (file_encryption_properties_) {
+        std::cout << "class hierarchy: " << file_encryption_properties_->class_hierarchy() << std::endl;
+      } else {
+        std::cout << "file_encryption_properties_ is nullptr" << std::endl;
+      }
+
+
       return std::shared_ptr<WriterProperties>(new WriterProperties(
           pool_, dictionary_pagesize_limit_, write_batch_size_, max_row_group_length_,
           pagesize_, version_, created_by_, page_checksum_enabled_,
@@ -828,13 +839,15 @@ class PARQUET_EXPORT WriterProperties {
     return false;
   }
 
-  inline FileEncryptionProperties* file_encryption_properties() const {
+  inline FileEncryptionProperties* file_encryption_properties() const {   
     return file_encryption_properties_.get();
   }
 
   std::shared_ptr<ColumnEncryptionProperties> column_encryption_properties(
       const std::string& path) const {
     if (file_encryption_properties_) {
+      std::cout << "[DEBUG] file_encryption_properties_ type: "
+            << file_encryption_properties_->class_hierarchy() << std::endl;
       return file_encryption_properties_->column_encryption_properties(path);
     } else {
       return NULLPTR;

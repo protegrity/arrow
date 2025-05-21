@@ -18,7 +18,7 @@
 # under the License.
 from pyarrow._parquet_encryption import (CryptoFactory,   # noqa
                                          ExternalClient,
-                                         ServiceEncryptionConfig,
+                                         ExternalEncryptionConfig,
                                          EncryptionConfiguration,
                                          DecryptionConfiguration,
                                          KmsConnectionConfig,

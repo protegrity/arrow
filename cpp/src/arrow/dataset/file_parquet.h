@@ -40,6 +40,7 @@ class RowGroupMetaData;
 class FileMetaData;
 class FileDecryptionProperties;
 class FileEncryptionProperties;
+class ServiceFileEncryptionProperties;
 
 class ReaderProperties;
 class ArrowReaderProperties;

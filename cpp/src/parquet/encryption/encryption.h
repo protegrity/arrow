@@ -410,7 +410,11 @@ class PARQUET_EXPORT FileEncryptionProperties {
     ColumnPathToEncryptionPropertiesMap encrypted_columns_;
   };
 
-  ~FileEncryptionProperties() { footer_key_.clear(); }
+  //~FileEncryptionProperties() { footer_key_.clear(); }
+  virtual ~FileEncryptionProperties() = default;
+  virtual std::string class_hierarchy() const {
+    return "FileEncryptionProperties";
+  }
 
   bool encrypted_footer() const { return encrypted_footer_; }
 
@@ -443,6 +447,43 @@ class PARQUET_EXPORT FileEncryptionProperties {
                            const std::string& footer_key_metadata, bool encrypted_footer,
                            const std::string& aad_prefix, bool store_aad_prefix_in_file,
                            const ColumnPathToEncryptionPropertiesMap& encrypted_columns);
+};
+
+class PARQUET_EXPORT ServiceFileEncryptionProperties : public FileEncryptionProperties {
+ public:
+  class PARQUET_EXPORT Builder : public FileEncryptionProperties::Builder {
+   public:
+    Builder(const std::string& footer_key, const std::string& user_id, const std::string& dir_path)
+        : FileEncryptionProperties::Builder(footer_key),  // Call superclass constructor
+          user_id_(user_id),
+          dir_path_(dir_path) {}
+
+    std::shared_ptr<ServiceFileEncryptionProperties> build() {
+      auto base_props = FileEncryptionProperties::Builder::build();  // Reuse base build logic
+      return std::make_shared<ServiceFileEncryptionProperties>(*base_props, user_id_, dir_path_);
+    }
+
+   private:
+    std::string user_id_;
+    std::string dir_path_;
+  };
+
+  const std::string& user_id() const { return user_id_; }
+  const std::string& dir_path() const { return dir_path_; }
+
+  std::string class_hierarchy() const override {
+    return "ServiceFileEncryptionProperties(user_id=" + user_id_ +
+          ", dir_path=" + dir_path_ + ") -> " + FileEncryptionProperties::class_hierarchy();
+  }
+
+ public:
+  std::string user_id_;
+  std::string dir_path_;
+
+  ServiceFileEncryptionProperties(const FileEncryptionProperties& base,
+                                  const std::string& user_id,
+                                  const std::string& dir_path)
+      : FileEncryptionProperties(base), user_id_(user_id), dir_path_(dir_path) {}
 };
 
 }  // namespace parquet

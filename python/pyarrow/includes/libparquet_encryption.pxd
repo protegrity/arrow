@@ -20,6 +20,7 @@
 from pyarrow.includes.common cimport *
 from pyarrow._parquet cimport (ParquetCipher,
                                CFileEncryptionProperties,
+                               CServiceFileEncryptionProperties,
                                CFileDecryptionProperties,
                                ParquetCipher_AES_GCM_V1,
                                ParquetCipher_AES_GCM_CTR_V1)
@@ -67,17 +68,17 @@ ctypedef void CallbackCreateKmsClient(
 
 cdef extern from "parquet/encryption/crypto_factory.h" \
         namespace "parquet::encryption" nogil:
-    cdef cppclass CServiceEncryptionConfig\
-            " parquet::encryption::ServiceEncryptionConfig":
-        CServiceEncryptionConfig(const c_string& user_id) except +
+    cdef cppclass CExternalEncryptionConfig\
+            " parquet::encryption::ExternalEncryptionConfig":
+        CExternalEncryptionConfig(const c_string& user_id) except +
         c_string user_id
 
 cdef extern from "parquet/encryption/crypto_factory.h" \
         namespace "parquet::encryption" nogil:
     cdef cppclass CExternalClient\
             " parquet::encryption::ExternalClient":
-        CExternalClient(const c_string& host) except +
-        c_string host
+        CExternalClient(const c_string& dir_path) except +
+        c_string dir_path
 
 cdef extern from "parquet/encryption/crypto_factory.h" \
         namespace "parquet::encryption" nogil:
@@ -104,6 +105,11 @@ cdef extern from "parquet/encryption/crypto_factory.h" \
         shared_ptr[CFileEncryptionProperties] GetFileEncryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CEncryptionConfiguration& encryption_config) except +*
+        shared_ptr[CServiceFileEncryptionProperties] GetServiceFileEncryptionProperties(
+            const CKmsConnectionConfig& kms_connection_config,
+            const CEncryptionConfiguration& encryption_config,
+            const CExternalEncryptionConfig& service_encryption_config,
+            const CExternalClient& external_client) except +*
         shared_ptr[CFileDecryptionProperties] GetFileDecryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CDecryptionConfiguration& decryption_config) except +*
@@ -138,11 +144,11 @@ cdef extern from "arrow/python/parquet_encryption.h" \
             SafeGetFileEncryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CEncryptionConfiguration& encryption_config)
-        CResult[shared_ptr[CFileEncryptionProperties]] \
+        CResult[shared_ptr[CServiceFileEncryptionProperties]] \
             SafeGetFileServiceEncryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CEncryptionConfiguration& encryption_config,
-            const CServiceEncryptionConfig& service_encryption_config,
+            const CExternalEncryptionConfig& service_encryption_config,
             const CExternalClient& external_client)
         CResult[shared_ptr[CFileDecryptionProperties]] \
             SafeGetFileDecryptionProperties(
@@ -160,6 +166,11 @@ cdef extern from "arrow/python/parquet_encryption.h" \
         shared_ptr[CFileEncryptionProperties] GetFileEncryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CEncryptionConfiguration& encryption_config) except +*
+        shared_ptr[CFileEncryptionProperties] GetServiceFileEncryptionProperties(
+            const CKmsConnectionConfig& kms_connection_config,
+            const CEncryptionConfiguration& encryption_config,
+            const CExternalEncryptionConfig& service_encryption_config,
+            const CExternalClient& external_client) except +*       
         shared_ptr[CFileDecryptionProperties] GetFileDecryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CDecryptionConfiguration& decryption_config) except +*

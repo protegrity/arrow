@@ -415,14 +415,14 @@ cdef class CryptoFactory(_Weakrefable):
     def external_file_encryption_properties(self,
                                     KmsConnectionConfig kms_connection_config,
                                     EncryptionConfiguration encryption_config,
-                                    ServiceEncryptionConfig service_encryption_config,
+                                    ExternalEncryptionConfig service_encryption_config,
                                     ExternalClient external_client):
         """
         Create file encryption properties with external service encryption config
         and an external client.
         """
 
-        cdef CResult[shared_ptr[CFileEncryptionProperties]] file_encryption_properties_result
+        cdef CResult[shared_ptr[CServiceFileEncryptionProperties]] file_encryption_properties_result
 
         with nogil:
             file_encryption_properties_result = \
@@ -434,7 +434,7 @@ cdef class CryptoFactory(_Weakrefable):
                 )
 
         file_encryption_properties = GetResultValue(file_encryption_properties_result)
-        return FileEncryptionProperties.wrap(file_encryption_properties)
+        return ServiceFileEncryptionProperties.wrap_external(file_encryption_properties)
     
     def file_decryption_properties(
             self,
@@ -507,37 +507,37 @@ cdef shared_ptr[CDecryptionConfiguration] pyarrow_unwrap_decryptionconfig(object
         return (<DecryptionConfiguration> decryptionconfig).unwrap()
     raise TypeError("Expected DecryptionConfiguration, got %s" % type(decryptionconfig))
 
-cdef class ServiceEncryptionConfig(_Weakrefable):
+cdef class ExternalEncryptionConfig(_Weakrefable):
 
     __slots__ = ()
 
     def __init__(self, user_id, *):
         self.configuration.reset(
-            new CServiceEncryptionConfig(tobytes(user_id)))
+            new CExternalEncryptionConfig(tobytes(user_id)))
 
     @property
     def user_id(self):
         return frombytes(self.configuration.get().user_id)
 
-    cdef inline shared_ptr[CServiceEncryptionConfig] unwrap(self) nogil:
+    cdef inline shared_ptr[CExternalEncryptionConfig] unwrap(self) nogil:
         return self.configuration
 
-cdef shared_ptr[CServiceEncryptionConfig] pyarrow_unwrap_service_encryptionconfig(object encryptionconfig) except *:
-    if isinstance(encryptionconfig, ServiceEncryptionConfig):
-        return (<ServiceEncryptionConfig> encryptionconfig).unwrap()
-    raise TypeError("Expected ServiceEncryptionConfig, got %s" % type(encryptionconfig))
+cdef shared_ptr[CExternalEncryptionConfig] pyarrow_unwrap_service_encryptionconfig(object encryptionconfig) except *:
+    if isinstance(encryptionconfig, ExternalEncryptionConfig):
+        return (<ExternalEncryptionConfig> encryptionconfig).unwrap()
+    raise TypeError("Expected ExternalEncryptionConfig, got %s" % type(encryptionconfig))
 
 cdef class ExternalClient(_Weakrefable):
 
     __slots__ = ()
 
-    def __init__(self, host, *):
+    def __init__(self, dir_path, *):
         self.configuration.reset(
-            new CExternalClient(tobytes(host)))
+            new CExternalClient(tobytes(dir_path)))
 
     @property
-    def host(self):
-        return frombytes(self.configuration.get().host)
+    def dir_path(self):
+        return frombytes(self.configuration.get().dir_path)
 
     cdef inline shared_ptr[CExternalClient] unwrap(self) nogil:
         return self.configuration

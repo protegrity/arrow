@@ -108,10 +108,10 @@ std::shared_ptr<FileEncryptionProperties> CryptoFactory::GetFileEncryptionProper
 }
 
 
-std::shared_ptr<FileEncryptionProperties> CryptoFactory::GetFileServiceEncryptionProperties(
+std::shared_ptr<ServiceFileEncryptionProperties> CryptoFactory::GetFileServiceEncryptionProperties(
     const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,
     const ::parquet::encryption::EncryptionConfiguration& encryption_config,
-    const ::parquet::encryption::ServiceEncryptionConfig& service_encryption_config,
+    const ::parquet::encryption::ExternalEncryptionConfig& service_encryption_config,
     const ::parquet::encryption::ExternalClient& external_client, const std::string& file_path,
     const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
   if (!encryption_config.uniform_encryption && encryption_config.column_keys.empty()) {
@@ -154,10 +154,12 @@ std::shared_ptr<FileEncryptionProperties> CryptoFactory::GetFileServiceEncryptio
   std::string footer_key_metadata =
       key_wrapper.GetEncryptionKeyMetadata(footer_key, footer_key_id, true);
 
-  FileEncryptionProperties::Builder properties_builder =
-      FileEncryptionProperties::Builder(footer_key);
-  properties_builder.footer_key_metadata(footer_key_metadata);
-  properties_builder.algorithm(encryption_config.encryption_algorithm);
+  ServiceFileEncryptionProperties::Builder properties_builder(
+      footer_key,
+      service_encryption_config.user_id,
+      external_client.dir_path);
+    properties_builder.footer_key_metadata(footer_key_metadata);
+    properties_builder.algorithm(encryption_config.encryption_algorithm);
 
   //if (!encryption_config.host.empty()) {
   //  // *** NEW: set the host attribute from EncryptionConfiguration ***

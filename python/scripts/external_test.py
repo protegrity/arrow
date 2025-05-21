@@ -50,7 +50,7 @@ config = ppe.EncryptionConfiguration(
     internal_key_material=True,
     data_key_length_bits=256,
 )
-external_encryption_config = ppe.ServiceEncryptionConfig(
+external_encryption_config = ppe.ExternalEncryptionConfig(
 #    service_encryption_algorithm="AES_GCM_V1",
 #    ext_column_keys={
 #      'NumericID001': ['CustomerID'],
@@ -74,7 +74,7 @@ external_encryption_config = ppe.ServiceEncryptionConfig(
 
 # Step 3: Get encryption properties
 external_connection_config = ppe.ExternalClient(   
-    host="https://kms.example.com",
+    dir_path="/users/test/path", #PME path de config 
     #certificate_authority_location=b"/certs/ca.pem",
     #client_certificate_location=b"/certs/client.pem",
     #client_key_location=b"/certs/client.key",
@@ -92,6 +92,13 @@ kms_connection_config = ppe.KmsConnectionConfig(
     )
 #file_encryption_props = crypto_factory.file_encryption_properties(kms_connection_config, config)
 file_encryption_props = crypto_factory.external_file_encryption_properties(kms_connection_config, config, external_encryption_config, external_connection_config)
+
+print("--------------------------")
+print("Type:", type(file_encryption_props))
+print("MRO (class + superclasses):")
+for cls in type(file_encryption_props).mro():
+    print("  ", cls)
+print("--------------------------")
 
 # Step 4: Write encrypted Parquet file
 output_path = "sample17.parquet"

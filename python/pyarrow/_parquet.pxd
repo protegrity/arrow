@@ -579,6 +579,22 @@ cdef class FileEncryptionProperties:
     cdef inline shared_ptr[CFileEncryptionProperties] unwrap(self):
         return self.properties
 
+
+cdef class ServiceFileEncryptionProperties(FileEncryptionProperties):
+    cdef:
+        shared_ptr[CServiceFileEncryptionProperties] properties
+
+    @staticmethod
+    cdef inline ServiceFileEncryptionProperties wrap_external(
+            shared_ptr[CServiceFileEncryptionProperties] properties):
+
+        result = ServiceFileEncryptionProperties()
+        result.properties = properties
+        return result
+
+    cdef inline shared_ptr[CServiceFileEncryptionProperties] unwrap_external(self):
+        return <shared_ptr[CServiceFileEncryptionProperties]> self.properties
+    
 cdef shared_ptr[WriterProperties] _create_writer_properties(
     use_dictionary=*,
     compression=*,
@@ -667,6 +683,10 @@ cdef extern from "parquet/encryption/encryption.h" namespace "parquet" nogil:
 
     cdef cppclass CFileEncryptionProperties\
             " parquet::FileEncryptionProperties":
+        pass
+
+    cdef cppclass CServiceFileEncryptionProperties\
+            " parquet::ServiceFileEncryptionProperties":
         pass
 
 cdef class FileDecryptionProperties:
