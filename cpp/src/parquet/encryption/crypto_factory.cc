@@ -147,7 +147,8 @@ std::shared_ptr<ExternalFileEncryptionProperties> CryptoFactory::GetExternalFile
       key_wrapper.GetEncryptionKeyMetadata(footer_key, footer_key_id, true);
   
   ExternalFileEncryptionProperties::Builder properties_builder(
-    footer_key, external_encryption_config.user_id, external_connection_config.config_path);
+    footer_key, external_encryption_config.user_id, external_encryption_config.ext_column_keys,
+    external_encryption_config.app_context, external_connection_config.config_path);
   properties_builder.footer_key_metadata(footer_key_metadata);
   properties_builder.algorithm(encryption_config.encryption_algorithm);
 

@@ -174,16 +174,20 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
       }
 
       const auto* encryption_properties = 
-        dynamic_cast<ExternalFileEncryptionProperties*>(writer_properties->file_encryption_properties());
+        dynamic_cast<ExternalFileEncryptionProperties*>(
+            writer_properties->file_encryption_properties());
       if (!encryption_properties) {
-        std::cout << "\nERROR!!! External algorithm requires external file encryption props" << std::endl;
+        std::cout << "\nERROR!!! External algorithm requires external file encryption props" 
+                  << std::endl;
         return nullptr;
       }
 
       data_encryptor_[index] = encryption::ExternalEncryptorImpl::Make(
         algorithm, key_len, col_name, static_cast<Type::type>(chunk_meta_data.type), 
-        writer_properties->compression(col_meta->descr()->path()), encryption_properties->user_id(),
-        encryption_properties->config_path(), false);
+        writer_properties->compression(col_meta->descr()->path()),
+        writer_properties->encoding(col_meta->descr()->path()),
+        encryption_properties->ext_column_keys(), encryption_properties->user_id(),
+        encryption_properties->app_context(), false);
     } else {
       data_encryptor_[index] = encryption::AesEncryptorImpl::Make(algorithm, key_len, false);
     }

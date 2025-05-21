@@ -71,8 +71,11 @@ cdef extern from "parquet/encryption/crypto_factory.h" \
         namespace "parquet::encryption" nogil:
     cdef cppclass CExternalEncryptionConfiguration\
             " parquet::encryption::ExternalEncryptionConfiguration":
-        CExternalEncryptionConfiguration(const c_string& user_id) except +
+        CExternalEncryptionConfiguration(const c_string& user_id, const c_string ext_column_keys,
+                                         const c_string& app_context) except +
         c_string user_id
+        c_string ext_column_keys
+        c_string app_context
 
 cdef extern from "parquet/encryption/crypto_factory.h" \
         namespace "parquet::encryption" nogil:

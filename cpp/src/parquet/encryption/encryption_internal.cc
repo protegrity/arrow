@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <iomanip>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -579,26 +580,27 @@ void EnsureBackendInitialized() { openssl::EnsureInitialized(); }
 ExternalEncryptorImpl::ExternalEncryptorImpl(ParquetCipher::type alg_id, int32_t key_len, 
                                             std::string column_name, Type::type data_type, 
                                             Compression::type compression_type,
-                                            std::string user_id, std::string config_path,
+                                            Encoding::type encoding, std::string ext_column_key,
+                                            std::string user_id, std::string app_context,
                                             bool metadata, bool write_length) 
         : column_name_(column_name), data_type_(data_type), compression_type_(compression_type),
-          user_id_(user_id), config_path_(config_path),
-          aes_encryptor_{std::unique_ptr<AesEncryptorImpl>(
-            new AesEncryptorImpl(alg_id, key_len, metadata, write_length))} {
+          encoding_(encoding), ext_column_key_(ext_column_key), user_id_(user_id),
+          app_context_(app_context), aes_encryptor_{std::unique_ptr<AesEncryptorImpl>(
+              new AesEncryptorImpl(alg_id, key_len, metadata, write_length))} {
   std::cout << "Created ExternalEncryptorImpl" << std::endl;
 }
 
 std::unique_ptr<ExternalEncryptorImpl> ExternalEncryptorImpl::Make(
     ParquetCipher::type alg_id, int32_t key_len, std::string column_name, Type::type data_type, 
-    Compression::type compression_type, std::string user_id, std::string config_path,
-    bool metadata, bool write_length) {
+    Compression::type compression_type, Encoding::type encoding, std::string ext_column_key,
+    std::string user_id, std::string app_context, bool metadata, bool write_length) {
   return std::make_unique<ExternalEncryptorImpl>(alg_id, key_len, column_name, data_type, 
-    compression_type, user_id, config_path, metadata, write_length);
+    compression_type, encoding, ext_column_key, user_id, app_context, metadata, write_length);
 }
 
 int32_t ExternalEncryptorImpl::Encrypt(span<const uint8_t> plaintext, span<const uint8_t> key,
                                        span<const uint8_t> aad, span<uint8_t> ciphertext) {
-  ConstructExternalCall();
+  ConstructExternalCall(plaintext);
   return aes_encryptor_->Encrypt(plaintext, key, aad, ciphertext);
 }
 
@@ -644,19 +646,65 @@ std::string CompressName(Compression::type codec) {
   }
 }
 
-void ExternalEncryptorImpl::ConstructExternalCall() {
+std::string MapArrowEncodingToExternalFormat(Encoding::type encoding) {
+  // Temporary hack before we do the full mapping.
+  return "raw-c-data";
+}
+
+std::string MapArrowEncodingToExternalEncoding(Encoding::type encoding) {
+  // Temporary hack before we do the full mapping.
+  return "base64";
+}
+
+void PrintSpan(span<const uint8_t> plaintext) {
+  for (auto byte : plaintext) {
+    std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte) << " ";
+  }
+  std::cout << std::dec << std::endl;
+}
+
+void ExternalEncryptorImpl::ConstructExternalCall(span<const uint8_t> plaintext) {
   std::cout << "\n\n!*!*!*!*!*!* START ExternalEncryptorImpl:ConstructExternalCall!*!*!*!*!*!*"
             << std::endl;
 
-  std::cout << "Here I would call the external encryption service. With:" << std::endl;
-  std::cout << "\tColumn name: [" << column_name_ << "]" << std::endl;
-  std::cout << "\tData type: [" << HackTypeToString(data_type_) << "]" << std::endl;
-  std::cout << "\tCompression algorithm: [" << CompressName(compression_type_) << "]" << std::endl;
-  std::cout << "\tUser id: [" << user_id_ << "]" << std::endl;
-  std::cout << "\tConfig path: [" << config_path_ << "]" << std::endl;
+  std::cout << "Calling ExternalEncryptorService." << std::endl;
+
+  std::cout << "Payload:" << std::endl;
+  
+  std::cout << "{" << std::endl;
+  std::cout << "  \"columnReference\": {" << std::endl;
+  std::cout << "    \"column\": \"" << column_name_ << "\"" << std::endl;
+  std::cout << "  }," << std::endl;
+  
+  std::cout << "  \"dataBatch\": {" << std::endl;
+  std::cout << "    \"compressed value (hex)\": \"";
+  PrintSpan(plaintext);
+  std::cout << "    \"datatype\": \"" << HackTypeToString(data_type_) << "\"," << std::endl;
+  std::cout << "    \"serialization\": {" << std::endl;
+  std::cout << "      \"compression\": \"" << CompressName(compression_type_) << "\"," << std::endl;
+  std::cout << "      \"format\": \"" << MapArrowEncodingToExternalFormat(encoding_) << "\"," 
+            << std::endl;
+  std::cout << "      \"encoding\": \"" << MapArrowEncodingToExternalEncoding(encoding_) << "\"," 
+            << std::endl;
+  std::cout << "    }," << std::endl;
+  std::cout << "  }," << std::endl;
+  
+  std::cout << "  \"encryption\": {" << std::endl;
+  std::cout << "    \"keyId\": \"" << ext_column_key_ << "\"," << std::endl;
+  std::cout << "  }," << std::endl;
+  
+  std::cout << "  \"access\": {" << std::endl;
+  std::cout << "    \"userId\": \"" << user_id_ << "\"," << std::endl;
+  std::cout << "  }," << std::endl;
+  
+  std::cout << "  \"application_context\": {" << std::endl;
+  std::cout << app_context_ << "\"," << std::endl;
+  std::cout << "  }," << std::endl;
+
+  std::cout << "}" << std::endl;
 
 
-  std::cout << "\n\n!*!*!*!*!*!* END ExternalEncryptorImpl:ConstructExternalCall!*!*!*!*!*!*"
+  std::cout << "!*!*!*!*!*!* END ExternalEncryptorImpl:ConstructExternalCall!*!*!*!*!*!*\n\n"
             << std::endl;
 }
 

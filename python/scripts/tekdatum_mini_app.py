@@ -139,8 +139,19 @@ def get_encryption_config(plaintext_footer=True):
 
 def get_external_encryption_config():
     return ppe.ExternalEncryptionConfiguration(
-        user_id = "Picard_NCC1701_E"
+        user_id = "Picard_NCC1701_E",
+        # These are temporarily defined as strings for the mini app example. They should be
+        # regular dictionaries.
+        ext_column_keys = "\"keyId\": \"NumericID001\"",
+        app_context = get_application_context_string()
     )
+
+def get_application_context_string():
+    schema1 = "    \"column_schema\" = {\n      \"database\": \"public\",\n      \"schema\":"
+    schema2 = " \"Federation\",\n      \"table\": \"Customers\",\n    },"
+    location1 = "\n    \"location\": {\n      \"country\": \"US\",\n      \"region\": \"CA\","
+    location2 = "\n      \"lat\": 37.7749,\n      \"lon\": -122.4191\n    }"
+    return schema1 + schema2 + location1 + location2
 
 def get_external_connection_config():
     return ppe.ExternalConnectionConfiguration(

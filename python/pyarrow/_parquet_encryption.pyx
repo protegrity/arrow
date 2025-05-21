@@ -510,12 +510,21 @@ cdef shared_ptr[CDecryptionConfiguration] pyarrow_unwrap_decryptionconfig(object
 cdef class ExternalEncryptionConfiguration(_Weakrefable):
     __slots__ = ()
 
-    def __init__(self, user_id, *):
-        self.configuration.reset(new CExternalEncryptionConfiguration(tobytes(user_id)))
+    def __init__(self, user_id, ext_column_keys, app_context, *):
+        self.configuration.reset(new CExternalEncryptionConfiguration(tobytes(user_id),
+                tobytes(ext_column_keys), tobytes(app_context)))
 
     @property
     def user_id(self):
         return frombytes(self.configuration.get().user_id)
+
+    @property
+    def ext_column_keys(self):
+        return frombytes(self.configuration.get().ext_column_keys)
+
+    @property
+    def app_context(self):
+        return frombytes(self.configuration.get().app_context)
     
     cdef inline shared_ptr[CExternalEncryptionConfiguration] unwrap(self) nogil:
         return self.configuration

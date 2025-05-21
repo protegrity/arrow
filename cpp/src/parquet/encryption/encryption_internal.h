@@ -170,14 +170,15 @@ class PARQUET_EXPORT ExternalEncryptorImpl : public EncryptorInterface {
   public:
     explicit ExternalEncryptorImpl(ParquetCipher::type alg_id, int32_t key_len, 
                                    std::string column_name, Type::type data_type, 
-                                   Compression::type compression_type,
-                                   std::string user_id, std::string config_path,
+                                   Compression::type compression_type, Encoding::type encoding_,
+                                   std::string ext_column_key, std::string user_id,
+                                   std::string app_context,
                                    bool metadata, bool write_length);
 
     static std::unique_ptr<ExternalEncryptorImpl> Make(
       ParquetCipher::type alg_id, int32_t key_len, std::string column_name, Type::type data_type, 
-      Compression::type compression_type, std::string user_id, std::string config_path,
-      bool metadata, bool write_length = true);
+      Compression::type compression_type, Encoding::type encoding, std::string ext_column_key,
+      std::string user_id, std::string app_context, bool metadata, bool write_length = true);
  
     int32_t Encrypt(span<const uint8_t> plaintext, span<const uint8_t> key,
                     span<const uint8_t> aad, span<uint8_t> ciphertext) override;
@@ -189,12 +190,15 @@ class PARQUET_EXPORT ExternalEncryptorImpl : public EncryptorInterface {
     [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override;
   
   private:
-      void ConstructExternalCall();
+      void ConstructExternalCall(span<const uint8_t> plaintext);
+
       std::string column_name_;
       Type::type data_type_;
       Compression::type compression_type_;
+      Encoding::type encoding_;
+      std::string ext_column_key_;
       std::string user_id_;
-      std::string config_path_;
+      std::string app_context_;
       std::unique_ptr<AesEncryptorImpl> aes_encryptor_;
 };
 

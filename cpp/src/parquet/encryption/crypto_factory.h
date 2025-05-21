@@ -89,10 +89,13 @@ struct PARQUET_EXPORT EncryptionConfiguration {
 };
 
 struct PARQUET_EXPORT ExternalEncryptionConfiguration {
-  explicit ExternalEncryptionConfiguration(const std::string& user_id)
-      : user_id(user_id) {}
+  explicit ExternalEncryptionConfiguration(const std::string& user_id,
+      const std::string& ext_column_keys, const std::string& app_context)
+      : user_id(user_id), ext_column_keys(ext_column_keys), app_context(app_context) {}
   
   std::string user_id = kUserId;
+  std::string ext_column_keys;
+  std::string app_context;
 };
 
 struct PARQUET_EXPORT ExternalConnectionConfiguration {

@@ -378,6 +378,16 @@ class FileWriterImpl : public FileWriter {
       chunk_size = this->properties().max_row_group_length();
     }
 
+     // HERE PRINT CONFIG!!!
+     const auto* encryption_properties = dynamic_cast<ExternalFileEncryptionProperties*>(
+        this->properties().file_encryption_properties());
+      if (encryption_properties) {
+        std::cout << "\n\n******** First Write Table entry point in Arrow **********" << std::endl;
+        std::cout << "Would initialize SDK with config path: [" 
+            << encryption_properties->config_path() << "]" << std::endl;
+        std::cout << "******** First Write Table entry point in Arrow **********\n\n" << std::endl;
+      }
+
     auto WriteRowGroup = [&](int64_t offset, int64_t size) {
       RETURN_NOT_OK(NewRowGroup());
       for (int i = 0; i < table.num_columns(); i++) {
