@@ -1017,6 +1017,10 @@ Examples
             sink = where
         self._metadata_collector = options.pop('metadata_collector', None)
         engine_version = 'V2'
+
+        if encryption_properties is not None:
+            print(f"core.py: Type of encryption properties: {type(encryption_properties)}")
+
         self.writer = _parquet.ParquetWriter(
             sink, schema,
             version=version,

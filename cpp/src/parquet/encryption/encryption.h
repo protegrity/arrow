@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <iostream>
 #include <map>
 #include <memory>
 #include <string>
@@ -410,7 +411,11 @@ class PARQUET_EXPORT FileEncryptionProperties {
     ColumnPathToEncryptionPropertiesMap encrypted_columns_;
   };
 
-  ~FileEncryptionProperties() { footer_key_.clear(); }
+  virtual ~FileEncryptionProperties() { footer_key_.clear(); }
+
+  virtual std::string class_hierarchy() const {
+    return "FileEncryptionProperties";
+  }
 
   bool encrypted_footer() const { return encrypted_footer_; }
 
@@ -443,6 +448,53 @@ class PARQUET_EXPORT FileEncryptionProperties {
                            const std::string& footer_key_metadata, bool encrypted_footer,
                            const std::string& aad_prefix, bool store_aad_prefix_in_file,
                            const ColumnPathToEncryptionPropertiesMap& encrypted_columns);
+};
+
+class PARQUET_EXPORT ExternalFileEncryptionProperties : public FileEncryptionProperties {
+  public:
+
+    ExternalFileEncryptionProperties(
+        const FileEncryptionProperties& base, const std::string& user_id,
+        const std::string& config_path)
+        : FileEncryptionProperties(base), user_id_(user_id), config_path_(config_path) {}
+
+    class PARQUET_EXPORT Builder : public FileEncryptionProperties::Builder {
+      public:
+        explicit Builder (const std::string& footer_key, const std::string& user_id,
+                          const std::string& config_path) :
+              FileEncryptionProperties::Builder(footer_key),
+              user_id_(user_id),
+              config_path_(config_path) {
+                std::cout << "Constructing ExternalFileEncryptionProperties" << std::endl;
+              }
+        
+        std::shared_ptr<ExternalFileEncryptionProperties> build() {
+          auto base_props = FileEncryptionProperties::Builder::build();
+          return std::make_shared<ExternalFileEncryptionProperties>(
+              *base_props, user_id_, config_path_);
+        }
+
+      private:
+        std::string user_id_;
+        std::string config_path_;
+    };
+
+    const std::string& user_id() const { return user_id_; }
+    const std::string& config_path() const { return config_path_; }
+
+    std::string class_hierarchy() const override {
+      std::stringstream stream;
+      stream << "ExternalFileEncryptionProperties:\n";
+      stream << "  user_id: " << user_id_ << "\n";
+      stream << "  config_path: " << config_path_ << "\n";
+      stream << " -> " << FileEncryptionProperties::class_hierarchy();
+      return stream.str();
+    }
+
+    private:
+      std::string user_id_;
+      std::string config_path_;
+
 };
 
 }  // namespace parquet

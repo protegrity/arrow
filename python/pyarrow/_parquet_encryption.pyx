@@ -415,6 +415,26 @@ cdef class CryptoFactory(_Weakrefable):
         file_encryption_properties = GetResultValue(
             file_encryption_properties_result)
         return FileEncryptionProperties.wrap(file_encryption_properties)
+    
+    def external_file_encryption_properties(self,
+                                            KmsConnectionConfig kms_connection_config,
+                                            EncryptionConfiguration encryption_config,
+                                            ExternalEncryptionConfiguration external_encryption_config,
+                                            ExternalConnectionConfiguration external_connection_config):
+        cdef:
+            CResult[shared_ptr[CExternalFileEncryptionProperties]] \
+                external_file_encryption_properties_result
+        with nogil:
+            external_file_encryption_properties_result = \
+                self.factory.get().SafeGetExternalFileEncryptionProperties(
+                    deref(kms_connection_config.unwrap().get()),
+                    deref(encryption_config.unwrap().get()),
+                    deref(external_encryption_config.unwrap().get()),
+                    deref(external_connection_config.unwrap().get())
+                )
+        external_file_encryption_properties = GetResultValue(
+            external_file_encryption_properties_result)
+        return ExternalFileEncryptionProperties.wrap_external(external_file_encryption_properties)
 
     def file_decryption_properties(
             self,
@@ -486,3 +506,41 @@ cdef shared_ptr[CDecryptionConfiguration] pyarrow_unwrap_decryptionconfig(object
     if isinstance(decryptionconfig, DecryptionConfiguration):
         return (<DecryptionConfiguration> decryptionconfig).unwrap()
     raise TypeError("Expected DecryptionConfiguration, got %s" % type(decryptionconfig))
+
+cdef class ExternalEncryptionConfiguration(_Weakrefable):
+    __slots__ = ()
+
+    def __init__(self, user_id, *):
+        self.configuration.reset(new CExternalEncryptionConfiguration(tobytes(user_id)))
+
+    @property
+    def user_id(self):
+        return frombytes(self.configuration.get().user_id)
+    
+    cdef inline shared_ptr[CExternalEncryptionConfiguration] unwrap(self) nogil:
+        return self.configuration
+
+cdef shared_ptr[CExternalEncryptionConfiguration] pyarrow_unwrap_externalencryptionconfig(object externalencryptionconfig) except *:
+    if isinstance(externalencryptionconfig, ExternalEncryptionConfiguration):
+        return (<ExternalEncryptionConfiguration> externalencryptionconfig).unwrap()
+    raise TypeError("Expected ExternalEncryptionConfiguration, got %s" % type(externalencryptionconfig))
+
+cdef class ExternalConnectionConfiguration(_Weakrefable):
+
+    __slots__ = ()
+
+    def __init__(self, config_path, *):
+        self.configuration.reset(
+            new CExternalConnectionConfiguration(tobytes(config_path)))
+
+    @property
+    def config_path(self):
+        return frombytes(self.configuration.get().config_path)
+
+    cdef inline shared_ptr[CExternalConnectionConfiguration] unwrap(self) nogil:
+        return self.configuration
+
+cdef shared_ptr[CExternalConnectionConfiguration] pyarrow_unwrap_externalconnectionconfig(object externalconnectionconfig) except *:
+    if isinstance(externalconnectionconfig, ExternalConnectionConfiguration):
+        return (<ExternalConnectionConfiguration> externalconnectionconfig).unwrap()
+    raise TypeError("Expected ExternalConnectionConfiguration, got %s" % type(externalconnectionconfig))

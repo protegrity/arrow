@@ -38,14 +38,23 @@ def kms_client_factory(kms_connection_config):
 
 
 def write_parquet(table, location, encryption_config=None):
-    encryption_properties = None
+    external_encryption_properties = None
 
     if encryption_config:
         crypto_factory = ppe.CryptoFactory(kms_client_factory)
-        encryption_properties = crypto_factory.file_encryption_properties(
-            get_kms_connection_config(), encryption_config)
+        external_encryption_properties = crypto_factory.external_file_encryption_properties(
+            get_kms_connection_config(), encryption_config, get_external_encryption_config(),
+            get_external_connection_config())
+        
+        print("--------------------------")
+        print("Type:", type(external_encryption_properties))
+        print("MRO (class + superclasses):")
+        for cls in type(external_encryption_properties).mro():
+            print("  ", cls)
+        print("--------------------------")
 
-    writer = pp.ParquetWriter(location, table.schema, encryption_properties=encryption_properties)
+    writer = pp.ParquetWriter(location, table.schema,
+                              encryption_properties=external_encryption_properties)
     writer.write_table(table)
 
 
@@ -124,6 +133,16 @@ def get_encryption_config(plaintext_footer=True):
         cache_lifetime=datetime.timedelta(minutes=2.0),
         data_key_length_bits = 128,
         plaintext_footer=plaintext_footer
+    )
+
+def get_external_encryption_config():
+    return ppe.ExternalEncryptionConfiguration(
+        user_id = "Picard_NCC1701_E"
+    )
+
+def get_external_connection_config():
+    return ppe.ExternalConnectionConfiguration(
+        config_path = "path/to/deck/ten/forward.config"
     )
 
 def get_decryption_config():

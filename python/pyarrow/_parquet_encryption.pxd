@@ -22,8 +22,10 @@ from pyarrow.includes.common cimport *
 from pyarrow.includes.libparquet_encryption cimport *
 from pyarrow._parquet cimport (ParquetCipher,
                                CFileEncryptionProperties,
+                               CExternalFileEncryptionProperties,
                                CFileDecryptionProperties,
                                FileEncryptionProperties,
+                               ExternalFileEncryptionProperties,
                                FileDecryptionProperties,
                                ParquetCipher_AES_GCM_V1,
                                ParquetCipher_AES_GCM_CTR_V1,
@@ -55,3 +57,13 @@ cdef shared_ptr[CCryptoFactory] pyarrow_unwrap_cryptofactory(object crypto_facto
 cdef shared_ptr[CKmsConnectionConfig] pyarrow_unwrap_kmsconnectionconfig(object kmsconnectionconfig) except *
 cdef shared_ptr[CEncryptionConfiguration] pyarrow_unwrap_encryptionconfig(object encryptionconfig) except *
 cdef shared_ptr[CDecryptionConfiguration] pyarrow_unwrap_decryptionconfig(object decryptionconfig) except *
+
+cdef class ExternalEncryptionConfiguration(_Weakrefable):
+    cdef shared_ptr[CExternalEncryptionConfiguration] configuration
+    cdef inline shared_ptr[CExternalEncryptionConfiguration] unwrap(self) nogil
+cdef shared_ptr[CExternalEncryptionConfiguration] pyarrow_unwrap_externalencryptionconfig(object externalencryptionconfig) except *
+
+cdef class ExternalConnectionConfiguration(_Weakrefable):
+    cdef shared_ptr[CExternalConnectionConfiguration] configuration
+    cdef inline shared_ptr[CExternalConnectionConfiguration] unwrap(self) nogil
+cdef shared_ptr[CExternalConnectionConfiguration] pyarrow_unwrap_externalconnectionconfig(object externalconnectionconfig) except *

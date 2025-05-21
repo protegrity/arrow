@@ -35,6 +35,8 @@ static constexpr double kDefaultCacheLifetimeSeconds = 600;  // 10 minutes
 static constexpr bool kDefaultInternalKeyMaterial = true;
 static constexpr bool kDefaultUniformEncryption = false;
 static constexpr int32_t kDefaultDataKeyLengthBits = 128;
+static constexpr const char* kUserId = "ExternalTestUser";
+static constexpr const char* kConfigPath = "config/to/external/service.path";
 
 struct PARQUET_EXPORT EncryptionConfiguration {
   explicit EncryptionConfiguration(const std::string& footer_key)
@@ -86,6 +88,20 @@ struct PARQUET_EXPORT EncryptionConfiguration {
   int32_t data_key_length_bits = kDefaultDataKeyLengthBits;
 };
 
+struct PARQUET_EXPORT ExternalEncryptionConfiguration {
+  explicit ExternalEncryptionConfiguration(const std::string& user_id)
+      : user_id(user_id) {}
+  
+  std::string user_id = kUserId;
+};
+
+struct PARQUET_EXPORT ExternalConnectionConfiguration {
+  explicit ExternalConnectionConfiguration(const std::string& config_path)
+    : config_path(config_path) {}
+  
+  std::string config_path = kConfigPath;
+};
+
 struct PARQUET_EXPORT DecryptionConfiguration {
   /// Lifetime of cached entities (key encryption keys, local wrapping keys, KMS client
   /// objects).
@@ -110,6 +126,14 @@ class PARQUET_EXPORT CryptoFactory {
   std::shared_ptr<FileEncryptionProperties> GetFileEncryptionProperties(
       const KmsConnectionConfig& kms_connection_config,
       const EncryptionConfiguration& encryption_config, const std::string& file_path = "",
+      const std::shared_ptr<::arrow::fs::FileSystem>& file_system = NULLPTR);
+
+  std::shared_ptr<ExternalFileEncryptionProperties> GetExternalFileEncryptionProperties(
+      const KmsConnectionConfig& kms_connection_config,
+      const EncryptionConfiguration& encryption_config, 
+      const ExternalEncryptionConfiguration& external_encryption_config,
+      const ExternalConnectionConfiguration& external_connection_config,
+      const std::string& file_path = "",
       const std::shared_ptr<::arrow::fs::FileSystem>& file_system = NULLPTR);
 
   /// Get decryption properties for a Parquet file.

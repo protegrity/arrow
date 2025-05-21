@@ -46,6 +46,11 @@ from pyarrow.lib import (ArrowException, NativeFile, BufferOutputStream,
 
 cimport cpython as cp
 
+from libcpp.memory cimport shared_ptr
+
+cdef extern from "memory" namespace "std":
+    shared_ptr[T] static_pointer_cast[T, U](shared_ptr[U] r)
+
 _DEFAULT_ROW_GROUP_SIZE = 1024*1024
 _MAX_ROW_GROUP_SIZE = 64*1024*1024
 
@@ -2005,8 +2010,14 @@ cdef shared_ptr[WriterProperties] _create_writer_properties(
     # encryption
 
     if encryption_properties is not None:
-        props.encryption(
-            (<FileEncryptionProperties>encryption_properties).unwrap())
+        if isinstance(encryption_properties, ExternalFileEncryptionProperties):
+            print("Constructing ExternalFileEncryptionProperties in _parquet.pyx")
+            props.encryption(
+                static_pointer_cast[CFileEncryptionProperties, CExternalFileEncryptionProperties] (
+                    (<ExternalFileEncryptionProperties>encryption_properties).unwrap_external()))
+        else:
+            print("Constructing regular FileEncryptionProperties in _parquet.pyx")
+            props.encryption((<FileEncryptionProperties>encryption_properties).unwrap())
 
     # For backwards compatibility reasons we cap the maximum row group size
     # at 64Mi rows.  This could be changed in the future, though it would be
