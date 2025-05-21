@@ -81,12 +81,13 @@ def create_and_encrypt_parquet():
 
 
 def read_and_print_parquet():
-    print("\nNow reading parquet file")
+    print("\n-----------------------------------------------\nNow reading parquet file")
     parquet_path = "sample.parquet"
 
     metadata = pp.read_metadata(parquet_path)
     print("\nMetadata:")
     print(metadata)
+    print("\n")
 
     decryption_config = get_decryption_config()
     read_data_table = read_parquet(parquet_path,
@@ -94,6 +95,7 @@ def read_and_print_parquet():
     data_frame = read_data_table.to_pandas()
     print("\nData:")
     print(data_frame.head())
+    print("\n")
 
 
 def read_parquet(location, decryption_config=None, read_metadata=False):

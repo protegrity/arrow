@@ -15,9 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include <iostream>
+
 #include "parquet/encryption/internal_file_encryptor.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
+#include "parquet/thrift_internal.h"
 
 namespace parquet {
 
@@ -79,13 +82,16 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetColumnMetaEncryptor(
 }
 
 std::shared_ptr<Encryptor> InternalFileEncryptor::GetColumnDataEncryptor(
-    const std::string& column_path) {
-  return GetColumnEncryptor(column_path, false);
+  const std::string& column_path, const ColumnChunkMetaDataBuilder* col_meta) {
+  //const FileEncryptionProperties* file_encryption_properties) {
+  return GetColumnEncryptor(column_path, false, col_meta);
 }
 
 std::shared_ptr<Encryptor>
 InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
-    const std::string& column_path, bool metadata) {
+  const std::string& column_path, bool metadata,
+  const ColumnChunkMetaDataBuilder* col_meta) {
+  //const FileEncryptionProperties* file_encryption_properties) {
   // first look if we already got the encryptor from before
   if (metadata) {
     if (column_metadata_map_.find(column_path) != column_metadata_map_.end()) {
@@ -110,7 +116,8 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
 
   ParquetCipher::type algorithm = properties_->algorithm().algorithm;
   auto encryptor_interface = metadata ? GetMetaEncryptor(algorithm, key.size())
-                                : GetDataEncryptor(algorithm, key.size());
+                                : GetDataEncryptor(algorithm, key, col_meta);
+                                                   //file_encryption_properties);
 
   std::string file_aad = properties_->file_aad();
   std::shared_ptr<Encryptor> encryptor =
@@ -138,22 +145,45 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetMetaEncryptor(
   auto key_len = static_cast<int32_t>(key_size);
   int index = MapKeyLenToEncryptorArrayIndex(key_len);
   if (meta_encryptor_[index] == nullptr) {
-    if (algorithm == ParquetCipher::type::EXTERNAL_V1) {
-      meta_encryptor_[index] = encryption::ExternalEncryptorImpl::Make(algorithm, key_len, true);
-    } else {
-      meta_encryptor_[index] = encryption::AesEncryptorImpl::Make(algorithm, key_len, true);
-    }
+    meta_encryptor_[index] = encryption::AesEncryptorImpl::Make(algorithm, key_len, true);
   }
   return meta_encryptor_[index].get();
 }
 
 encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
-    ParquetCipher::type algorithm, size_t key_size) {
-  auto key_len = static_cast<int32_t>(key_size);
+  ParquetCipher::type algorithm, std::string key, 
+  const ColumnChunkMetaDataBuilder* col_meta) {
+  //const FileEncryptionProperties* file_encryption_properties) {
+  auto key_len = static_cast<int32_t>(key.size());
   int index = MapKeyLenToEncryptorArrayIndex(key_len);
   if (data_encryptor_[index] == nullptr) {
     if (algorithm == ParquetCipher::type::EXTERNAL_V1) {
-      data_encryptor_[index] = encryption::ExternalEncryptorImpl::Make(algorithm, key_len, false);
+      if (col_meta == nullptr) {
+        std::cout << "\nERROR!!! External algorithm requires specific config" << std::endl;
+        return nullptr;
+      }
+
+      auto col_name = col_meta->descr()->path()->ToDotString();
+      const parquet::format::ColumnChunk* chunk = static_cast<const parquet::format::ColumnChunk*>(
+        col_meta->contents());
+      const auto& chunk_meta_data = chunk->meta_data;
+      const auto* writer_properties = col_meta->properties();
+      if (!writer_properties) {
+        std::cout << "\nERROR!!! External algorithm requires writer properties" << std::endl;
+        return nullptr;
+      }
+
+      const auto* encryption_properties = 
+        dynamic_cast<ExternalFileEncryptionProperties*>(writer_properties->file_encryption_properties());
+      if (!encryption_properties) {
+        std::cout << "\nERROR!!! External algorithm requires external file encryption props" << std::endl;
+        return nullptr;
+      }
+
+      data_encryptor_[index] = encryption::ExternalEncryptorImpl::Make(
+        algorithm, key_len, col_name, static_cast<Type::type>(chunk_meta_data.type), 
+        writer_properties->compression(col_meta->descr()->path()), encryption_properties->user_id(),
+        encryption_properties->config_path(), false);
     } else {
       data_encryptor_[index] = encryption::AesEncryptorImpl::Make(algorithm, key_len, false);
     }

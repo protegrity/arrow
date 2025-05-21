@@ -444,6 +444,7 @@ class PARQUET_EXPORT ColumnChunkMetaDataBuilder {
 
   // get the column descriptor
   const ColumnDescriptor* descr() const;
+  const WriterProperties* properties() const;
 
   int64_t total_compressed_size() const;
   // commit the metadata

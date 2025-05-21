@@ -49,9 +49,7 @@ namespace parquet::encryption {
 
 AesEncryptorImpl::AesEncryptorImpl(ParquetCipher::type alg_id, int32_t key_len,
                                    bool metadata, bool write_length)
-    : AesCryptoContext(alg_id, key_len, metadata, write_length) {
-      std::cout << "Created AesEncryptorImpl" << std::endl;
-}
+    : AesCryptoContext(alg_id, key_len, metadata, write_length) {}
 
 AesCryptoContext::CipherContext AesEncryptorImpl::MakeCipherContext() const {
   auto ctx = NewCipherContext();
@@ -276,7 +274,6 @@ int32_t AesEncryptorImpl::CtrEncrypt(span<const uint8_t> plaintext, span<const u
 AesDecryptorImpl::AesDecryptorImpl(ParquetCipher::type alg_id, int32_t key_len, bool metadata,
                                    bool contains_length)
     : AesCryptoContext(alg_id, key_len, metadata, contains_length) {
-      std::cout << "Created AesDecryptorImpl" << std::endl;
 }
 
 AesCryptoContext::CipherContext AesDecryptorImpl::MakeCipherContext()
@@ -579,17 +576,24 @@ void RandBytes(unsigned char* buf, size_t num) {
 
 void EnsureBackendInitialized() { openssl::EnsureInitialized(); }
 
-ExternalEncryptorImpl::ExternalEncryptorImpl(ParquetCipher::type alg_id, int32_t key_len,
-                                             bool metadata, bool write_length) 
-        : aes_encryptor_{std::unique_ptr<AesEncryptorImpl>(
+ExternalEncryptorImpl::ExternalEncryptorImpl(ParquetCipher::type alg_id, int32_t key_len, 
+                                            std::string column_name, Type::type data_type, 
+                                            Compression::type compression_type,
+                                            std::string user_id, std::string config_path,
+                                            bool metadata, bool write_length) 
+        : column_name_(column_name), data_type_(data_type), compression_type_(compression_type),
+          user_id_(user_id), config_path_(config_path),
+          aes_encryptor_{std::unique_ptr<AesEncryptorImpl>(
             new AesEncryptorImpl(alg_id, key_len, metadata, write_length))} {
   std::cout << "Created ExternalEncryptorImpl" << std::endl;
 }
 
-std::unique_ptr<ExternalEncryptorImpl> ExternalEncryptorImpl::Make(ParquetCipher::type alg_id,
-                                                                   int32_t key_len, bool metadata, 
-                                                                   bool write_length) {
-  return std::make_unique<ExternalEncryptorImpl>(alg_id, key_len, metadata, write_length);
+std::unique_ptr<ExternalEncryptorImpl> ExternalEncryptorImpl::Make(
+    ParquetCipher::type alg_id, int32_t key_len, std::string column_name, Type::type data_type, 
+    Compression::type compression_type, std::string user_id, std::string config_path,
+    bool metadata, bool write_length) {
+  return std::make_unique<ExternalEncryptorImpl>(alg_id, key_len, column_name, data_type, 
+    compression_type, user_id, config_path, metadata, write_length);
 }
 
 int32_t ExternalEncryptorImpl::Encrypt(span<const uint8_t> plaintext, span<const uint8_t> key,
@@ -610,8 +614,50 @@ int32_t ExternalEncryptorImpl::CiphertextLength(int64_t plaintext_len) const {
   return aes_encryptor_->CiphertextLength(plaintext_len);
 }
 
+std::string HackTypeToString(Type::type t) {
+  switch (t) {
+    case Type::BOOLEAN: return "BOOLEAN";
+    case Type::INT32: return "INT32";
+    case Type::INT64: return "INT64";
+    case Type::INT96: return "INT96";
+    case Type::FLOAT: return "FLOAT";
+    case Type::DOUBLE: return "DOUBLE";
+    case Type::BYTE_ARRAY: return "BYTE_ARRAY";
+    case Type::FIXED_LEN_BYTE_ARRAY: return "FIXED_LEN_BYTE_ARRAY";
+    default: return "UNKNOWN";
+  }
+}
+
+std::string CompressName(Compression::type codec) {
+  switch (codec) {
+    case Compression::UNCOMPRESSED: return "UNCOMPRESSED";
+    case Compression::SNAPPY:       return "SNAPPY";
+    case Compression::GZIP:         return "GZIP";
+    case Compression::BROTLI:       return "BROTLI";
+    case Compression::ZSTD:         return "ZSTD";
+    case Compression::LZ4:          return "LZ4";
+    case Compression::LZ4_FRAME:    return "LZ4_FRAME";
+    case Compression::LZO:          return "LZO";
+    case Compression::BZ2:          return "BZ2";
+    case Compression::LZ4_HADOOP:   return "LZ4_HADOOP";
+    default:                        return "UNKNOWN";
+  }
+}
+
 void ExternalEncryptorImpl::ConstructExternalCall() {
-  std::cout << "Here I would call the external encryption service. Hold for params." << std::endl;
+  std::cout << "\n\n!*!*!*!*!*!* START ExternalEncryptorImpl:ConstructExternalCall!*!*!*!*!*!*"
+            << std::endl;
+
+  std::cout << "Here I would call the external encryption service. With:" << std::endl;
+  std::cout << "\tColumn name: [" << column_name_ << "]" << std::endl;
+  std::cout << "\tData type: [" << HackTypeToString(data_type_) << "]" << std::endl;
+  std::cout << "\tCompression algorithm: [" << CompressName(compression_type_) << "]" << std::endl;
+  std::cout << "\tUser id: [" << user_id_ << "]" << std::endl;
+  std::cout << "\tConfig path: [" << config_path_ << "]" << std::endl;
+
+
+  std::cout << "\n\n!*!*!*!*!*!* END ExternalEncryptorImpl:ConstructExternalCall!*!*!*!*!*!*"
+            << std::endl;
 }
 
 ExternalDecryptorImpl::ExternalDecryptorImpl(ParquetCipher::type alg_id, int32_t key_len,

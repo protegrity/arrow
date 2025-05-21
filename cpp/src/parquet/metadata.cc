@@ -1545,6 +1545,7 @@ class ColumnChunkMetaDataBuilder::ColumnChunkMetaDataBuilderImpl {
   }
 
   const void* contents() const { return column_chunk_; }
+  const WriterProperties* properties() const { return properties_.get(); }
 
   // column chunk
   void set_file_path(const std::string& val) { column_chunk_->__set_file_path(val); }
@@ -1761,6 +1762,10 @@ void ColumnChunkMetaDataBuilder::WriteTo(::arrow::io::OutputStream* sink) {
 
 const ColumnDescriptor* ColumnChunkMetaDataBuilder::descr() const {
   return impl_->descr();
+}
+
+const WriterProperties* ColumnChunkMetaDataBuilder::properties() const {
+  return impl_->properties();
 }
 
 void ColumnChunkMetaDataBuilder::SetStatistics(const EncodedStatistics& result) {

@@ -17,6 +17,7 @@
 
 #include "parquet/file_writer.h"
 
+#include <iostream>
 #include <memory>
 #include <ostream>
 #include <string>
@@ -267,11 +268,12 @@ class RowGroupSerializer : public RowGroupWriter::Contents {
       ColumnChunkMetaDataBuilder* col_meta, int32_t column_ordinal) const {
     const auto& path = col_meta->descr()->path();
     const ColumnProperties& column_properties = properties_->column_properties(path);
+
     auto meta_encryptor =
         file_encryptor_ ? file_encryptor_->GetColumnMetaEncryptor(path->ToDotString())
                         : nullptr;
     auto data_encryptor =
-        file_encryptor_ ? file_encryptor_->GetColumnDataEncryptor(path->ToDotString())
+        file_encryptor_ ? file_encryptor_->GetColumnDataEncryptor(path->ToDotString(), col_meta)
                         : nullptr;
     auto ci_builder = page_index_builder_ && column_properties.page_index_enabled()
                           ? page_index_builder_->GetColumnIndexBuilder(column_ordinal)

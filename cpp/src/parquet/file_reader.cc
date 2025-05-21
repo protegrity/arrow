@@ -661,7 +661,6 @@ uint32_t SerializedFile::ParseUnencryptedFileMetadata(
   }
   uint32_t read_metadata_len = metadata_len;
   // The encrypted read path falls through to here, so pass in the decryptor
-  std::cout << "Parsing unencrypted file metadata" << std::endl;
   file_metadata_ = FileMetaData::Make(metadata_buffer->data(), &read_metadata_len,
                                       properties_, std::move(file_decryptor));
   return read_metadata_len;
