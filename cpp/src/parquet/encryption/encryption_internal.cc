@@ -690,7 +690,7 @@ void ExternalEncryptorImpl::ConstructExternalCall(span<const uint8_t> plaintext)
   std::cout << "  }," << std::endl;
   
   std::cout << "  \"encryption\": {" << std::endl;
-  std::cout << "    \"keyId\": \"" << ext_column_key_ << "\"," << std::endl;
+  std::cout << "    " << ext_column_key_ << std::endl;
   std::cout << "  }," << std::endl;
   
   std::cout << "  \"access\": {" << std::endl;
