@@ -17,3 +17,22 @@
 
 # Headers: public api
 arrow_install_all_headers("parquet/encryption")
+
+if(PARQUET_REQUIRE_ENCRYPTION AND ARROW_BUILD_TESTS)
+
+  # Find GoogleTest package (make sure CMAKE_PREFIX_PATH includes Homebrew googletest path if needed)
+  find_package(GTest REQUIRED)
+
+  add_executable(parquet-encryption-external-test
+    encryption_external_test.cc
+  )
+
+  target_link_libraries(parquet-encryption-external-test
+    PRIVATE
+      parquet_shared
+      GTest::gtest
+      GTest::gtest_main
+  )
+
+  add_test(NAME parquet-encryption-external-test COMMAND parquet-encryption-external-test)
+endif()
