@@ -738,6 +738,48 @@ void ExternalDecryptorImpl::ConstructExternalCall() {
   std::cout << "Here I would call the external decryption service. Hold for params." << std::endl;
 }
 
+// Empty implementation of DLLEncryptor
+DLLEncryptor::DLLEncryptor(ParquetCipher::type alg_id, 
+                           int32_t key_len, 
+                           std::string column_name, 
+                           Type::type data_type, 
+                           Compression::type compression_type, 
+                           Encoding::type encoding, 
+                           std::string ext_column_key, 
+                           std::string user_id, 
+                           std::string app_context, 
+                           bool metadata, 
+                           bool write_length) {
+
+                           }
+
+std::unique_ptr<DLLEncryptor> DLLEncryptor::Make(ParquetCipher::type alg_id, int32_t key_len, std::string column_name, Type::type data_type, Compression::type compression_type, Encoding::type encoding, std::string ext_column_key, std::string user_id, std::string app_context, bool metadata, bool write_length) {
+  std::cout << "Inside DLLEncryptor::Make" << std::endl;
+
+  return std::make_unique<DLLEncryptor>(alg_id, key_len, column_name, data_type, compression_type, encoding, ext_column_key, user_id, app_context, metadata, write_length);
+}
+
+int32_t DLLEncryptor::Encrypt(span<const uint8_t> /*plaintext*/, span<const uint8_t> /*key*/, span<const uint8_t> /*aad*/, span<uint8_t> /*ciphertext*/) {
+  std::cout << "Inside DLLEncryptor::Encrypt" << std::endl;
+
+  return 0;
+}
+
+int32_t DLLEncryptor::SignedFooterEncrypt(span<const uint8_t> /*footer*/, span<const uint8_t> /*key*/, span<const uint8_t> /*aad*/, span<const uint8_t> /*nonce*/, span<uint8_t> /*encrypted_footer*/) {
+  std::cout << "Inside DLLEncryptor::SignedFooterEncrypt" << std::endl;
+  return 0;
+}
+
+int32_t DLLEncryptor::CiphertextLength(int64_t /*plaintext_len*/) const {
+  std::cout << "Inside DLLEncryptor::CiphertextLength" << std::endl;
+
+  return 0;
+}
+
+void DLLEncryptor::ConstructExternalCall(span<const uint8_t> plaintext) {
+  std::cout << "Inside DLLEncryptor::ConstructExternalCall" << std::endl;
+}
+
 #undef ENCRYPT_INIT
 #undef DECRYPT_INIT
 

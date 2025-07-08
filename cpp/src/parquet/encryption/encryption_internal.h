@@ -27,6 +27,9 @@
 #include "parquet/properties.h"
 #include "parquet/types.h"
 
+#define USE_DLL_ENCRYPTOR_AS_EXTERNAL_ENCRYPTOR 0
+
+
 using parquet::ParquetCipher;
 using ::arrow::util::span;
 
@@ -200,6 +203,42 @@ class PARQUET_EXPORT ExternalEncryptorImpl : public EncryptorInterface {
       std::string user_id_;
       std::string app_context_;
       std::unique_ptr<AesEncryptorImpl> aes_encryptor_;
+};
+
+class PARQUET_EXPORT DLLEncryptor : public EncryptorInterface {
+ public:
+  explicit DLLEncryptor(ParquetCipher::type alg_id, int32_t key_len,
+                        std::string column_name, Type::type data_type,
+                        Compression::type compression_type, Encoding::type encoding,
+                        std::string ext_column_key, std::string user_id,
+                        std::string app_context,
+                        bool metadata, bool write_length);
+
+  static std::unique_ptr<DLLEncryptor> Make(
+      ParquetCipher::type alg_id, int32_t key_len, std::string column_name, Type::type data_type,
+      Compression::type compression_type, Encoding::type encoding, std::string ext_column_key,
+      std::string user_id, std::string app_context, bool metadata, bool write_length = true);
+
+  int32_t Encrypt(span<const uint8_t> plaintext, span<const uint8_t> key,
+                  span<const uint8_t> aad, span<uint8_t> ciphertext) override;
+
+  int32_t SignedFooterEncrypt(span<const uint8_t> footer, span<const uint8_t> key,
+                              span<const uint8_t> aad, span<const uint8_t> nonce,
+                              span<uint8_t> encrypted_footer) override;
+
+  [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override;
+
+ private:
+  void ConstructExternalCall(span<const uint8_t> plaintext);
+
+  std::string column_name_;
+  Type::type data_type_;
+  Compression::type compression_type_;
+  Encoding::type encoding_;
+  std::string ext_column_key_;
+  std::string user_id_;
+  std::string app_context_;
+  std::unique_ptr<AesEncryptorImpl> aes_encryptor_;
 };
 
 
