@@ -20,6 +20,7 @@
 #include "parquet/encryption/internal_file_encryptor.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
+#include "parquet/encryption/dll_encryptor.h"
 #include "parquet/thrift_internal.h"
 
 namespace parquet {
@@ -182,15 +183,48 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
         return nullptr;
       }
 
-      data_encryptor_[index] = encryption::ExternalEncryptorImpl::Make(
-        algorithm, key_len, col_name, static_cast<Type::type>(chunk_meta_data.type), 
-        writer_properties->compression(col_meta->descr()->path()),
-        writer_properties->encoding(col_meta->descr()->path()),
-        encryption_properties->ext_column_keys(), encryption_properties->user_id(),
-        encryption_properties->app_context(), false);
+      //TODO: move this elsewhere.
+      bool use_dll_encryptor = true;
+
+      if (!use_dll_encryptor) {
+        //the original workflow of the mini-app
+        data_encryptor_[index] = encryption::ExternalEncryptorImpl::Make(
+          algorithm, 
+          key_len, 
+          col_name, 
+          static_cast<Type::type>(chunk_meta_data.type), 
+          writer_properties->compression(col_meta->descr()->path()),
+          writer_properties->encoding(col_meta->descr()->path()),
+          encryption_properties->ext_column_keys(), 
+          encryption_properties->user_id(),
+          encryption_properties->app_context(), 
+          false);
+      }
+      else {
+        // Use DLLEncryptor instead of ExternalEncryptorImpl
+        std::cout << "encryption_internal.h :: attempting to load DLLEncryptor" << std::endl;
+
+        //TODO: check for null, error loading, etc
+
+        auto dll_encryptor = encryption::DLLEncryptorLoader::LoadFromLibrary("libDLLEncryptor.so");
+        dll_encryptor->init(algorithm, 
+          key_len, 
+          col_name, 
+          static_cast<Type::type>(chunk_meta_data.type), 
+          writer_properties->compression(col_meta->descr()->path()),
+          writer_properties->encoding(col_meta->descr()->path()),
+          encryption_properties->ext_column_keys(), 
+          encryption_properties->user_id(),
+          encryption_properties->app_context(), false);
+
+        std::cout << "encryption_internal.h :: done with dll_encryptor->init" << std::endl;
+        
+        data_encryptor_[index] = std::move(dll_encryptor);
+      }
     } else {
       data_encryptor_[index] = encryption::AesEncryptorImpl::Make(algorithm, key_len, false);
     }
+
   }
   return data_encryptor_[index].get();
 }

@@ -19,22 +19,28 @@
 
 #include <memory>
 #include <string>
+#include <dlfcn.h>
 
-#include "arrow/util/span.h"
+#include "parquet/platform.h"
 #include "parquet/properties.h"
 #include "parquet/types.h"
 #include "parquet/encryption/encryption_internal.h"
-
-using parquet::ParquetCipher;
-using ::arrow::util::span;
 
 namespace parquet::encryption {
 
 // Forward declaration
 class AesEncryptorImpl;
+class EncryptorInterface;
+class DLLEncryptor;
 
-class PARQUET_EXPORT DLLEncryptor : public EncryptorInterface {
+class PARQUET_EXPORT DLLEncryptorLoader {
+  public:
+    static std::unique_ptr<DLLEncryptor> LoadFromLibrary(const std::string& library_path);
+};
+
+class PARQUET_EXPORT DLLEncryptor: public EncryptorInterface {
  public:
+  DLLEncryptor();
   explicit DLLEncryptor(ParquetCipher::type alg_id, int32_t key_len,
                         std::string column_name, Type::type data_type,
                         Compression::type compression_type, Encoding::type encoding,
@@ -42,11 +48,19 @@ class PARQUET_EXPORT DLLEncryptor : public EncryptorInterface {
                         std::string app_context,
                         bool metadata, bool write_length);
 
-  static std::unique_ptr<DLLEncryptor> Make(
-      ParquetCipher::type alg_id, int32_t key_len, std::string column_name, Type::type data_type,
-      Compression::type compression_type, Encoding::type encoding, std::string ext_column_key,
-      std::string user_id, std::string app_context, bool metadata, bool write_length = true);
 
+  void init(ParquetCipher::type alg_id, 
+            int32_t key_len,
+            std::string column_name, 
+            Type::type data_type,
+            Compression::type compression_type, 
+            Encoding::type encoding,
+            std::string ext_column_key, 
+            std::string user_id,
+            std::string app_context,
+            bool metadata, 
+            bool write_length = true);
+      
   int32_t Encrypt(span<const uint8_t> plaintext, span<const uint8_t> key,
                   span<const uint8_t> aad, span<uint8_t> ciphertext) override;
 
@@ -55,6 +69,8 @@ class PARQUET_EXPORT DLLEncryptor : public EncryptorInterface {
                               span<uint8_t> encrypted_footer) override;
 
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override;
+
+  ~DLLEncryptor();
 
  private:
   void ConstructExternalCall(span<const uint8_t> plaintext);

@@ -17,3 +17,18 @@
 
 # Headers: public api
 arrow_install_all_headers("parquet/encryption")
+
+add_library(DLLEncryptor SHARED
+   encryption_internal.cc
+   dll_encryptor.cc
+)
+
+# target_include_directories(DLLEncryptor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+#TODO marguedas: this needs review.
+target_link_libraries(DLLEncryptor PUBLIC
+  ${ARROW_OPENSSL_LIBS}
+  arrow_shared
+)
+
+set_target_properties(DLLEncryptor PROPERTIES OUTPUT_NAME "DLLEncryptor")
