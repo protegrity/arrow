@@ -241,7 +241,8 @@ if(PARQUET_REQUIRE_ENCRYPTION)
   list(APPEND PARQUET_STATIC_LINK_LIBS ${ARROW_OPENSSL_LIBS})
   set(PARQUET_SRCS ${PARQUET_SRCS} encryption/encryption_internal.cc
                    encryption/openssl_internal.cc
-                   encryption/dll_encryptor.cc)
+                   encryption/dll_encryptor.cc
+                   encryption/dll_encryptor_loader.cc)
   # Encryption key management
   set(PARQUET_SRCS
       ${PARQUET_SRCS}

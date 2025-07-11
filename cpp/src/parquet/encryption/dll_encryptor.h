@@ -19,24 +19,18 @@
 
 #include <memory>
 #include <string>
-#include <dlfcn.h>
 
 #include "parquet/platform.h"
 #include "parquet/properties.h"
 #include "parquet/types.h"
 #include "parquet/encryption/encryption_internal.h"
+#include "parquet/encryption/dll_encryptor_loader.h"
 
 namespace parquet::encryption {
 
 // Forward declaration
 class AesEncryptorImpl;
 class EncryptorInterface;
-class DLLEncryptor;
-
-class PARQUET_EXPORT DLLEncryptorLoader {
-  public:
-    static std::unique_ptr<DLLEncryptor> LoadFromLibrary(const std::string& library_path);
-};
 
 class PARQUET_EXPORT DLLEncryptor: public EncryptorInterface {
  public:

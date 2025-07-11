@@ -21,6 +21,7 @@
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/dll_encryptor.h"
+#include "parquet/encryption/dll_encryptor_loader.h"
 #include "parquet/thrift_internal.h"
 
 namespace parquet {

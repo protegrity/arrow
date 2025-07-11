@@ -30,15 +30,7 @@ using ::arrow::util::span;
 
 namespace parquet::encryption {
 
-DLLEncryptor::DLLEncryptor()
-    : column_name_(""), 
-      data_type_(Type::type::BOOLEAN), 
-      compression_type_(Compression::type::UNCOMPRESSED),
-      encoding_(Encoding::type::PLAIN), 
-      ext_column_key_(""), 
-      user_id_(""),
-      app_context_(""),
-      aes_encryptor_(nullptr) {
+DLLEncryptor::DLLEncryptor() {
   std::cout << "Created DLLEncryptor with empty constructor" << std::endl;
 }
 
@@ -132,52 +124,11 @@ void DLLEncryptor::ConstructExternalCall(span<const uint8_t> plaintext) {
 }
 
 
-//TODO: move this to a header file
-typedef DLLEncryptor* (*create_encryptor_t)();
 
-  //TODO: move this to its own cc file
-std::unique_ptr<DLLEncryptor> DLLEncryptorLoader::LoadFromLibrary(const std::string& library_path) {
-  std::cout << "Inside DLLEncryptorLoader::LoadFromLibrary" << std::endl;
-
-  // If library_path is provided, try to load the shared library
-  if (!library_path.empty()) {
-    try {
-
-      // Load the shared library
-      auto library_handle = dlopen(library_path.c_str(), RTLD_LAZY);
-
-      if (!library_handle) {
-        std::cout << "Warning: Failed to load shared library: " << library_path << std::endl;
-        return nullptr;
-      }
-
-      //load the create_instance() function from the library
-      create_encryptor_t create_instance = (create_encryptor_t) dlsym(library_handle, "create_new_instance");
-      const char* dlsym_error = dlerror();
-
-      if (dlsym_error) {
-        std::cerr << "Error: Cannot load symbol 'create': " << dlsym_error << std::endl;
-        dlclose(library_handle);
-        return nullptr;
-      }
-
-      auto instance = std::unique_ptr<DLLEncryptor>(create_instance());
-          
-      std::cout << "Successfully loaded DLLEncryptor from shared library: " << library_path << std::endl;
-
-      return instance;
-    } catch (const std::exception& e) {
-      std::cout << "Warning: Exception while loading shared library: " << e.what() << std::endl;      
-    }
-
-  } //if (!library_path.empty())
-
-  std::cout << "Returning nullptr" << std::endl;
-  return nullptr;
-}
-
+  
+  //this will export the create_new_instance function to the shared library
   extern "C" {
-    //TODO: deal with the return type.
+    //TODO: do we need to deal with the return type?
     DLLEncryptor* create_new_instance() {
       return std::make_unique<DLLEncryptor>().release();
     }
