@@ -34,28 +34,6 @@ DLLEncryptor::DLLEncryptor() {
   std::cout << "Created DLLEncryptor with empty constructor" << std::endl;
 }
 
-DLLEncryptor::DLLEncryptor(ParquetCipher::type alg_id, 
-                           int32_t key_len, 
-                           std::string column_name, 
-                           Type::type data_type, 
-                           Compression::type compression_type, 
-                           Encoding::type encoding, 
-                           std::string ext_column_key, 
-                           std::string user_id, 
-                           std::string app_context, 
-                           bool metadata, 
-                           bool write_length)
-    : column_name_(column_name), 
-      data_type_(data_type), 
-      compression_type_(compression_type),
-      encoding_(encoding), 
-      ext_column_key_(ext_column_key), 
-      user_id_(user_id),
-      app_context_(app_context),
-      aes_encryptor_(std::make_unique<AesEncryptorImpl>(alg_id, key_len, metadata, write_length)) {
-  std::cout << "Created DLLEncryptor" << std::endl;
-}
-
 //have to decide how to initialize the instance. 
 //we can use the builder pattern, an init method, or pass all the values to the constructuctor via the LoadFromLibrary method
 
@@ -117,19 +95,12 @@ int32_t DLLEncryptor::CiphertextLength(int64_t plaintext_len) const {
   return aes_encryptor_->CiphertextLength(plaintext_len);
 }
 
-void DLLEncryptor::ConstructExternalCall(span<const uint8_t> plaintext) {
-  std::cout << "Inside DLLEncryptor::ConstructExternalCall" << std::endl;
-  // This method is currently not implemented
-  // It would be used to construct external calls to the DLL
-}
-
-
-
-  
   //this will export the create_new_instance function to the shared library
   extern "C" {
+    // should this be a singleton?
+
     //TODO: do we need to deal with the return type?
-    DLLEncryptor* create_new_instance() {
+    LoadableEncryptorInterface* create_new_instance() {
       return std::make_unique<DLLEncryptor>().release();
     }
   }

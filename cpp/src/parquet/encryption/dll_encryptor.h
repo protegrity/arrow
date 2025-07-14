@@ -24,7 +24,6 @@
 #include "parquet/properties.h"
 #include "parquet/types.h"
 #include "parquet/encryption/encryption_internal.h"
-#include "parquet/encryption/dll_encryptor_loader.h"
 
 namespace parquet::encryption {
 
@@ -32,16 +31,28 @@ namespace parquet::encryption {
 class AesEncryptorImpl;
 class EncryptorInterface;
 
-class PARQUET_EXPORT DLLEncryptor: public EncryptorInterface {
+//TODO: we probably need to inherit from a different class and/or
+//      implement a different interface.
+class PARQUET_EXPORT LoadableEncryptorInterface : public EncryptorInterface {
  public:
-  DLLEncryptor();
-  explicit DLLEncryptor(ParquetCipher::type alg_id, int32_t key_len,
-                        std::string column_name, Type::type data_type,
-                        Compression::type compression_type, Encoding::type encoding,
-                        std::string ext_column_key, std::string user_id,
-                        std::string app_context,
-                        bool metadata, bool write_length);
+  virtual void init(ParquetCipher::type alg_id, 
+    int32_t key_len,
+    std::string column_name, 
+    Type::type data_type,
+    Compression::type compression_type, 
+    Encoding::type encoding,
+    std::string ext_column_key, 
+    std::string user_id,
+    std::string app_context,
+    bool metadata, 
+    bool write_length = true) = 0;
+    
+  virtual ~LoadableEncryptorInterface() = default;
+};
 
+class PARQUET_EXPORT DLLEncryptor : public LoadableEncryptorInterface {
+ public:
+  explicit DLLEncryptor();
 
   void init(ParquetCipher::type alg_id, 
             int32_t key_len,
@@ -65,9 +76,6 @@ class PARQUET_EXPORT DLLEncryptor: public EncryptorInterface {
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override;
 
   ~DLLEncryptor();
-
- private:
-  void ConstructExternalCall(span<const uint8_t> plaintext);
 
   std::string column_name_;
   Type::type data_type_;

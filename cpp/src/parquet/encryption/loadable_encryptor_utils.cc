@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include "parquet/encryption/dll_encryptor_loader.h"
+#include "parquet/encryption/loadable_encryptor_utils.h"
 #include "parquet/encryption/dll_encryptor.h"
 #include <dlfcn.h>
 
@@ -26,10 +26,10 @@ namespace parquet::encryption {
 
 // Function pointer type for creating encryptor instances
 // This needs to match the return type of the create_new_instance function in the shared library.
-typedef DLLEncryptor* (*create_encryptor_t)();
+typedef LoadableEncryptorInterface* (*create_encryptor_t)();
 
-std::unique_ptr<DLLEncryptor> DLLEncryptorLoader::LoadFromLibrary(const std::string& library_path) {
-  std::cout << "Inside DLLEncryptorLoader::LoadFromLibrary" << std::endl;
+std::unique_ptr<LoadableEncryptorInterface> LoadableEncryptorUtils::LoadFromLibrary(const std::string& library_path) {
+  std::cout << "Inside LoadableEncryptorUtils::LoadFromLibrary" << std::endl;
 
   // If library_path is provided, try to load the shared library
   if (!library_path.empty()) {
@@ -57,9 +57,9 @@ std::unique_ptr<DLLEncryptor> DLLEncryptorLoader::LoadFromLibrary(const std::str
 
       //at this point, we have the create_instance function pointer (from the shared library)
       // so we can create a new instance of the DLLEncryptor
-      auto instance = std::unique_ptr<DLLEncryptor>(create_instance());
+      auto instance = std::unique_ptr<LoadableEncryptorInterface>(create_instance());
 
-      std::cout << "DLLEncryptorLoader -- Successfully loaded DLLEncryptor from shared library: " << library_path << std::endl;
+      std::cout << "LoadableEncryptorUtils -- Successfully loaded DLLEncryptor from shared library: " << library_path << std::endl;
 
       
       return instance;

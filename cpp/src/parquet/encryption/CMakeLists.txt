@@ -20,6 +20,7 @@ arrow_install_all_headers("parquet/encryption")
 
 add_library(DLLEncryptor SHARED
    encryption_internal.cc
+   openssl_internal.cc
    dll_encryptor.cc
 )
 
@@ -32,3 +33,11 @@ target_link_libraries(DLLEncryptor PUBLIC
 )
 
 set_target_properties(DLLEncryptor PROPERTIES OUTPUT_NAME "DLLEncryptor")
+
+# Install the DLLEncryptor library
+# install(TARGETS DLLEncryptor
+#         EXPORT DLLEncryptor_targets
+#         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+#         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+#         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+#         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

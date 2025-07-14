@@ -25,11 +25,11 @@
 namespace parquet::encryption {
 
 // Forward declaration
-class DLLEncryptor;
+class LoadableEncryptorInterface;
 
-class PARQUET_EXPORT DLLEncryptorLoader {
+class PARQUET_EXPORT LoadableEncryptorUtils {
  public:
-  static std::unique_ptr<DLLEncryptor> LoadFromLibrary(const std::string& library_path);
+  static std::unique_ptr<LoadableEncryptorInterface> LoadFromLibrary(const std::string& library_path);
 };
 
 }  // namespace parquet::encryption 

@@ -21,7 +21,7 @@
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/dll_encryptor.h"
-#include "parquet/encryption/dll_encryptor_loader.h"
+#include "parquet/encryption/loadable_encryptor_utils.h"
 #include "parquet/thrift_internal.h"
 
 namespace parquet {
@@ -203,11 +203,11 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
       }
       else {
         // Use DLLEncryptor instead of ExternalEncryptorImpl
-        std::cout << "encryption_internal.h :: attempting to load DLLEncryptor" << std::endl;
+        std::cout << "internal_file_encryptor.cc :: attempting to load DLLEncryptor" << std::endl;
 
         //TODO: check for null, error loading, etc
-
-        auto dll_encryptor = encryption::DLLEncryptorLoader::LoadFromLibrary("libDLLEncryptor.so");
+        auto dll_encryptor = encryption::LoadableEncryptorUtils::LoadFromLibrary("libDLLEncryptor.so");
+        
         dll_encryptor->init(algorithm, 
           key_len, 
           col_name, 
@@ -218,7 +218,7 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
           encryption_properties->user_id(),
           encryption_properties->app_context(), false);
 
-        std::cout << "encryption_internal.h :: done with dll_encryptor->init" << std::endl;
+        std::cout << "internal_file_encryptor.cc :: done with dll_encryptor->init" << std::endl;
         
         data_encryptor_[index] = std::move(dll_encryptor);
       }
