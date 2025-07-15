@@ -20,7 +20,7 @@
 #include "parquet/encryption/internal_file_encryptor.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
-#include "parquet/encryption/dll_encryptor.h"
+#include "parquet/encryption/loadable_encryptor.h"
 #include "parquet/encryption/loadable_encryptor_utils.h"
 #include "parquet/thrift_internal.h"
 
@@ -206,6 +206,8 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
         std::cout << "internal_file_encryptor.cc :: attempting to load DLLEncryptor" << std::endl;
 
         //TODO: check for null, error loading, etc
+        
+        //dll_encryptor is an instance of ExternalEncryptorImpl
         auto dll_encryptor = encryption::LoadableEncryptorUtils::LoadFromLibrary("libDLLEncryptor.so");
         
         dll_encryptor->init(algorithm, 

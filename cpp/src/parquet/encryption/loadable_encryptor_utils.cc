@@ -16,6 +16,7 @@
 // under the License.
 
 #include "parquet/encryption/loadable_encryptor_utils.h"
+#include "parquet/encryption/loadable_encryptor.h"
 #include "parquet/encryption/dll_encryptor.h"
 #include <dlfcn.h>
 
@@ -36,19 +37,26 @@ std::unique_ptr<LoadableEncryptorInterface> LoadableEncryptorUtils::LoadFromLibr
     try {
 
       // Load the shared library
-      auto library_handle = dlopen(library_path.c_str(), RTLD_LAZY);
+      void* library_handle = dlopen(library_path.c_str(), RTLD_LAZY);
 
       if (!library_handle) {
+        //auto dl_error = dlerror();
+
+        //TODO: log the error.
+        //TODO: raise exception:
+        //https://github.com/apache/arrow/blob/main/cpp/src/arrow/util/io_util.cc#L2241
+
         std::cout << "Warning: Failed to load shared library: " << library_path << std::endl;
         return nullptr;
       }
 
       //load the create_new_instance() function from the library
       create_encryptor_t create_instance = (create_encryptor_t) dlsym(library_handle, "create_new_instance");
-      const char* dlsym_error = dlerror();
+    const char* dlsym_error = dlerror();
 
       if (dlsym_error) {
         std::cerr << "Error: Cannot load symbol 'create_new_instance()': " << dlsym_error << std::endl;
+
         dlclose(library_handle);
 
         //TODO: what to return here?

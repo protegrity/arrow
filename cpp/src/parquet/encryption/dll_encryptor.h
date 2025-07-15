@@ -24,31 +24,12 @@
 #include "parquet/properties.h"
 #include "parquet/types.h"
 #include "parquet/encryption/encryption_internal.h"
+#include "parquet/encryption/loadable_encryptor.h"
 
 namespace parquet::encryption {
 
 // Forward declaration
 class AesEncryptorImpl;
-class EncryptorInterface;
-
-//TODO: we probably need to inherit from a different class and/or
-//      implement a different interface.
-class PARQUET_EXPORT LoadableEncryptorInterface : public EncryptorInterface {
- public:
-  virtual void init(ParquetCipher::type alg_id, 
-    int32_t key_len,
-    std::string column_name, 
-    Type::type data_type,
-    Compression::type compression_type, 
-    Encoding::type encoding,
-    std::string ext_column_key, 
-    std::string user_id,
-    std::string app_context,
-    bool metadata, 
-    bool write_length = true) = 0;
-    
-  virtual ~LoadableEncryptorInterface() = default;
-};
 
 class PARQUET_EXPORT DLLEncryptor : public LoadableEncryptorInterface {
  public:
