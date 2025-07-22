@@ -98,6 +98,7 @@ std::string InternalFileDecryptor::GetFooterKey() {
 std::unique_ptr<encryption::DecryptorInterface> GetDecryptorImpl(ParquetCipher::type algorithm, 
                                                      int32_t key_len, bool metadata) {
   if (algorithm == ParquetCipher::type::EXTERNAL_V1) {
+    std::cout << "Heeey I found an external decryptor!! woot!!!" << std::endl;
     return encryption::ExternalDecryptorImpl::Make(algorithm, key_len, metadata);
   }
   return encryption::AesDecryptorImpl::Make(algorithm, key_len, metadata);
