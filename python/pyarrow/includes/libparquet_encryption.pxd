@@ -70,8 +70,16 @@ cdef extern from "parquet/encryption/crypto_factory.h" \
         namespace "parquet::encryption" nogil:
     cdef cppclass CExternalEncryptionConfig\
             " parquet::encryption::ExternalEncryptionConfig":
-        CExternalEncryptionConfig(const c_string& user_id) except +
+        CExternalEncryptionConfig(
+            const c_string& user_id,
+            const unordered_map[c_string, unordered_map[c_string, c_string]]& column_encryption,
+            const unordered_map[c_string, c_string]& app_context,
+            const unordered_map[c_string, c_string]& connection_config
+        ) except +
         c_string user_id
+        unordered_map[c_string, unordered_map[c_string, c_string]] column_encryption
+        unordered_map[c_string, c_string] app_context
+        unordered_map[c_string, c_string] connection_config
 
 cdef extern from "parquet/encryption/crypto_factory.h" \
         namespace "parquet::encryption" nogil:

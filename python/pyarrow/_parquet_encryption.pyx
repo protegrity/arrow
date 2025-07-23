@@ -507,13 +507,68 @@ cdef shared_ptr[CDecryptionConfiguration] pyarrow_unwrap_decryptionconfig(object
         return (<DecryptionConfiguration> decryptionconfig).unwrap()
     raise TypeError("Expected DecryptionConfiguration, got %s" % type(decryptionconfig))
 
+# Helper to convert Python str → C++ string
+cdef c_string to_c_string(str s):
+    return c_string(s.encode('utf-8'))
+    
+# Convert Python dict[str, str] → unordered_map[c_string, c_string]
+cdef unordered_map[c_string, c_string] py_dict_to_umap(dict d):
+    cdef unordered_map[c_string, c_string] result
+    for k, v in d.items():
+        result[to_c_string(k)] = to_c_string(v)
+    return result
+
+cdef unordered_map[c_string, unordered_map[c_string, c_string]] convert_column_encryption_nested(dict d):
+    cdef unordered_map[c_string, unordered_map[c_string, c_string]] result
+    cdef unordered_map[c_string, c_string] inner
+    cdef str col
+    cdef str k, v
+    cdef dict subdict
+    for col, subdict in d.items():
+        if not isinstance(subdict, dict):
+            raise TypeError(f"Expected dict for column_encryption[{col}]")
+        inner.clear()
+        for k, v in subdict.items():
+            inner[to_c_string(k)] = to_c_string(v)
+        result[to_c_string(col)] = inner
+    return result
+
 cdef class ExternalEncryptionConfig(_Weakrefable):
 
     __slots__ = ()
 
-    def __init__(self, user_id, *):
+    def __init__(self, *, user_id, column_encryption=None, app_context=None, connection_config=None):
+        if column_encryption is None:
+            column_encryption = {}
+        if app_context is None:
+            app_context = {}
+        if connection_config is None:
+            connection_config = {}
+
+        cdef unordered_map[c_string, unordered_map[c_string, c_string]] col_enc_cpp = convert_column_encryption_nested(column_encryption)
+        cdef unordered_map[c_string, c_string] app_ctx_cpp = py_dict_to_umap(app_context)
+        cdef unordered_map[c_string, c_string] conn_cfg_cpp = py_dict_to_umap(connection_config)
+
         self.configuration.reset(
-            new CExternalEncryptionConfig(tobytes(user_id)))
+            new CExternalEncryptionConfig(
+                to_c_string(user_id),
+                col_enc_cpp,
+                app_ctx_cpp,
+                conn_cfg_cpp
+            )
+        )
+
+    @property
+    def column_encryption(self):
+        return self._column_encryption
+
+    @property
+    def app_context(self):
+        return self._app_context
+
+    @property
+    def connection_config(self):
+        return self._connection_config
 
     @property
     def user_id(self):

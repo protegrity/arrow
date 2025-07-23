@@ -24,6 +24,7 @@
 #include "parquet/encryption/key_toolkit.h"
 #include "parquet/encryption/kms_client_factory.h"
 #include "parquet/platform.h"
+#include <iostream>
 
 namespace parquet::encryption {
 
@@ -115,12 +116,43 @@ struct PARQUET_EXPORT EncryptionConfiguration {
   
 };
 
-
 struct PARQUET_EXPORT ExternalEncryptionConfig {
-  explicit ExternalEncryptionConfig(const std::string& user_id)
-      : user_id(user_id) {}
+  explicit ExternalEncryptionConfig(
+      const std::string& user_id,
+      const std::unordered_map<std::string, std::unordered_map<std::string, std::string>>& column_encryption,
+      const std::unordered_map<std::string, std::string>& app_context,
+      const std::unordered_map<std::string, std::string>& connection_config)
+      : user_id(user_id),
+        column_encryption(column_encryption),
+        app_context(app_context),
+        connection_config(connection_config) {
+
+          std::cout << "DEBUG: ExternalEncryptionConfig constructor called\n";
+          std::cout << "DEBUG: user_id = " << user_id << "\n";
+
+          std::cout << "DEBUG: column_encryption:\n";
+          for (const auto& [col, enc_map] : column_encryption) {
+            std::cout << "  DEBUG: Column: " << col << "\n";
+            for (const auto& [k, v] : enc_map) {
+              std::cout << "    DEBUG: " << k << " = " << v << "\n";
+            }
+          }
+
+          std::cout << "DEBUG: app_context:\n";
+          for (const auto& [k, v] : app_context) {
+            std::cout << "  DEBUG: " << k << " = " << v << "\n";
+          }
+
+          std::cout << "DEBUG: connection_config:\n";
+          for (const auto& [k, v] : connection_config) {
+            std::cout << "  DEBUG: " << k << " = " << v << "\n";
+          }
+        }
 
   std::string user_id;
+  std::unordered_map<std::string, std::unordered_map<std::string, std::string>> column_encryption;
+  std::unordered_map<std::string, std::string> app_context;
+  std::unordered_map<std::string, std::string> connection_config;
 };
 
 struct PARQUET_EXPORT ExternalClient {
