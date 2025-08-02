@@ -12,6 +12,10 @@ WORKDIR /arrowdev
 # Clone mini-app source
 RUN git clone -b dev-miniapp https://github.com/protegrity/arrow.git .
 
+# some utils
+RUN apt-get update && \
+    apt-get install -y gdb valgrind vim thrift-compiler less 
+
 # Build Arrow C++ libraries
 RUN cd /arrowdev/cpp && \
     rm -rf build && \
