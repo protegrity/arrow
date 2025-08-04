@@ -244,6 +244,8 @@ FileDecryptionProperties::FileDecryptionProperties(
   if (footer_key.empty() && check_plaintext_footer_integrity) {
     DCHECK(nullptr != key_retriever);
   }
+  std::cout << "In the FileDecryptionProperties constructor" << std::endl;
+  std::cout << "column_decryption_properties.size(): " << column_decryption_properties.size() << std::endl;
   aad_prefix_verifier_ = std::move(aad_prefix_verifier);
   footer_key_ = footer_key;
   check_plaintext_footer_integrity_ = check_plaintext_footer_integrity;

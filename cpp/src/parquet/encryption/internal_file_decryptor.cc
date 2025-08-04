@@ -61,9 +61,11 @@ InternalFileDecryptor::InternalFileDecryptor(
       footer_key_metadata_(footer_key_metadata),
       pool_(pool) {
         std::cout << "Created an InternalFileDecryptor!! Algorithm [" << algorithm << "]" << std::endl;
+        std::cout << "Footer key metadata: " << footer_key_metadata << std::endl;
       }
 
 std::string InternalFileDecryptor::GetFooterKey() {
+  std::cout << "Getting footer key!! Footer key metadata: " << footer_key_metadata_ << std::endl;
   std::unique_lock lock(mutex_);
   if (!footer_key_.empty()) {
     return footer_key_;
@@ -101,6 +103,7 @@ std::unique_ptr<encryption::DecryptorInterface> GetDecryptorImpl(ParquetCipher::
     std::cout << "Heeey I found an external decryptor!! woot!!!" << std::endl;
     return encryption::ExternalDecryptorImpl::Make(algorithm, key_len, metadata);
   }
+  std::cout << "Going with regular AesDecryptor" << std::endl;
   return encryption::AesDecryptorImpl::Make(algorithm, key_len, metadata);
 }
 
@@ -112,6 +115,8 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetFooterDecryptor() {
 std::unique_ptr<Decryptor> InternalFileDecryptor::GetFooterDecryptor(
     const std::string& aad, bool metadata) {
   std::string footer_key = GetFooterKey();
+  std::cout << "Getting footer decryptor!! Footer key: " << footer_key << std::endl;
+  std::cout << "Algorithm: " << algorithm_ << std::endl;
 
   auto key_len = static_cast<int32_t>(footer_key.size());
   auto decryptor_impl = GetDecryptorImpl(algorithm_, key_len, metadata);

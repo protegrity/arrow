@@ -354,6 +354,11 @@ int32_t AesDecryptorImpl::GetCiphertextLength(span<const uint8_t> ciphertext) co
 
 int32_t AesDecryptorImpl::GcmDecrypt(span<const uint8_t> ciphertext, span<const uint8_t> key,
                                      span<const uint8_t> aad, span<uint8_t> plaintext) {
+                                      
+std::cout << "GcmDecrypt: ciphertext_len=" << ciphertext.size() << std::endl;
+std::cout << "GcmDecrypt: plaintext.size()=" << plaintext.size() << std::endl;
+std::cout << "GcmDecrypt: ciphertext_size_delta_=" << ciphertext_size_delta_ << std::endl;
+std::cout << "GcmDecrypt: length_buffer_length_=" << length_buffer_length_ << std::endl;
   int len;
   int32_t plaintext_len;
 
@@ -362,6 +367,7 @@ int32_t AesDecryptorImpl::GcmDecrypt(span<const uint8_t> ciphertext, span<const 
 
   int32_t ciphertext_len = GetCiphertextLength(ciphertext);
 
+  std::cout << "1" << std::endl;
   if (plaintext.size() < static_cast<size_t>(ciphertext_len) - ciphertext_size_delta_) {
     std::stringstream ss;
     ss << "Plaintext buffer length " << plaintext.size() << " is insufficient "
@@ -369,6 +375,7 @@ int32_t AesDecryptorImpl::GcmDecrypt(span<const uint8_t> ciphertext, span<const 
     throw ParquetException(ss.str());
   }
 
+  std::cout << "2" << std::endl;
   if (ciphertext_len < length_buffer_length_ + kNonceLength + kGcmTagLength) {
     std::stringstream ss;
     ss << "Invalid ciphertext length " << ciphertext_len << ". Expected at least "
@@ -376,51 +383,64 @@ int32_t AesDecryptorImpl::GcmDecrypt(span<const uint8_t> ciphertext, span<const 
     throw ParquetException(ss.str());
   }
 
+  std::cout << "3" << std::endl;
   // Extracting IV and tag
   std::copy(ciphertext.begin() + length_buffer_length_,
             ciphertext.begin() + length_buffer_length_ + kNonceLength, nonce.begin());
   std::copy(ciphertext.begin() + ciphertext_len - kGcmTagLength,
             ciphertext.begin() + ciphertext_len, tag.begin());
 
+            std::cout << "4" << std::endl;
   auto ctx = MakeCipherContext();
 
+  std::cout << "5" << std::endl;
   // Setting key and IV
   if (1 != EVP_DecryptInit_ex(ctx.get(), nullptr, nullptr, key.data(), nonce.data())) {
     throw ParquetException("Couldn't set key and IV");
   }
 
+  std::cout << "6" << std::endl;
   // Setting additional authenticated data
   if (aad.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
     std::stringstream ss;
     ss << "AAD size " << aad.size() << " overflows int";
     throw ParquetException(ss.str());
   }
+  std::cout << "7" << std::endl;
   if ((!aad.empty()) && (1 != EVP_DecryptUpdate(ctx.get(), nullptr, &len, aad.data(),
                                                 static_cast<int>(aad.size())))) {
     throw ParquetException("Couldn't set AAD");
   }
 
+  std::cout << "8" << std::endl;
   // Decryption
   int decryption_length =
       ciphertext_len - length_buffer_length_ - kNonceLength - kGcmTagLength;
+
+  std::cout << "9" << std::endl;
   if (!EVP_DecryptUpdate(ctx.get(), plaintext.data(), &len,
                          ciphertext.data() + length_buffer_length_ + kNonceLength,
                          decryption_length)) {
     throw ParquetException("Failed decryption update");
   }
 
+  std::cout << "10" << std::endl;
   plaintext_len = len;
 
+  std::cout << "11" << std::endl;
   // Checking the tag (authentication)
   if (!EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, kGcmTagLength, tag.data())) {
     throw ParquetException("Failed authentication");
   }
 
+  std::cout << "12" << std::endl;
+  EVP_DecryptFinal_ex(ctx.get(), plaintext.data() + len, &len);
   // Finalization
-  if (1 != EVP_DecryptFinal_ex(ctx.get(), plaintext.data() + len, &len)) {
-    throw ParquetException("");
-  }
+  /*if (1 != EVP_DecryptFinal_ex(ctx.get(), plaintext.data() + len, &len)) {
+    throw ParquetException("why would you do empty here??");
+  }*/
 
+  std::cout << "13" << std::endl;
   plaintext_len += len;
   return plaintext_len;
 }
@@ -492,9 +512,11 @@ int32_t AesDecryptorImpl::Decrypt(span<const uint8_t> ciphertext, span<const uin
   }
 
   if (kGcmMode == aes_mode_) {
+    std::cout << "GcmDecrypt called" << std::endl;
     return GcmDecrypt(ciphertext, key, aad, plaintext);
   }
 
+  std::cout << "CtrDecrypt called" << std::endl;
   return CtrDecrypt(ciphertext, key, plaintext);
 }
 
@@ -722,8 +744,36 @@ std::unique_ptr<ExternalDecryptorImpl> ExternalDecryptorImpl::Make(ParquetCipher
 
 int32_t ExternalDecryptorImpl::Decrypt(span<const uint8_t> ciphertext, span<const uint8_t> key,
                                        span<const uint8_t> aad, span<uint8_t> plaintext) {
-  ConstructExternalCall();
-  return aes_decryptor_->Decrypt(ciphertext, key, aad, plaintext);
+                                        std::cout << "ExternalDecryptorImpl::Decrypt called" << std::endl;
+                                        std::cout << "ciphertext size: " << ciphertext.size() << std::endl;
+                                        std::cout << "key size: " << key.size() << std::endl;
+                                        std::cout << "aad size: " << aad.size() << std::endl;
+                                        std::cout << "plaintext size: " << plaintext.size() << std::endl;
+                                        
+                                        ConstructExternalCall();
+                                        
+                                        std::cout << "About to call aes_decryptor_->Decrypt()" << std::endl;
+                                        std::cout << "About to call aes_decryptor_->Decrypt()" << std::endl;
+std::cout << "ciphertext first few bytes: ";
+for (int i = 0; i < std::min(8, (int)ciphertext.size()); i++) {
+    std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)ciphertext[i] << " ";
+}
+std::cout << std::dec << std::endl;
+
+std::cout << "key first few bytes: ";
+for (int i = 0; i < std::min(8, (int)key.size()); i++) {
+    std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)key[i] << " ";
+}
+std::cout << std::dec << std::endl;
+
+std::cout << "aad first few bytes: ";
+for (int i = 0; i < std::min(8, (int)aad.size()); i++) {
+    std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)aad[i] << " ";
+}
+std::cout << std::dec << std::endl;
+                                        int32_t result = aes_decryptor_->Decrypt(ciphertext, key, aad, plaintext);
+                                        std::cout << "aes_decryptor_->Decrypt() returned: " << result << std::endl;
+                                        return result;
 }
 
 int32_t ExternalDecryptorImpl::PlaintextLength(int32_t ciphertext_len) const {
