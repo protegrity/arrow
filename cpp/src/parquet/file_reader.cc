@@ -705,6 +705,7 @@ void SerializedFile::ParseMetaDataOfEncryptedFileWithPlaintextFooter(
     uint32_t read_metadata_len) {
   // Providing decryption properties in plaintext footer mode is not mandatory, for
   // example when reading by legacy reader.
+  std::cout << "In the ParseMetaDataOfEncryptedFileWithPlaintextFooter" << std::endl;
   if (file_decryption_properties != nullptr) {
     EncryptionAlgorithm algo = file_metadata_->encryption_algorithm();
     // Handle AAD prefix
@@ -714,7 +715,9 @@ void SerializedFile::ParseMetaDataOfEncryptedFileWithPlaintextFooter(
         file_metadata_->footer_signing_key_metadata(), properties_.memory_pool());
     // set the InternalFileDecryptor in the metadata as well, as it's used
     // for signature verification and for ColumnChunkMetaData creation.
+    std::cout << "Setting the InternalFileDecryptor in the metadata" << std::endl;
     file_metadata_->set_file_decryptor(std::move(file_decryptor));
+    std::cout << "Set the InternalFileDecryptor in the metadata" << std::endl;
 
     if (file_decryption_properties->check_plaintext_footer_integrity()) {
       if (metadata_len - read_metadata_len !=

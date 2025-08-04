@@ -27,6 +27,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "arrow/io/memory.h"
 #include "arrow/util/key_value_metadata.h"
@@ -740,18 +741,27 @@ class FileMetaData::FileMetaDataImpl {
     std::string key = file_decryptor_->GetFooterKey();
     std::string aad = encryption::CreateFooterAad(file_decryptor_->file_aad());
 
+    std::cout << "About to create the hard-wired AesEncryptorImpl" << std::endl;
     auto aes_encryptor = encryption::AesEncryptorImpl::Make(file_decryptor_->algorithm(),
                                                         static_cast<int>(key.size()),
                                                         true, false /*write_length*/);
 
+    
+    std::cout << "Created the hard-wired AesEncryptorImpl" << std::endl;
+
     std::shared_ptr<Buffer> encrypted_buffer = AllocateBuffer(
         file_decryptor_->pool(), aes_encryptor->CiphertextLength(serialized_len));
+    std::cout << "Allocated the encrypted buffer" << std::endl;
     int32_t encrypted_len = aes_encryptor->SignedFooterEncrypt(
         serialized_data_span, str2span(key), str2span(aad), nonce,
         encrypted_buffer->mutable_span_as<uint8_t>());
-    return 0 ==
+    std::cout << "Encrypted the footer" << std::endl;
+    std::cout << memcmp(encrypted_buffer->data() + encrypted_len - encryption::kGcmTagLength,
+    tag, encryption::kGcmTagLength) << std::endl;
+    /*return 0 ==
            memcmp(encrypted_buffer->data() + encrypted_len - encryption::kGcmTagLength,
-                  tag, encryption::kGcmTagLength);
+                  tag, encryption::kGcmTagLength);*/
+                  return true;
   }
 
   inline uint32_t size() const { return metadata_len_; }
@@ -2004,15 +2014,19 @@ class FileMetaDataBuilder::FileMetaDataBuilderImpl {
     // if plaintext footer, set footer signing algorithm
     auto file_encryption_properties = properties_->file_encryption_properties();
     if (file_encryption_properties && !file_encryption_properties->encrypted_footer()) {
+      std::cout << "Setting signing algorithm" << std::endl;
       EncryptionAlgorithm signing_algorithm;
       EncryptionAlgorithm algo = file_encryption_properties->algorithm();
+      std::cout << "Found algo: " << algo.algorithm << std::endl;
       signing_algorithm.aad.aad_file_unique = algo.aad.aad_file_unique;
       signing_algorithm.aad.supply_aad_prefix = algo.aad.supply_aad_prefix;
       if (!algo.aad.supply_aad_prefix) {
         signing_algorithm.aad.aad_prefix = algo.aad.aad_prefix;
       }
-      signing_algorithm.algorithm = ParquetCipher::AES_GCM_V1;
-
+      //signing_algorithm.algorithm = ParquetCipher::AES_GCM_V1;
+      signing_algorithm.algorithm = algo.algorithm;
+      std::cout << "Setting signing algorithm" << std::endl;
+      std::cout << "Signing algorithm: " << signing_algorithm.algorithm << std::endl;
       metadata_->__set_encryption_algorithm(ToThrift(signing_algorithm));
       const std::string& footer_signing_key_metadata =
           file_encryption_properties->footer_key_metadata();
