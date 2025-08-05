@@ -29,6 +29,7 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 using ::arrow::util::span;
 
@@ -104,56 +105,73 @@ class DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
   }
 }; // class DBPALibraryWrapper
 
+
+// forward declarations
+void* LoadSharedLibrary(const std::string& library_path);
+std::unique_ptr<LoadableEncryptorInterface> CreateInstance(void* library_handle);
+
 std::unique_ptr<LoadableEncryptorInterface> LoadableEncryptorUtils::LoadFromLibrary(const std::string& library_path) {
   std::cout << "Inside LoadableEncryptorUtils::LoadFromLibrary" << std::endl;
 
-  // If library_path is provided, try to load the shared library
-  if (!library_path.empty()) {
-    try {
+  if (library_path.empty()) {
+    throw std::invalid_argument("LoadableEncryptorUtils::LoadFromLibrary: No library path provided");
+  }
 
-      // Load the shared library
-      void* library_handle = dlopen(library_path.c_str(), RTLD_LAZY);
+  //TODO: do we need to wrap this in a try/catch block?
+  //if we do that, how to we raise exceptions to the caller?
 
-      if (!library_handle) {
-        //auto dl_error = dlerror();
-
-        //TODO: log the error.
-        //TODO: raise exception:
-        //https://github.com/apache/arrow/blob/main/cpp/src/arrow/util/io_util.cc#L2241
-
-        std::cout << "Warning: Failed to load shared library: " << library_path << std::endl;
-        return nullptr;
-      }
-
-      //load the create_new_instance() function from the library
-      create_encryptor_t create_instance = (create_encryptor_t) dlsym(library_handle, "create_new_instance");
-    const char* dlsym_error = dlerror();
-
-      if (dlsym_error) {
-        std::cerr << "Error: Cannot load symbol 'create_new_instance()': " << dlsym_error << std::endl;
-
-        dlclose(library_handle);
-
-        //TODO: what to return here?
-        return nullptr;
-      }
-
-      //at this point, we have the create_instance function pointer (from the shared library)
-      // so we can create a new instance of the DLLEncryptor
-      auto instance = std::unique_ptr<LoadableEncryptorInterface>(create_instance());
-
-      std::cout << "LoadableEncryptorUtils -- Successfully loaded DLLEncryptor from shared library: " << library_path << std::endl;
-
-      
-      return instance;
-    } catch (const std::exception& e) {
-      std::cout << "Warning: Exception while loading shared library: " << e.what() << std::endl;      
-    }
-
-  } //if (!library_path.empty())
-
-  std::cout << "Returning nullptr" << std::endl;
-  return nullptr;
+  void* library_handle = LoadSharedLibrary(library_path);
+  auto agent_instance = CreateInstance(library_handle);
+  //auto wrapped_agent = std::make_unique<DBPALibraryWrapper>(std::move(agent_instance), library_handle);
+  //return wrapped_agent;
+  return agent_instance;
 }
 
-}  // namespace parquet::encryption::external 
+void* LoadSharedLibrary(const std::string& library_path) {
+  //TODO: WIN vs UNIX handling
+  //    //https://github.com/apache/arrow/blob/main/cpp/src/arrow/util/io_util.cc#L2241
+
+  // Load the shared library
+  void* library_handle = dlopen(library_path.c_str(), RTLD_LAZY);
+  if (library_handle != nullptr) {
+    return library_handle;
+  }
+
+  std::string error_msg = "Failed to load shared library: " + library_path;
+
+  auto dl_error = dlerror();
+  if (dl_error) {
+    error_msg += " - " + std::string(dl_error);
+  }
+
+  //TODO: this is likely temporary.
+  std::cout << error_msg << std::endl;
+
+  throw std::runtime_error(error_msg);
+}
+
+std::unique_ptr<LoadableEncryptorInterface> CreateInstance(void* library_handle) {
+
+  //TODO: WIN vs UNIX handling
+  void* symbol_handle = dlsym(library_handle, "create_new_instance");
+  if (symbol_handle == nullptr) {
+    std::cerr << "Error: Cannot load symbol 'create_new_instance()': " << dlerror() << std::endl;
+    dlclose(library_handle);
+    return nullptr;
+  }
+  
+  std::cout << "Symbol handle: " << symbol_handle << std::endl;
+  create_encryptor_t create_instance = (create_encryptor_t) symbol_handle;
+
+  //at this point, we have the create_instance function pointer (from the shared library)
+  // so we can create a new instance of the DLLEncryptor
+  auto instance = std::unique_ptr<LoadableEncryptorInterface>(create_instance());
+
+  std::cout << "LoadableEncryptorUtils -- Successfully loaded DLLEncryptor from shared library" << std::endl;
+  
+  return instance;
+} // CreateInstance()
+
+} // namespace parquet::encryption::external 
+
+
