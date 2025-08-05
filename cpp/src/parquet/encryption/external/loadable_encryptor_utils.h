@@ -17,35 +17,17 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
 
 #include "parquet/platform.h"
-#include "parquet/properties.h"
-#include "parquet/types.h"
-#include "parquet/encryption/encryption_internal.h"
+#include "parquet/encryption/external/loadable_encryptor.h"
 
-namespace parquet::encryption {
+namespace parquet::encryption::external {
 
-// Forward declaration
-class EncryptorInterface;
-
-// Interface for loadable encryptors that can be dynamically loaded from shared libraries
-// This extends the base EncryptorInterface with initialization capabilities
-class PARQUET_EXPORT LoadableEncryptorInterface : public EncryptorInterface {
+class PARQUET_EXPORT LoadableEncryptorUtils {
  public:
-  virtual void init(ParquetCipher::type alg_id, 
-    int32_t key_len,
-    std::string column_name, 
-    Type::type data_type,
-    Compression::type compression_type, 
-    Encoding::type encoding,
-    std::string ext_column_key, 
-    std::string user_id,
-    std::string app_context,
-    bool metadata, 
-    bool write_length = true) = 0;
-    
-  virtual ~LoadableEncryptorInterface() = default;
+  static std::unique_ptr<LoadableEncryptorInterface> LoadFromLibrary(const std::string& library_path);
 };
 
-}  // namespace parquet::encryption 
+}  // namespace parquet::encryption::external 

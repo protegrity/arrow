@@ -20,8 +20,8 @@
 #include "parquet/encryption/internal_file_encryptor.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
-#include "parquet/encryption/loadable_encryptor.h"
-#include "parquet/encryption/loadable_encryptor_utils.h"
+#include "parquet/encryption/external/loadable_encryptor.h"
+#include "parquet/encryption/external/loadable_encryptor_utils.h"
 #include "parquet/thrift_internal.h"
 
 namespace parquet {
@@ -208,7 +208,7 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
         //TODO: check for null, error loading, etc
         
         //dll_encryptor is an instance of ExternalEncryptorImpl
-        auto dll_encryptor = encryption::LoadableEncryptorUtils::LoadFromLibrary("libDLLEncryptor.so");
+        auto dll_encryptor = encryption::external::LoadableEncryptorUtils::LoadFromLibrary("libDLLEncryptor.so");
         
         dll_encryptor->init(algorithm, 
           key_len, 

@@ -21,7 +21,7 @@ arrow_install_all_headers("parquet/encryption")
 add_library(DLLEncryptor SHARED
    encryption_internal.cc
    openssl_internal.cc
-   dll_encryptor.cc
+   external/dll_encryptor.cc
 )
 
 # target_include_directories(DLLEncryptor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

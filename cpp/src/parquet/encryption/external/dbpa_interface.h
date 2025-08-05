@@ -18,16 +18,27 @@
 #pragma once
 
 #include <memory>
-#include <string>
-
 #include "parquet/platform.h"
-#include "parquet/encryption/loadable_encryptor.h"
+#include "arrow/util/span.h"
 
-namespace parquet::encryption {
+using ::arrow::util::span;
 
-class PARQUET_EXPORT LoadableEncryptorUtils {
- public:
-  static std::unique_ptr<LoadableEncryptorInterface> LoadFromLibrary(const std::string& library_path);
-};
+namespace parquet::encryption::external {
 
-}  // namespace parquet::encryption 
+    class EncryptionResult {
+    };
+
+    class DecryptionResult {
+    };
+
+    class PARQUET_EXPORT DataBatchProtectionAgentInterface {
+        public:
+         std::unique_ptr<EncryptionResult> Encrypt(
+            span<const uint8_t> plaintext, 
+            span<uint8_t> ciphertext);
+
+        std::unique_ptr<DecryptionResult> Decrypt(
+            span<const uint8_t> ciphertext);
+
+       };
+}

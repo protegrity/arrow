@@ -24,9 +24,9 @@
 #include "parquet/properties.h"
 #include "parquet/types.h"
 #include "parquet/encryption/encryption_internal.h"
-#include "parquet/encryption/loadable_encryptor.h"
+#include "parquet/encryption/external/loadable_encryptor.h"
 
-namespace parquet::encryption {
+namespace parquet::encryption::external {
 
 // Forward declaration
 class AesEncryptorImpl;
@@ -65,7 +65,7 @@ class PARQUET_EXPORT DLLEncryptor : public LoadableEncryptorInterface {
   std::string ext_column_key_;
   std::string user_id_;
   std::string app_context_;
-  std::unique_ptr<AesEncryptorImpl> aes_encryptor_;
+  std::unique_ptr<parquet::encryption::AesEncryptorImpl> aes_encryptor_;
 };
 
-}  // namespace parquet::encryption 
+}  // namespace parquet::encryption::external 

@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include "parquet/encryption/dll_encryptor.h"
+#include "parquet/encryption/external/dll_encryptor.h"
 #include <dlfcn.h>
 
 #include <iostream>
@@ -28,7 +28,7 @@
 
 using ::arrow::util::span;
 
-namespace parquet::encryption {
+namespace parquet::encryption::external {
 
 DLLEncryptor::DLLEncryptor() {
   std::cout << "Created DLLEncryptor with empty constructor" << std::endl;
@@ -61,7 +61,7 @@ void DLLEncryptor::init(ParquetCipher::type alg_id,
 
   std::cout << "DLLEncryptor::init :: here" << std::endl;
 
-  aes_encryptor_ = std::make_unique<AesEncryptorImpl>(alg_id, key_len, metadata, write_length);
+  aes_encryptor_ = std::make_unique<parquet::encryption::AesEncryptorImpl>(alg_id, key_len, metadata, write_length);
 
   std::cout << "Done with DLLEncryptor::init" << std::endl;
 }
@@ -101,8 +101,8 @@ int32_t DLLEncryptor::CiphertextLength(int64_t plaintext_len) const {
 
     //TODO: do we need to deal with the return type?
     LoadableEncryptorInterface* create_new_instance() {
-      return std::make_unique<DLLEncryptor>().release();
+      return std::make_unique<parquet::encryption::external::DLLEncryptor>().release();
     }
   }
 
-}  // namespace parquet::encryption 
+}  // namespace parquet::encryption::external 

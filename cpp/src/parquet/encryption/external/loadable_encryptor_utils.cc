@@ -15,15 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include "parquet/encryption/loadable_encryptor_utils.h"
-#include "parquet/encryption/loadable_encryptor.h"
-#include "parquet/encryption/dll_encryptor.h"
+#include "parquet/encryption/external/loadable_encryptor_utils.h"
+#include "parquet/encryption/external/loadable_encryptor.h"
+#include "parquet/encryption/external/dll_encryptor.h"
 #include <dlfcn.h>
 
 #include <iostream>
 #include <stdexcept>
 
-namespace parquet::encryption {
+namespace parquet::encryption::external {
 
 // Function pointer type for creating encryptor instances
 // This needs to match the return type of the create_new_instance function in the shared library.
@@ -81,4 +81,4 @@ std::unique_ptr<LoadableEncryptorInterface> LoadableEncryptorUtils::LoadFromLibr
   return nullptr;
 }
 
-}  // namespace parquet::encryption 
+}  // namespace parquet::encryption::external 
