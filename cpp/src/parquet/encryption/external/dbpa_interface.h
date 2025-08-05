@@ -33,12 +33,13 @@ namespace parquet::encryption::external {
 
     class PARQUET_EXPORT DataBatchProtectionAgentInterface {
         public:
-         std::unique_ptr<EncryptionResult> Encrypt(
+         virtual std::unique_ptr<EncryptionResult> Encrypt(
             span<const uint8_t> plaintext, 
-            span<uint8_t> ciphertext);
+            span<uint8_t> ciphertext) = 0;
 
-        std::unique_ptr<DecryptionResult> Decrypt(
-            span<const uint8_t> ciphertext);
+        virtual std::unique_ptr<DecryptionResult> Decrypt(
+            span<const uint8_t> ciphertext) = 0;
 
-       };
+        virtual ~DataBatchProtectionAgentInterface() = default;
+    };
 }

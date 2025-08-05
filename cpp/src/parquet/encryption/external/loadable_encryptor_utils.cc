@@ -18,16 +18,91 @@
 #include "parquet/encryption/external/loadable_encryptor_utils.h"
 #include "parquet/encryption/external/loadable_encryptor.h"
 #include "parquet/encryption/external/dll_encryptor.h"
+#include "parquet/encryption/external/dbpa_interface.h"
+#include "arrow/util/span.h"
 #include <dlfcn.h>
+
+#ifdef _WIN32
+//TODO: this needs to be reviewed and tested.
+#include <windows.h>
+#endif
 
 #include <iostream>
 #include <stdexcept>
+
+using ::arrow::util::span;
 
 namespace parquet::encryption::external {
 
 // Function pointer type for creating encryptor instances
 // This needs to match the return type of the create_new_instance function in the shared library.
 typedef LoadableEncryptorInterface* (*create_encryptor_t)();
+
+class DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
+ private:
+  std::unique_ptr<DataBatchProtectionAgentInterface> wrapped_agent_;
+  void * library_handle_;
+
+ public:
+  // Constructor that takes ownership of the wrapped agent
+  explicit DBPALibraryWrapper(
+    std::unique_ptr<DataBatchProtectionAgentInterface> agent, 
+    void * library_handle)
+      : wrapped_agent_(std::move(agent)), library_handle_(library_handle) {
+    // Ensure the wrapped agent is not null
+    if (!wrapped_agent_) {
+      throw std::invalid_argument("DBPAWrapper: Cannot create wrapper with null agent");
+    }
+    if (!library_handle_) {
+      throw std::invalid_argument("DBPAWrapper: Cannot create wrapper with null library handle");
+    }
+  }
+
+  // Destructor
+  // This is the main reason for the decorator/wrapper.
+  // This will (a) destroy the wrapped agent, and (b) close the shared library.
+  // While the wrapped_agent_ would automatically be destroyed when this object is destroyed
+  // we need to explicitly destroy **before** we are able to close the shared library.
+  // Doing it in a different order, may cause issues, as by unloading the library may cause the class
+  // definition to be unloaded before the destructor completes, and that is likely to cause issues 
+  // (such as a segfault).
+  ~DBPALibraryWrapper() {
+    // Explicitly destroy the wrapped agent first
+    if (wrapped_agent_) {
+      DataBatchProtectionAgentInterface* wrapped_agent = wrapped_agent_.release();
+      delete wrapped_agent;
+    }
+    
+    // Now we can close the shared library
+    #ifndef _WIN32    
+    if (library_handle_) {
+      dlclose(library_handle_);
+      library_handle_ = nullptr;        
+    }
+    #else
+    // TODO: this needs to be reviewed and tested.
+    if (library_handle_) {
+      FreeLibrary(library_handle_);
+      library_handle_ = nullptr;
+    }
+    #endif
+  }
+
+  // Decorator implementation of Encrypt method
+  std::unique_ptr<EncryptionResult> Encrypt(
+      span<const uint8_t> plaintext, 
+      span<uint8_t> ciphertext) override {
+    
+    return wrapped_agent_->Encrypt(plaintext, ciphertext);
+  }
+
+  // Decorator implementation of Decrypt method
+  std::unique_ptr<DecryptionResult> Decrypt(
+      span<const uint8_t> ciphertext) override {
+    
+      return wrapped_agent_->Decrypt(ciphertext);
+  }
+}; // class DBPALibraryWrapper
 
 std::unique_ptr<LoadableEncryptorInterface> LoadableEncryptorUtils::LoadFromLibrary(const std::string& library_path) {
   std::cout << "Inside LoadableEncryptorUtils::LoadFromLibrary" << std::endl;
