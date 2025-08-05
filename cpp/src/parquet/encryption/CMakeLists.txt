@@ -24,6 +24,10 @@ add_library(DLLEncryptor SHARED
    external/dll_encryptor.cc
 )
 
+add_library(DBPATestAgent SHARED
+   external/dbpa_test_agent.cc
+)
+
 # target_include_directories(DLLEncryptor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 #TODO marguedas: this needs review.
@@ -33,6 +37,13 @@ target_link_libraries(DLLEncryptor PUBLIC
 )
 
 set_target_properties(DLLEncryptor PROPERTIES OUTPUT_NAME "DLLEncryptor")
+
+# DBPATestAgent configuration
+target_link_libraries(DBPATestAgent PUBLIC
+  arrow_shared
+)
+
+set_target_properties(DBPATestAgent PROPERTIES OUTPUT_NAME "DBPATestAgent")
 
 # Install the DLLEncryptor library
 # install(TARGETS DLLEncryptor
