@@ -9,5 +9,5 @@ cmake -GNinja \
   -DARROW_PYTHON=ON \
   -DCMAKE_BUILD_TYPE=Debug \
   ..
-ninja install
+ninja install -j 8
 
