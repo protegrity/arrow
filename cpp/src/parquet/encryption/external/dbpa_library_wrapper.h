@@ -49,7 +49,7 @@ class DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
   explicit DBPALibraryWrapper(
       std::unique_ptr<DataBatchProtectionAgentInterface> agent,
       void* library_handle,
-      std::function<void(void*)> handle_closing_fn);
+      std::function<void(void*)> handle_closing_fn = &DefaultSharedLibraryClosingFn);
 
   // Destructor
   // This is the main reason for the decorator/wrapper.
