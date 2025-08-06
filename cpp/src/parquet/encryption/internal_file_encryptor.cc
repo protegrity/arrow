@@ -20,8 +20,8 @@
 #include "parquet/encryption/internal_file_encryptor.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
-#include "parquet/encryption/external/loadable_encryptor.h"
-#include "parquet/encryption/external/loadable_encryptor_utils.h"
+// #include "parquet/encryption/external/loadable_encryptor.h"
+// #include "parquet/encryption/external/loadable_encryptor_utils.h"
 #include "parquet/thrift_internal.h"
 
 namespace parquet {
@@ -185,7 +185,7 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
       }
 
       //TODO: move this elsewhere.
-      bool use_dll_encryptor = true;
+      bool use_dll_encryptor = false;
 
       if (!use_dll_encryptor) {
         //the original workflow of the mini-app
@@ -202,6 +202,9 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
           false);
       }
       else {
+        // this is a minor trick to keep this code temporarily.
+        // will remove this once we have a solid defition of interfaces 
+        #if false
         // Use DLLEncryptor instead of ExternalEncryptorImpl
         std::cout << "internal_file_encryptor.cc :: attempting to load DLLEncryptor" << std::endl;
 
@@ -223,8 +226,9 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
         std::cout << "internal_file_encryptor.cc :: done with dll_encryptor->init" << std::endl;
         
         data_encryptor_[index] = std::move(dll_encryptor);
+        #endif
       }
-    } else {
+    } else { // algo is not external.
       data_encryptor_[index] = encryption::AesEncryptorImpl::Make(algorithm, key_len, false);
     }
 
