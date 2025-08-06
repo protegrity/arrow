@@ -25,6 +25,8 @@ using ::arrow::util::span;
 
 namespace parquet::encryption::external {
 
+    //TODO: this will change once we have a solid defition of interfaces 
+
     class EncryptionResult {
     };
 
