@@ -55,8 +55,11 @@ std::unique_ptr<LoadableEncryptorInterface> LoadableEncryptorUtils::LoadFromLibr
 
   void* library_handle = LoadSharedLibrary(library_path);
   auto agent_instance = CreateInstance(library_handle);
-  //auto wrapped_agent = std::make_unique<DBPALibraryWrapper>(std::move(agent_instance), library_handle);
-  //return wrapped_agent;
+  // auto wrapped_agent = std::make_unique<DBPALibraryWrapper>(
+  //   std::move(agent_instance), 
+  //   library_handle, 
+  //   &DefaultSharedLibraryClosingFn);
+  // return wrapped_agent;
   return agent_instance;
 }
 
@@ -104,8 +107,6 @@ std::unique_ptr<LoadableEncryptorInterface> CreateInstance(void* library_handle)
   
   return instance;
 } // CreateInstance()
-
-
 
 } // namespace parquet::encryption::external 
 

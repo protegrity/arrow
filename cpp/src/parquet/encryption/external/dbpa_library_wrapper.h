@@ -18,6 +18,7 @@
 #pragma once
 
 #include <memory>
+#include <functional>
 
 #include "parquet/encryption/external/dbpa_interface.h"
 #include "arrow/util/span.h"
@@ -26,19 +27,29 @@ using ::arrow::util::span;
 
 namespace parquet::encryption::external {
 
+// Default implementation for shared library closing function
+// This is passed into the constructor of DBPALibraryWrapper, 
+// and is used as the default function to close the shared library.
+void DefaultSharedLibraryClosingFn(void* library_handle);
+
 // Decorator/Wrapper class for the DataBatchProtectionAgentInterface
 // Its main purpose is to close the shared library when Arrow is about to destroy 
 // an intance of an DPBAgent
+//
+// In the constructor we allow to pass a function that will be used to close the shared library.
+// This simplifies testing, as we can use a mock function to avoid actually closing the shared library.
 class DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
  private:
   std::unique_ptr<DataBatchProtectionAgentInterface> wrapped_agent_;
   void* library_handle_;
+  std::function<void(void*)> handle_closing_fn_;
 
  public:
   // Constructor that takes ownership of the wrapped agent
   explicit DBPALibraryWrapper(
       std::unique_ptr<DataBatchProtectionAgentInterface> agent,
-      void* library_handle);
+      void* library_handle,
+      std::function<void(void*)> handle_closing_fn);
 
   // Destructor
   // This is the main reason for the decorator/wrapper.

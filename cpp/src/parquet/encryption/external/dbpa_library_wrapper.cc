@@ -20,6 +20,7 @@
 #include "arrow/util/span.h"
 #include <dlfcn.h>
 #include <stdexcept>
+#include <functional>
 
 #include <iostream>
 
@@ -32,17 +33,34 @@ using ::arrow::util::span;
 
 namespace parquet::encryption::external {
 
-// DBPALibraryWrapper implementation
+// Default implementation for handle closing function
+void DefaultSharedLibraryClosingFn(void* library_handle) {
+  #ifndef _WIN32    
+    dlclose(library_handle);
+  #else
+    // TODO: this needs to be reviewed and tested.
+    if (library_handle) {
+      FreeLibrary(library_handle);
+    }
+  #endif
+}
+
 DBPALibraryWrapper::DBPALibraryWrapper(
     std::unique_ptr<DataBatchProtectionAgentInterface> agent,
-    void* library_handle)
-    : wrapped_agent_(std::move(agent)), library_handle_(library_handle) {
+    void* library_handle,
+    std::function<void(void*)> handle_closing_fn)
+    : wrapped_agent_(std::move(agent)), 
+      library_handle_(library_handle),
+      handle_closing_fn_(std::move(handle_closing_fn)) {
   // Ensure the wrapped agent is not null
   if (!wrapped_agent_) {
     throw std::invalid_argument("DBPAWrapper: Cannot create wrapper with null agent");
   }
   if (!library_handle_) {
     throw std::invalid_argument("DBPAWrapper: Cannot create wrapper with null library handle");
+  }
+  if (!handle_closing_fn_) {
+    throw std::invalid_argument("DBPAWrapper: Cannot create wrapper with null handle closing function");
   }
 }
 
@@ -61,21 +79,13 @@ DBPALibraryWrapper::~DBPALibraryWrapper() {
     delete wrapped_agent;
   }
   
-  // Now we can close the shared library
-  #ifndef _WIN32    
+  // Now we can close the shared library using the provided function
 
   std::cout << "DBPALibraryWrapper::~DBPALibraryWrapper() -- Closing shared library" << std::endl;
-  dlclose(library_handle_);
+  handle_closing_fn_(library_handle_);
   std::cout << "DBPALibraryWrapper::~DBPALibraryWrapper() -- after dlclose" << std::endl;
-  library_handle_ = nullptr;        
 
-  #else
-  // TODO: this needs to be reviewed and tested.
-  if (library_handle_) {
-    FreeLibrary(library_handle_);
-    library_handle_ = nullptr;
-  }
-  #endif
+  library_handle_ = nullptr;
 }
 
 // Decorator implementation of Encrypt method
