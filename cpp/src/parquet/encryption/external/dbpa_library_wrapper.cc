@@ -64,7 +64,7 @@ DBPALibraryWrapper::DBPALibraryWrapper(
   }
 }
 
-// Destructor
+// DBPALibraryWrapper destructor
 // This is the main reason for the decorator/wrapper.
 // This will (a) destroy the wrapped agent, and (b) close the shared library.
 // While the wrapped_agent_ would automatically be destroyed when this object is destroyed
@@ -80,11 +80,7 @@ DBPALibraryWrapper::~DBPALibraryWrapper() {
   }
   
   // Now we can close the shared library using the provided function
-
-  std::cout << "DBPALibraryWrapper::~DBPALibraryWrapper() -- Closing shared library" << std::endl;
   handle_closing_fn_(library_handle_);
-  std::cout << "DBPALibraryWrapper::~DBPALibraryWrapper() -- after dlclose" << std::endl;
-
   library_handle_ = nullptr;
 }
 

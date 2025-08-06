@@ -45,6 +45,19 @@ target_link_libraries(DBPATestAgent PUBLIC
 
 set_target_properties(DBPATestAgent PROPERTIES OUTPUT_NAME "DBPATestAgent")
 
+# Add test for DBPATestAgent
+if(ARROW_TESTING)
+#  add_parquet_test(dbpa-test-agent-test
+#                   SOURCES external/dbpa_test_agent_test.cc
+#                   EXTRA_LINK_LIBS DBPATestAgent
+#                   LABELS "parquet-tests" "encryption-tests")
+  
+  # Add test for DBPALibraryWrapper
+  add_parquet_test(dbpa-library-wrapper-test
+                   SOURCES external/dbpa_library_wrapper_test.cc
+                   LABELS "parquet-tests" "encryption-tests")
+endif()
+
 # Install the DLLEncryptor library
 # install(TARGETS DLLEncryptor
 #         EXPORT DLLEncryptor_targets
