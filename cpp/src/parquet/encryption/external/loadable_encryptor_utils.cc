@@ -16,9 +16,9 @@
 // under the License.
 
 #include "parquet/encryption/external/loadable_encryptor_utils.h"
-#include "parquet/encryption/external/loadable_encryptor.h"
-#include "parquet/encryption/external/dll_encryptor.h"
 #include "parquet/encryption/external/dbpa_interface.h"
+#include "parquet/encryption/external/dbpa_library_wrapper.h"
+
 #include "arrow/util/span.h"
 #include <dlfcn.h>
 
@@ -37,13 +37,13 @@ namespace parquet::encryption::external {
 
 // Function pointer type for creating encryptor instances
 // This needs to match the return type of the create_new_instance function in the shared library.
-typedef LoadableEncryptorInterface* (*create_encryptor_t)();
+typedef DataBatchProtectionAgentInterface* (*create_encryptor_t)();
 
 // forward declarations
 void* LoadSharedLibrary(const std::string& library_path);
-std::unique_ptr<LoadableEncryptorInterface> CreateInstance(void* library_handle);
+std::unique_ptr<DataBatchProtectionAgentInterface> CreateInstance(void* library_handle);
 
-std::unique_ptr<LoadableEncryptorInterface> LoadableEncryptorUtils::LoadFromLibrary(const std::string& library_path) {
+std::unique_ptr<DataBatchProtectionAgentInterface> LoadableEncryptorUtils::LoadFromLibrary(const std::string& library_path) {
   std::cout << "Inside LoadableEncryptorUtils::LoadFromLibrary" << std::endl;
 
   if (library_path.empty()) {
@@ -55,12 +55,10 @@ std::unique_ptr<LoadableEncryptorInterface> LoadableEncryptorUtils::LoadFromLibr
 
   void* library_handle = LoadSharedLibrary(library_path);
   auto agent_instance = CreateInstance(library_handle);
-  // auto wrapped_agent = std::make_unique<DBPALibraryWrapper>(
-  //   std::move(agent_instance), 
-  //   library_handle, 
-  //   &DefaultSharedLibraryClosingFn);
-  // return wrapped_agent;
-  return agent_instance;
+  auto wrapped_agent = std::make_unique<DBPALibraryWrapper>(
+    std::move(agent_instance), 
+    library_handle);
+  return wrapped_agent;
 }
 
 void* LoadSharedLibrary(const std::string& library_path) {
@@ -86,7 +84,7 @@ void* LoadSharedLibrary(const std::string& library_path) {
   throw std::runtime_error(error_msg);
 }
 
-std::unique_ptr<LoadableEncryptorInterface> CreateInstance(void* library_handle) {
+std::unique_ptr<DataBatchProtectionAgentInterface> CreateInstance(void* library_handle) {
 
   //TODO: WIN vs UNIX handling
   void* symbol_handle = dlsym(library_handle, "create_new_instance");
@@ -96,16 +94,14 @@ std::unique_ptr<LoadableEncryptorInterface> CreateInstance(void* library_handle)
     return nullptr;
   }
   
-  std::cout << "Symbol handle: " << symbol_handle << std::endl;
   create_encryptor_t create_instance = (create_encryptor_t) symbol_handle;
 
   //at this point, we have the create_instance function pointer (from the shared library)
   // so we can create a new instance of the DLLEncryptor
-  auto instance = std::unique_ptr<LoadableEncryptorInterface>(create_instance());
+  DataBatchProtectionAgentInterface* instance = create_instance();
+  auto instance_ptr = std::unique_ptr<DataBatchProtectionAgentInterface>(instance);
 
-  std::cout << "LoadableEncryptorUtils -- Successfully loaded DLLEncryptor from shared library" << std::endl;
-  
-  return instance;
+  return instance_ptr;
 } // CreateInstance()
 
 } // namespace parquet::encryption::external 

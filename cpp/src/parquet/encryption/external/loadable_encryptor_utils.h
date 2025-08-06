@@ -21,13 +21,13 @@
 #include <string>
 
 #include "parquet/platform.h"
-#include "parquet/encryption/external/loadable_encryptor.h"
+#include "parquet/encryption/external/dbpa_interface.h"
 
 namespace parquet::encryption::external {
 
 class PARQUET_EXPORT LoadableEncryptorUtils {
  public:
-  static std::unique_ptr<LoadableEncryptorInterface> LoadFromLibrary(const std::string& library_path);
+  static std::unique_ptr<DataBatchProtectionAgentInterface> LoadFromLibrary(const std::string& library_path);
 };
 
 }  // namespace parquet::encryption::external 
