@@ -24,11 +24,6 @@
 
 #include <iostream>
 
-#ifdef _WIN32
-//TODO: this needs to be reviewed and tested.
-#include <windows.h>
-#endif
-
 using ::arrow::util::span;
 
 namespace parquet::encryption::external {
@@ -38,10 +33,7 @@ void DefaultSharedLibraryClosingFn(void* library_handle) {
   #ifndef _WIN32    
     dlclose(library_handle);
   #else
-    // TODO: this needs to be reviewed and tested.
-    if (library_handle) {
-      FreeLibrary(library_handle);
-    }
+    throw std::runtime_error("DBPALibraryWrapper: Not yet implemented for Windows");
   #endif
 }
 
