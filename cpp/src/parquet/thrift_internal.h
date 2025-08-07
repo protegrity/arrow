@@ -241,6 +241,8 @@ static inline EncryptionAlgorithm FromThrift(format::EncryptionAlgorithm encrypt
   } else if (encryption.__isset.AES_GCM_CTR_V1) {
     encryption_algorithm.algorithm = ParquetCipher::AES_GCM_CTR_V1;
     encryption_algorithm.aad = FromThrift(encryption.AES_GCM_CTR_V1);
+  } else if (encryption.__isset.EXTERNAL_V1) {
+    encryption_algorithm.algorithm = ParquetCipher::EXTERNAL_V1;
   } else {
     throw ParquetException("Unsupported algorithm");
   }
@@ -382,12 +384,19 @@ static inline format::AesGcmCtrV1 ToAesGcmCtrV1Thrift(AadMetadata aad) {
   return aesGcmCtrV1;
 }
 
+static inline format::ExternalV1 ToExternalV1Thrift() {
+  format::ExternalV1 externalV1;
+  return externalV1;
+}
+
 static inline format::EncryptionAlgorithm ToThrift(EncryptionAlgorithm encryption) {
   format::EncryptionAlgorithm encryption_algorithm;
   if (encryption.algorithm == ParquetCipher::AES_GCM_V1) {
     encryption_algorithm.__set_AES_GCM_V1(ToAesGcmV1Thrift(encryption.aad));
-  } else {
+  } else if (encryption.algorithm == ParquetCipher::AES_GCM_CTR_V1) {
     encryption_algorithm.__set_AES_GCM_CTR_V1(ToAesGcmCtrV1Thrift(encryption.aad));
+  } else {
+    encryption_algorithm.__set_EXTERNAL_V1(ToExternalV1Thrift());
   }
   return encryption_algorithm;
 }

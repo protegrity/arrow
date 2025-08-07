@@ -240,10 +240,12 @@ std::shared_ptr<FileDecryptionProperties> CryptoFactory::GetFileDecryptionProper
     const KmsConnectionConfig& kms_connection_config,
     const DecryptionConfiguration& decryption_config, const std::string& file_path,
     const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
+  std::cout << "Getting file decryption properties!!" << std::endl;
   auto key_retriever = std::make_shared<FileKeyUnwrapper>(
       key_toolkit_, kms_connection_config, decryption_config.cache_lifetime_seconds,
       file_path, file_system);
-
+  std::cout << "Key retriever: " << key_retriever << std::endl;
+  std::cout << "Going to decryption properties builder" << std::endl;
   return FileDecryptionProperties::Builder()
       .key_retriever(key_retriever)
       ->plaintext_files_allowed()
