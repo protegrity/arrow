@@ -26,6 +26,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <memory>
 
 using ::arrow::util::span;
 using ::arrow::Result;
@@ -46,7 +47,7 @@ std::unique_ptr<DataBatchProtectionAgentInterface> CreateInstance(void* library_
   }
   
   //create_instance_fn is a function pointer to the create_new_instance function in the shared library.
-  create_encryptor_t create_instance_fn = (create_encryptor_t) symbol_result.ValueOrDie();
+  create_encryptor_t create_instance_fn = reinterpret_cast<create_encryptor_t>(symbol_result.ValueOrDie());
 
   //at this point, we have the create_instance function pointer (from the shared library)
   // so we can create a new instance of the DataBatchProtectionAgentInterface
