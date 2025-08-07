@@ -18,6 +18,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <filesystem>
 
 #include "gtest/gtest.h"
 #include "parquet/encryption/external/loadable_encryptor_utils.h"
@@ -26,45 +27,94 @@
 #include "arrow/util/span.h"
 #include "parquet/test_util.h"
 
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#include <linux/limits.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#endif
+
 using ::arrow::util::span;
 
 namespace parquet::encryption::external::test {
 
 // Test fixture for LoadableEncryptorUtils tests
 class LoadableEncryptorUtilsTest : public ::testing::Test {
- protected:
-  void SetUp() override {
-    // Get the path to the DBPATestAgent shared library
-    // This assumes the library is built and available in the build directory
-    library_path_ = GetTestLibraryPath();
-  }
+  public:
+    std::string library_path_;
 
-  void TearDown() override {
-    // Clean up any resources if needed
+  protected:
+    void SetUp() override {
+      // Get the path to the DBPATestAgent shared library
+      // This assumes the library is built 
+      library_path_ = GetTestLibraryPath();
+    }
+
+// Helper function to get the directory where the executable is located
+// used within GetTestLibraryPath to determine the path to the test library (*.so)
+std::string GetExecutableDirectory() {
+  #ifdef __APPLE__
+    char path[PATH_MAX];
+    uint32_t size = sizeof(path);
+    if (_NSGetExecutablePath(path, &size) == 0) {
+      return std::filesystem::path(path).parent_path().string();
+    }
+  #elif defined(__linux__)
+    char path[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+    if (len != -1) {
+      path[len] = '\0';
+      return std::filesystem::path(path).parent_path().string();
+    }
+  #elif defined(_WIN32)
+    char path[MAX_PATH];
+    if (GetModuleFileNameA(NULL, path, MAX_PATH) != 0) {
+      return std::filesystem::path(path).parent_path().string();
+    }
+  #endif
+    // Fallback to current working directory if we can't determine executable path
+    return std::filesystem::current_path().string();
   }
 
   // Helper method to get the path to the test library
   std::string GetTestLibraryPath() {
-    // Try to find the DBPATestAgent library in common build locations
-    std::vector<std::string> possible_paths = {
+    // Check for environment variable to override the executable directory
+    const char* cwd_override = std::getenv("PARQUET_TEST_LIBRARY_CWD");
+    std::string base_path;
+    
+    if (cwd_override && cwd_override[0]) {
+      base_path = std::string(cwd_override);
+    } else {
+      // Get the directory where the executable is located
+      base_path = GetExecutableDirectory();
+    }
+
+    std::vector<std::string> possible_filenames = {
       "libDBPATestAgent.so",
-      "./libDBPATestAgent.so",
-      "./libDBPATestAgent.dylib",
-      "./DBPATestAgent.dll",
-      "../libDBPATestAgent.so",
-      "../libDBPATestAgent.dylib",
-      "../DBPATestAgent.dll",
-      "../../libDBPATestAgent.so",
-      "../../libDBPATestAgent.dylib",
-      "../../DBPATestAgent.dll"
+      "libDBPATestAgent.dylib",
+      "DBPATestAgent.dll"
     };
 
-    // TODO: For now, return the first path, but we may need to revise this and
-    // have this method look up the library in a smarter way.
-    return possible_paths[0];
-  }
+    std::vector<std::string> possible_directories = {
+      GetExecutableDirectory() + "/",
+      base_path + "/"
+      "./",
+      ""
+    };
 
-  std::string library_path_;
+    for (const auto& filename : possible_filenames) {
+      for (const auto& directory : possible_directories) {
+        std::string path = directory + filename;
+        if (std::filesystem::exists(path)) {
+          return path;
+        }
+      }
+    }
+
+    throw std::runtime_error("Could not find library");
+  }
 };
 
 // ============================================================================
