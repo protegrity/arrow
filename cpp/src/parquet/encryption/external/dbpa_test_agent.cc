@@ -40,7 +40,6 @@ void DBPATestAgent::init(std::string agent_name,
   agent_name_ = agent_name;
   configuration_ = configuration;
   enable_logging_ = enable_logging;
-  is_initialized_ = true;
 
   if (enable_logging_) {
     std::cout << "DBPATestAgent initialized with name: " << agent_name_ 
@@ -53,12 +52,7 @@ void DBPATestAgent::init(std::string agent_name,
 std::unique_ptr<EncryptionResult> DBPATestAgent::Encrypt(
     span<const uint8_t> plaintext, 
     span<uint8_t> ciphertext) {
-  std::cout << "Inside DBPATestAgent::Encrypt" << std::endl;
   
-  if (!is_initialized_) {
-    throw std::runtime_error("DBPATestAgent not initialized");
-  }
-
   if (enable_logging_) {
     std::cout << "Encrypting " << plaintext.size() << " bytes" << std::endl;
   }
@@ -83,12 +77,7 @@ std::unique_ptr<EncryptionResult> DBPATestAgent::Encrypt(
 
 std::unique_ptr<DecryptionResult> DBPATestAgent::Decrypt(
     span<const uint8_t> ciphertext) {
-  std::cout << "Inside DBPATestAgent::Decrypt" << std::endl;
   
-  if (!is_initialized_) {
-    throw std::runtime_error("DBPATestAgent not initialized");
-  }
-
   if (enable_logging_) {
     std::cout << "Decrypting " << ciphertext.size() << " bytes" << std::endl;
   }
@@ -111,7 +100,7 @@ DBPATestAgent::~DBPATestAgent() {
 
 // Export function for creating new instances from shared library
 extern "C" {
-  DataBatchProtectionAgentInterface* create_new_dbpa_instance() {
+  DataBatchProtectionAgentInterface* create_new_instance() {
     return new parquet::encryption::external::DBPATestAgent();
   }
 }

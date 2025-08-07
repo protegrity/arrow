@@ -56,6 +56,12 @@ if(ARROW_TESTING)
   add_parquet_test(dbpa-library-wrapper-test
                    SOURCES external/dbpa_library_wrapper_test.cc
                    LABELS "parquet-tests" "encryption-tests")
+  
+  # Add test for LoadableEncryptorUtils
+  add_parquet_test(loadable-encryptor-utils-test
+                   SOURCES external/loadable_encryptor_utils_test.cc
+                   EXTRA_LINK_LIBS DBPATestAgent
+                   LABELS "parquet-tests" "encryption-tests")
 endif()
 
 # Install the DLLEncryptor library
