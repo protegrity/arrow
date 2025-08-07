@@ -24,17 +24,18 @@
 
 #include <iostream>
 
+#include "arrow/util/io_util.h"
+
 using ::arrow::util::span;
 
 namespace parquet::encryption::external {
 
 // Default implementation for handle closing function
 void DefaultSharedLibraryClosingFn(void* library_handle) {
-  #ifndef _WIN32    
-    dlclose(library_handle);
-  #else
-    throw std::runtime_error("DBPALibraryWrapper: Not yet implemented for Windows");
-  #endif
+  auto status = arrow::internal::CloseDynamicLibrary(library_handle);
+  if (!status.ok()) {
+    std::cerr << "Error closing library: " << status.message() << std::endl;
+  }
 }
 
 DBPALibraryWrapper::DBPALibraryWrapper(
