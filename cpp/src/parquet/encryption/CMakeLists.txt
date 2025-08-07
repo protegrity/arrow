@@ -18,25 +18,9 @@
 # Headers: public api
 arrow_install_all_headers("parquet/encryption")
 
-add_library(DLLEncryptor SHARED
-   encryption_internal.cc
-   openssl_internal.cc
-   external/dll_encryptor.cc
-)
-
 add_library(DBPATestAgent SHARED
    external/dbpa_test_agent.cc
 )
-
-# target_include_directories(DLLEncryptor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-
-#TODO marguedas: this needs review.
-target_link_libraries(DLLEncryptor PUBLIC
-  ${ARROW_OPENSSL_LIBS}
-  arrow_shared
-)
-
-set_target_properties(DLLEncryptor PROPERTIES OUTPUT_NAME "DLLEncryptor")
 
 # DBPATestAgent configuration
 target_link_libraries(DBPATestAgent PUBLIC
@@ -64,10 +48,3 @@ if(ARROW_TESTING)
                    LABELS "parquet-tests" "encryption-tests")
 endif()
 
-# Install the DLLEncryptor library
-# install(TARGETS DLLEncryptor
-#         EXPORT DLLEncryptor_targets
-#         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-#         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
