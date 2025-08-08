@@ -60,21 +60,5 @@ DBPALibraryWrapper::~DBPALibraryWrapper() {
   // Now we can close the shared library using the provided function
   handle_closing_fn_(library_handle_);
   library_handle_ = nullptr;
-}
-
-// Decorator implementation of Encrypt method
-std::unique_ptr<EncryptionResult> DBPALibraryWrapper::Encrypt(
-    span<const uint8_t> plaintext,
-    span<uint8_t> ciphertext) {
-  
-  return wrapped_agent_->Encrypt(plaintext, ciphertext);
-}
-
-// Decorator implementation of Decrypt method
-std::unique_ptr<DecryptionResult> DBPALibraryWrapper::Decrypt(
-    span<const uint8_t> ciphertext) {
-  
-    return wrapped_agent_->Decrypt(ciphertext);
-}
-
+} //DBPALibraryWrapper::~DBPALibraryWrapper()
 }  // namespace parquet::encryption::external 

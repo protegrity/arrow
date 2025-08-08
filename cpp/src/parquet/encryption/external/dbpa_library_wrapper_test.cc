@@ -85,9 +85,9 @@ class DestructionOrderTracker {
 }; //DestructionOrderTracker
 
 // Companion object to hold mock state that persists after mock instance destruction
-class MockCompanionDPBA {
+class MockCompanionDBPA {
  public:
-  MockCompanionDPBA(std::shared_ptr<DestructionOrderTracker> order_tracker = nullptr) 
+  MockCompanionDBPA(std::shared_ptr<DestructionOrderTracker> order_tracker = nullptr) 
       : encrypt_called_(false), 
         decrypt_called_(false),
         destructor_called_(false),
@@ -131,7 +131,7 @@ class MockCompanionDPBA {
   std::vector<uint8_t> decrypt_ciphertext_;
   size_t encrypt_ciphertext_size_;
   std::shared_ptr<DestructionOrderTracker> order_tracker_;
-}; //MockCompanionDPBA
+}; //MockCompanionDBPA
 
 // Companion object to track shared library handle management operations
 class SharedLibHandleManagementCompanion {
@@ -174,8 +174,8 @@ class SharedLibHandleManagementCompanion {
 // Mock implementation of DataBatchProtectionAgentInterface for testing delegation
 class MockDataBatchProtectionAgent : public DataBatchProtectionAgentInterface {
  public:
-  explicit MockDataBatchProtectionAgent(std::shared_ptr<MockCompanionDPBA> companion = nullptr) 
-      : companion_(companion ? companion : std::make_shared<MockCompanionDPBA>()) {}
+  explicit MockDataBatchProtectionAgent(std::shared_ptr<MockCompanionDBPA> companion = nullptr) 
+      : companion_(companion ? companion : std::make_shared<MockCompanionDBPA>()) {}
   
   ~MockDataBatchProtectionAgent() override {
     companion_->SetDestructorCalled(true);
@@ -207,10 +207,10 @@ class MockDataBatchProtectionAgent : public DataBatchProtectionAgentInterface {
   }
 
   // Getter for the companion object
-  std::shared_ptr<MockCompanionDPBA> GetCompanion() const { return companion_; }
+  std::shared_ptr<MockCompanionDBPA> GetCompanion() const { return companion_; }
 
  private:
-  std::shared_ptr<MockCompanionDPBA> companion_;
+  std::shared_ptr<MockCompanionDBPA> companion_;
 };
 
 // Test fixture for DBPALibraryWrapper tests
@@ -225,7 +225,7 @@ class DBPALibraryWrapperTest : public ::testing::Test {
     destruction_order_tracker_ = std::make_shared<DestructionOrderTracker>();
     
     // Create companion objects with shared order tracker
-    mock_companion_ = std::make_shared<MockCompanionDPBA>(destruction_order_tracker_);
+    mock_companion_ = std::make_shared<MockCompanionDBPA>(destruction_order_tracker_);
     handle_companion_ = std::make_shared<SharedLibHandleManagementCompanion>(destruction_order_tracker_);
     
     // Create mock agent
@@ -265,7 +265,7 @@ class DBPALibraryWrapperTest : public ::testing::Test {
   std::string test_plaintext_;
   std::vector<uint8_t> test_ciphertext_;
   std::shared_ptr<DestructionOrderTracker> destruction_order_tracker_;
-  std::shared_ptr<MockCompanionDPBA> mock_companion_;
+  std::shared_ptr<MockCompanionDBPA> mock_companion_;
   std::shared_ptr<SharedLibHandleManagementCompanion> handle_companion_;
   std::unique_ptr<MockDataBatchProtectionAgent> mock_agent_;
   MockDataBatchProtectionAgent* mock_agent_ptr_;
@@ -609,7 +609,7 @@ TEST_F(DBPALibraryWrapperTest, DestructorOrderVerification) {
   destruction_order_tracker_->Clear();
   
   // Create a custom mock agent that tracks destruction order
-  auto custom_companion = std::make_shared<MockCompanionDPBA>(destruction_order_tracker_);
+      auto custom_companion = std::make_shared<MockCompanionDBPA>(destruction_order_tracker_);
   auto custom_agent = std::make_unique<MockDataBatchProtectionAgent>(custom_companion);
   
   void* dummy_handle = reinterpret_cast<void*>(0x12345678);

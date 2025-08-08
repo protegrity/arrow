@@ -34,7 +34,7 @@ std::unique_ptr<DataBatchProtectionAgentInterface> CreateInstance(void* library_
   //create_instance_fn is a function pointer to the create_new_instance function in the shared library.
   create_encryptor_t create_instance_fn = reinterpret_cast<create_encryptor_t>(symbol_result.ValueOrDie());
 
-  //at this point, we have the create_instance function pointer (from the shared library)
+  // at this point, we have the create_instance function pointer (from the shared library)
   // so we can create a new instance of the DataBatchProtectionAgentInterface
   DataBatchProtectionAgentInterface* instance = create_instance_fn();
 
@@ -51,6 +51,7 @@ std::unique_ptr<DataBatchProtectionAgentInterface> CreateInstance(void* library_
 
 
 std::unique_ptr<DataBatchProtectionAgentInterface> LoadableEncryptorUtils::LoadFromLibrary(const std::string& library_path) {
+  //TODO: remove this.
   std::cout << "Inside LoadableEncryptorUtils::LoadFromLibrary" << std::endl;
 
   if (library_path.empty()) {

@@ -19,7 +19,7 @@ void DefaultSharedLibraryClosingFn(void* library_handle);
 
 // Decorator/Wrapper class for the DataBatchProtectionAgentInterface
 // Its main purpose is to close the shared library when Arrow is about to destroy 
-// an intance of an DPBAgent
+// an instance of an DBPAgent
 //
 // In the constructor we allow to pass a function that will be used to close the shared library.
 // This simplifies testing, as we can use a mock function to avoid actually closing the shared library.
@@ -46,14 +46,18 @@ class DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
   // (such as a segfault).
   ~DBPALibraryWrapper() override;
 
-  // Decorator implementation of Encrypt method
-  std::unique_ptr<EncryptionResult> Encrypt(
+  // Decorator implementation of Encrypt method - inlined for performance
+  inline std::unique_ptr<EncryptionResult> Encrypt(
       span<const uint8_t> plaintext,
-      span<uint8_t> ciphertext) override;
+      span<uint8_t> ciphertext) override {
+    return wrapped_agent_->Encrypt(plaintext, ciphertext);
+  }
 
-  // Decorator implementation of Decrypt method
-  std::unique_ptr<DecryptionResult> Decrypt(
-      span<const uint8_t> ciphertext) override;
+  // Decorator implementation of Decrypt method - inlined for performance
+  inline std::unique_ptr<DecryptionResult> Decrypt(
+      span<const uint8_t> ciphertext) override {
+    return wrapped_agent_->Decrypt(ciphertext);
+  }
 };
 
 }  // namespace parquet::encryption::external 
