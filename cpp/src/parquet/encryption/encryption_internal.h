@@ -203,8 +203,6 @@ class PARQUET_EXPORT ExternalEncryptorImpl : public EncryptorInterface {
 };
 
 
-
-
 class PARQUET_EXPORT DecryptorInterface {
   public:
     virtual ~DecryptorInterface() = default;

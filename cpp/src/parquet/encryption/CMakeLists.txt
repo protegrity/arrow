@@ -18,23 +18,17 @@
 # Headers: public api
 arrow_install_all_headers("parquet/encryption")
 
-add_library(DBPATestAgent SHARED
-   external/dbpa_test_agent.cc
-)
-
-# DBPATestAgent configuration
-target_link_libraries(DBPATestAgent PUBLIC
-  arrow_shared
-)
-
-set_target_properties(DBPATestAgent PROPERTIES OUTPUT_NAME "DBPATestAgent")
-
-# Add test for DBPATestAgent
 if(ARROW_TESTING)
-#  add_parquet_test(dbpa-test-agent-test
-#                   SOURCES external/dbpa_test_agent_test.cc
-#                   EXTRA_LINK_LIBS DBPATestAgent
-#                   LABELS "parquet-tests" "encryption-tests")
+  add_library(DBPATestAgent SHARED
+     external/dbpa_test_agent.cc
+  )
+
+  # DBPATestAgent configuration
+  target_link_libraries(DBPATestAgent PUBLIC
+    arrow_shared
+  )
+
+  set_target_properties(DBPATestAgent PROPERTIES OUTPUT_NAME "DBPATestAgent")
   
   # Add test for DBPALibraryWrapper
   add_parquet_test(dbpa-library-wrapper-test

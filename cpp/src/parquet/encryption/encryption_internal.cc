@@ -775,8 +775,6 @@ void ExternalDecryptorImpl::ConstructExternalCall() {
   std::cout << "Here I would call the external decryption service. Hold for params." << std::endl;
 }
 
-
-
 #undef ENCRYPT_INIT
 #undef DECRYPT_INIT
 
