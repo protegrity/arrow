@@ -333,7 +333,7 @@ cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
     __slots__ = ()
 
     def __init__(self, *, cache_lifetime=None, app_context=None, connection_config=None):
-        super().__init__(cache_lifetime)
+        super().__init__(cache_lifetime=cache_lifetime)
         self.external_configuration.reset(new CExternalDecryptionConfiguration())
 
         if app_context is not None:
@@ -368,10 +368,17 @@ cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
     @property
     def connection_config(self):
         """Get the connection configuration as a Python dictionary."""
+
+        cdef pair[ParquetCipher, unordered_map[c_string, c_string]] outer_pair
+        cdef pair[c_string, c_string] inner_pair
         result = {}
 
-        for pair in self.external_configuration.get().connection_config:
-            result[frombytes(pair.first)] = frombytes(pair.second)
+        for outer_pair in self.external_configuration.get().connection_config:
+            cipher_name = cipher_to_name(outer_pair.first)
+            inner_map = {}
+            for inner_pair in outer_pair.second:
+                inner_map[frombytes(inner_pair.first)] = frombytes(inner_pair.second)
+            result[cipher_name] = inner_map
 
         return result
 
@@ -381,16 +388,22 @@ cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
         if value is None:
             raise ValueError("Connection config value cannot be None")
 
-        cdef unordered_map[c_string, c_string] cpp_map
-        for k, v in value.items():
-            if not isinstance(k, str):
-                raise TypeError(f"Connection config key must be str, got {type(k).__name__}")
-            if not isinstance(v, str):
-                raise TypeError(f"Connection config value must be str, got {type(v).__name__}")
-            cpp_map[tobytes(k)] = tobytes(v)
+        cdef unordered_map[ParquetCipher, unordered_map[c_string, c_string]] cpp_map
+        cdef unordered_map[c_string, c_string] inner_cpp_map
+        cdef ParquetCipher cipher_enum
+
+        for cipher_name, inner_dict in value.items():
+            cipher_enum = cipher_from_name(cipher_name)
+            if not isinstance(inner_dict, dict):
+                raise TypeError(f"Inner value for cipher {cipher_name!r} must be a dict")
+            inner_cpp_map.clear()
+            for k, v in inner_dict.items():
+                if not isinstance(k, str) or not isinstance(v, str):
+                    raise TypeError("All inner config keys/values must be str")
+                inner_cpp_map[tobytes(k)] = tobytes(v)
+            cpp_map[cipher_enum] = inner_cpp_map
 
         self.external_configuration.get().connection_config = cpp_map
-
 
     cdef inline shared_ptr[CExternalDecryptionConfiguration] unwrap_external(self) nogil:
         return self.external_configuration
@@ -608,22 +621,7 @@ cdef class CryptoFactory(_Weakrefable):
         file_encryption_properties = GetResultValue(
             file_encryption_properties_result)
         return FileEncryptionProperties.wrap(file_encryption_properties)
-
-    def external_file_encryption_properties(self,
-                                            KmsConnectionConfig kms_connection_config,
-                                            ExternalEncryptionConfiguration external_encryption_config):
-        cdef:
-            CResult[shared_ptr[CExternalFileEncryptionProperties]] \
-                external_file_encryption_properties_result
-        with nogil:
-            external_file_encryption_properties_result = \
-                self.factory.get().SafeGetExternalFileEncryptionProperties(
-                    deref(kms_connection_config.unwrap().get()),
-                    deref(external_encryption_config.unwrap_external().get()))
-        external_file_encryption_properties = GetResultValue(
-            external_file_encryption_properties_result)
-        return ExternalFileEncryptionProperties.wrap_external(external_file_encryption_properties)
-        
+       
     def file_decryption_properties(
             self,
             KmsConnectionConfig kms_connection_config,
@@ -660,43 +658,6 @@ cdef class CryptoFactory(_Weakrefable):
         file_decryption_properties = GetResultValue(
             c_file_decryption_properties)
         return FileDecryptionProperties.wrap(file_decryption_properties)
-
-    def external_file_decryption_properties(
-            self,
-            KmsConnectionConfig kms_connection_config,
-            ExternalDecryptionConfiguration decryption_config=None):
-        """Create file decryption properties.
-
-        Parameters
-        ----------
-        kms_connection_config : KmsConnectionConfig
-            Configuration of connection to KMS
-
-        decryption_config : ExternalDecryptionConfiguration, default None
-            Configuration of the decryption, such as cache timeout.
-            Can be None.
-
-        Returns
-        -------
-        file_decryption_properties : ExternalFileDecryptionProperties
-            File decryption properties.
-        """
-        cdef:
-            CExternalDecryptionConfiguration c_decryption_config
-            CResult[shared_ptr[CExternalFileDecryptionProperties]] \
-                c_file_decryption_properties
-        if decryption_config is None:
-            c_decryption_config = CExternalDecryptionConfiguration()
-        else:
-            c_decryption_config = deref(decryption_config.unwrap_external().get())
-        with nogil:
-            c_file_decryption_properties = \
-                self.factory.get().SafeGetExternalFileDecryptionProperties(
-                    deref(kms_connection_config.unwrap().get()),
-                    c_decryption_config)
-        file_decryption_properties = GetResultValue(
-            c_file_decryption_properties)
-        return ExternalFileDecryptionProperties.wrap(file_decryption_properties)
 
     def remove_cache_entries_for_token(self, access_token):
         self.factory.get().RemoveCacheEntriesForToken(tobytes(access_token))
