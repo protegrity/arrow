@@ -207,11 +207,39 @@ def test_external_encryption_rejects_none_values():
     with pytest.raises(ValueError, match="Connection config value cannot be None"):
         config.connection_config = None
 
+def test_external_file_encryption_properties_valid(external_encryption_config):
+    class DummyKmsClient(pe.KmsClient):
+        def __init__(self, kms_connection_config):
+            super().__init__()
+
+        def wrap_key(self, key_bytes, master_key_identifier):
+            # dummy wrap just returns key_bytes
+            return key_bytes
+
+        def unwrap_key(self, wrapped_key, master_key_identifier):
+            # dummy unwrap just returns wrapped_key
+            return wrapped_key
+    
+    kms_config = pe.KmsConnectionConfig(
+        custom_kms_conf={
+            "footer_key": "012footer_secret",
+            "orderid_key": "column_secret001",
+            "productid_key": "column_secret002"
+        }
+    )
+
+    factory = pe.CryptoFactory(DummyKmsClient)
+    result = factory.external_file_encryption_properties(kms_config, external_encryption_config)
+
+    # Instead of isinstance, check class name and module dynamically because ExternalFileEncryptionProperties is not visbile
+    assert result.__class__.__name__ == "ExternalFileEncryptionProperties"
+    assert result.__class__.__module__ == "pyarrow._parquet"
+
 def test_decryption_configuration_properties():
     """Test the standard DecryptionConfiguration properties to avoid regressions."""
 
     config = pe.DecryptionConfiguration(
-        
+
     )
     config.cache_lifetime=timedelta(minutes=5.0)
 
@@ -221,20 +249,21 @@ def test_decryption_configuration_properties():
 def test_external_decryption_configuration_properties(external_decryption_config):
     """Test the ExternalDecryptionConfiguration properties including external-specific fields."""
 
-    assert isinstance(external_decryption_config, pe.ExternalDecryptionConfiguration)
+    config = external_decryption_config
 
-    assert external_decryption_config.cache_lifetime == timedelta(minutes=5.0)
-    assert external_decryption_config.app_context =={
-            "user_id": "Picard1701",
-            "location": "Presidio"
+    assert isinstance(config, pe.ExternalDecryptionConfiguration)
+    assert config.cache_lifetime == timedelta(minutes=5.0)
+    assert config.app_context == {
+        "user_id": "Picard1701",
+        "location": "Presidio"
+    }
+    assert config.connection_config == {
+        "AES_GCM_V1": {
+            "config_file": "path/to/config/file",
+            "config_file_decryption_key": "some_key"
         }
-    assert external_decryption_config.connection_config =={
-            "AES_GCM_V1": {
-                "config_file": "path/to/config/file",
-                "config_file_decryption_key": "some_key"
-            }
-        }
-
+    }
+    
 def test_external_decryption_connection_config_invalid_types():
     """Ensure connection_config rejects non-string keys or values."""
 
@@ -246,7 +275,7 @@ def test_external_decryption_connection_config_invalid_types():
                 "config_file": "should-fail"
             }
         }
-
+    
     # Outer value is not a dict
     with pytest.raises(TypeError, match="Inner value for cipher 'AES_GCM_V1' must be a dict"):
         config = pe.ExternalDecryptionConfiguration()
