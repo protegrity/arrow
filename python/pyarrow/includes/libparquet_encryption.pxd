@@ -22,7 +22,6 @@ from pyarrow._parquet cimport (ParquetCipher,
                                CFileEncryptionProperties,
                                CExternalFileEncryptionProperties,
                                CFileDecryptionProperties,
-                               CExternalFileDecryptionProperties,
                                ParquetCipher_AES_GCM_V1,
                                ParquetCipher_AES_GCM_CTR_V1,
                                ParquetCipher_EXTERNAL_DBPA_V1)
@@ -113,8 +112,8 @@ cdef extern from "parquet/encryption/crypto_factory.h" \
         CExternalDecryptionConfiguration() except +
         double cache_lifetime_seconds
         c_string app_context
-        unordered_map[c_string, c_string] connection_config
-
+        unordered_map[ParquetCipher, unordered_map[c_string, c_string]] connection_config 
+        
     cdef cppclass CCryptoFactory" parquet::encryption::CryptoFactory":
         void RegisterKmsClientFactory(
             shared_ptr[CKmsClientFactory] kms_client_factory) except +
@@ -127,9 +126,6 @@ cdef extern from "parquet/encryption/crypto_factory.h" \
         shared_ptr[CFileDecryptionProperties] GetFileDecryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CDecryptionConfiguration& decryption_config) except +*
-        shared_ptr[CExternalFileDecryptionProperties] GetExternalFileDecryptionProperties(
-            const CKmsConnectionConfig& kms_connection_config,
-            const CExternalDecryptionConfiguration& decryption_config) except +*
         void RemoveCacheEntriesForToken(const c_string& access_token) except +
         void RemoveCacheEntriesForAllTokens() except +
 
@@ -169,7 +165,3 @@ cdef extern from "arrow/python/parquet_encryption.h" \
             SafeGetFileDecryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CDecryptionConfiguration& decryption_config)
-        CResult[shared_ptr[CExternalFileDecryptionProperties]] \
-            SafeGetExternalFileDecryptionProperties(
-            const CKmsConnectionConfig& kms_connection_config,
-            const CExternalDecryptionConfiguration& decryption_config)
