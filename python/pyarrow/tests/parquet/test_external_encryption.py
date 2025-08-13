@@ -149,7 +149,7 @@ def test_external_encryption_app_context_invalid_json():
 def test_external_encryption_per_column_encryption_invalid_algorithm():
     """Ensure invalid encryption_algorithm raises a ValueError or is rejected."""
 
-    with pytest.raises(ValueError, match="Invalid cipher name: 'INVALID'"):
+    with pytest.raises(ValueError, match="Invalid cipher name: INVALID"):
         pe.ExternalEncryptionConfiguration(
             footer_key="key",
             per_column_encryption={
@@ -238,9 +238,7 @@ def test_external_file_encryption_properties_valid(external_encryption_config):
 def test_decryption_configuration_properties():
     """Test the standard DecryptionConfiguration properties to avoid regressions."""
 
-    config = pe.DecryptionConfiguration(
-
-    )
+    config = pe.DecryptionConfiguration()
     config.cache_lifetime=timedelta(minutes=5.0)
 
     assert isinstance(config, pe.DecryptionConfiguration)
@@ -277,7 +275,7 @@ def test_external_decryption_connection_config_invalid_types():
         }
     
     # Outer value is not a dict
-    with pytest.raises(TypeError, match="Inner value for cipher 'AES_GCM_V1' must be a dict"):
+    with pytest.raises(TypeError, match="Inner value for cipher AES_GCM_V1 must be a dict"):
         config = pe.ExternalDecryptionConfiguration()
         config.connection_config = {
             "AES_GCM_V1": ["not", "a", "dict"]  # invalid outer value (should be dict)

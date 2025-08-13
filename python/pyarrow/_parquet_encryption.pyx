@@ -39,7 +39,7 @@ cdef ParquetCipher cipher_from_name(name):
     elif name == 'EXTERNAL_DBPA_V1':
         return ParquetCipher_EXTERNAL_DBPA_V1
     else:
-        raise ValueError(f'Invalid cipher name: {name!r}')
+        raise ValueError(f'Invalid cipher name: {name}')
 
 
 cdef cipher_to_name(ParquetCipher cipher):
@@ -394,7 +394,7 @@ cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
         for cipher_name, inner_dict in value.items():
             cipher_enum = cipher_from_name(cipher_name)
             if not isinstance(inner_dict, dict):
-                raise TypeError(f"Inner value for cipher {cipher_name!r} must be a dict")
+                raise TypeError(f"Inner value for cipher {cipher_name} must be a dict")
             inner_cpp_map.clear()
             for k, v in inner_dict.items():
                 if not isinstance(k, str) or not isinstance(v, str):
