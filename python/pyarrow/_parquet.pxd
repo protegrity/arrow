@@ -195,7 +195,6 @@ cdef extern from "parquet/api/schema.h" namespace "parquet" nogil:
     enum ParquetCipher" parquet::ParquetCipher::type":
         ParquetCipher_AES_GCM_V1" parquet::ParquetCipher::AES_GCM_V1"
         ParquetCipher_AES_GCM_CTR_V1" parquet::ParquetCipher::AES_GCM_CTR_V1"
-        ParquetCipher_EXTERNAL_DBPA_V1" parquet::ParquetCipher::EXTERNAL_DBPA_V1"
 
     struct AadMetadata:
         c_string aad_prefix
@@ -580,21 +579,6 @@ cdef class FileEncryptionProperties:
     cdef inline shared_ptr[CFileEncryptionProperties] unwrap(self):
         return self.properties
 
-cdef class ExternalFileEncryptionProperties(FileEncryptionProperties):
-    cdef:
-        shared_ptr[CExternalFileEncryptionProperties] properties
-
-    @staticmethod
-    cdef inline ExternalFileEncryptionProperties wrap_external(
-        shared_ptr[CExternalFileEncryptionProperties] properties):
-
-        result = ExternalFileEncryptionProperties()
-        result.properties = properties
-        return result
-
-    cdef inline shared_ptr[CExternalFileEncryptionProperties] unwrap_external(self):
-        return <shared_ptr[CExternalFileEncryptionProperties]> self.properties
-
 cdef shared_ptr[WriterProperties] _create_writer_properties(
     use_dictionary=*,
     compression=*,
@@ -683,10 +667,6 @@ cdef extern from "parquet/encryption/encryption.h" namespace "parquet" nogil:
 
     cdef cppclass CFileEncryptionProperties\
             " parquet::FileEncryptionProperties":
-        pass
-
-    cdef cppclass CExternalFileEncryptionProperties\
-            " parquet::ExternalFileEncryptionProperties":
         pass
 
 cdef class FileDecryptionProperties:
