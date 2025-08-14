@@ -264,6 +264,7 @@ cdef class ExternalEncryptionConfiguration(EncryptionConfiguration):
             cipher_enum = cipher_from_name(cipher_name)
             if not isinstance(inner_dict, dict):
                 raise TypeError(f"Inner value for cipher {cipher_name} must be a dict")
+            # Clear the map from the values of the previous iteration
             inner_cpp_map.clear()
 
             for k, v in inner_dict.items():
