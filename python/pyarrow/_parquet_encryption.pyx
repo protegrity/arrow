@@ -762,15 +762,14 @@ cdef class CryptoFactory(_Weakrefable):
     def external_file_decryption_properties(
             self,
             KmsConnectionConfig kms_connection_config,
-            ExternalDecryptionConfiguration decryption_config=None):
+            ExternalDecryptionConfiguration decryption_config):
         """Create file decryption properties.
         Parameters
         ----------
         kms_connection_config : KmsConnectionConfig
             Configuration of connection to KMS
-        decryption_config : ExternalDecryptionConfiguration, default None
-            Configuration of the decryption, such as cache timeout.
-            Can be None.
+        decryption_config : ExternalDecryptionConfiguration
+            Configuration of the decryption, such as cache timeout and the information on how to connect the external decryption service.
         Returns
         -------
         file_decryption_properties : ExternalFileDecryptionProperties
@@ -791,7 +790,7 @@ cdef class CryptoFactory(_Weakrefable):
                     c_decryption_config)
         file_decryption_properties = GetResultValue(
             c_file_decryption_properties)
-        return ExternalFileDecryptionProperties.wrap(file_decryption_properties)
+        return ExternalFileDecryptionProperties.wrap_external(file_decryption_properties)
 
     def remove_cache_entries_for_token(self, access_token):
         self.factory.get().RemoveCacheEntriesForToken(tobytes(access_token))

@@ -715,7 +715,7 @@ cdef class ExternalFileDecryptionProperties:
         shared_ptr[CExternalFileDecryptionProperties] properties
 
     @staticmethod
-    cdef inline ExternalFileDecryptionProperties wrap(
+    cdef inline ExternalFileDecryptionProperties wrap_external(
             shared_ptr[CExternalFileDecryptionProperties] properties):
 
         result = ExternalFileDecryptionProperties()
@@ -723,4 +723,4 @@ cdef class ExternalFileDecryptionProperties:
         return result
 
     cdef inline shared_ptr[CExternalFileDecryptionProperties] unwrap_external(self):
-        return self.properties
+        return <shared_ptr[CExternalFileDecryptionProperties]> self.properties
