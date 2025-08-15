@@ -54,18 +54,16 @@ cdef class KmsConnectionConfig(_Weakrefable):
     @staticmethod
     cdef wrap(const CKmsConnectionConfig& config)
 
+cdef class ExternalEncryptionConfiguration(EncryptionConfiguration):
+    cdef shared_ptr[CExternalEncryptionConfiguration] external_configuration
+    cdef inline shared_ptr[CExternalEncryptionConfiguration] unwrap_external(self) nogil
+cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
+    cdef shared_ptr[CExternalDecryptionConfiguration] external_configuration
+    cdef inline shared_ptr[CExternalDecryptionConfiguration] unwrap_external(self) nogil
 
 cdef shared_ptr[CCryptoFactory] pyarrow_unwrap_cryptofactory(object crypto_factory) except *
 cdef shared_ptr[CKmsConnectionConfig] pyarrow_unwrap_kmsconnectionconfig(object kmsconnectionconfig) except *
 cdef shared_ptr[CEncryptionConfiguration] pyarrow_unwrap_encryptionconfig(object encryptionconfig) except *
 cdef shared_ptr[CDecryptionConfiguration] pyarrow_unwrap_decryptionconfig(object decryptionconfig) except *
-
-cdef class ExternalEncryptionConfiguration(EncryptionConfiguration):
-    cdef shared_ptr[CExternalEncryptionConfiguration] external_configuration
-    cdef inline shared_ptr[CExternalEncryptionConfiguration] unwrap_external(self) nogil
 cdef shared_ptr[CExternalEncryptionConfiguration] pyarrow_unwrap_external_encryptionconfig(object externalencryptionconfig) except *
-
-cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
-    cdef shared_ptr[CExternalDecryptionConfiguration] external_configuration
-    cdef inline shared_ptr[CExternalDecryptionConfiguration] unwrap_external(self) nogil
 cdef shared_ptr[CExternalDecryptionConfiguration] pyarrow_unwrap_external_decryptionconfig(object externaldecryptionconfig) except *
