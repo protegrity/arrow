@@ -95,8 +95,8 @@ class InternalFileDecryptor {
   // Get a Decryptor instance for column chunk data.
   std::unique_ptr<Decryptor> GetColumnDataDecryptor(
       const std::string& column_path, const std::string& column_key_metadata,
-      const std::string& aad = "",
-      const ColumnChunkMetaData* column_chunk_metadata = nullptr) {
+      const ColumnChunkMetaData* column_chunk_metadata = nullptr,
+      const std::string& aad = "") {
     return GetColumnDecryptor(
       column_path, column_key_metadata, aad, /*metadata=*/false, column_chunk_metadata);
   }
@@ -116,7 +116,7 @@ class InternalFileDecryptor {
   // argument if the column is not encrypted.
   static std::function<std::unique_ptr<Decryptor>()> GetColumnDataDecryptorFactory(
       InternalFileDecryptor* file_decryptor, const ColumnCryptoMetaData* crypto_metadata,
-      const ColumnChunkMetaData* column_chunk_metadata,
+      const ColumnChunkMetaData* column_chunk_metadata = nullptr,
       const std::string& aad = "");
 
  private:

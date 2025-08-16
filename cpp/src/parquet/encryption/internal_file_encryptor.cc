@@ -75,7 +75,7 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterSigningEncryptor() {
 
 std::shared_ptr<Encryptor> InternalFileEncryptor::GetColumnMetaEncryptor(
     const std::string& column_path) {
-  return GetColumnEncryptor(column_path, true, nullptr);
+  return GetColumnEncryptor(column_path, true);
 }
 
 std::shared_ptr<Encryptor> InternalFileEncryptor::GetColumnDataEncryptor(
