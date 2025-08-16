@@ -1,84 +1,106 @@
 //TODO: figure out the licensing.
 
-#include "parquet/encryption/external/dbpa_test_agent.h"
-#include <iostream>
-#include <stdexcept>
 #include <cstring>
+#include <iostream>
+#include <map>
+#include <stdexcept>
+#include <string>
+#include <span>
+#include <vector>
 
 #include "parquet/exception.h"
-#include "arrow/util/span.h"
+#include "parquet/encryption/external/dbpa_test_agent.h"
+#include "parquet/encryption/external/dbpa_interface.h"
+#include "span.hpp"
 
-using ::arrow::util::span;
+using tcb::span;
+using dbps::external::EncryptionResult;
+using dbps::external::DecryptionResult;
 
 namespace parquet::encryption::external {
 
-DBPATestAgent::DBPATestAgent() 
-    : agent_name_(""), configuration_(""), enable_logging_(false), is_initialized_(false) {
-  std::cout << "Created DBPATestAgent with empty constructor" << std::endl;
-}
+// Concrete implementation of EncryptionResult for testing
+class TestEncryptionResult : public EncryptionResult {
+public:
+    TestEncryptionResult(std::vector<uint8_t> data, bool success = true, 
+                        std::string error_msg = "", 
+                        std::map<std::string, std::string> error_fields = {})
+        : ciphertext_data_(std::move(data)), success_(success), 
+          error_message_(std::move(error_msg)), error_fields_(std::move(error_fields)) {}
 
-void DBPATestAgent::init(std::string agent_name, 
-                         std::string configuration,
-                         bool enable_logging) {
-  std::cout << "Inside DBPATestAgent::init" << std::endl;
+    span<const uint8_t> ciphertext() const override {
+        return span<const uint8_t>(ciphertext_data_.data(), ciphertext_data_.size());
+    }
 
-  agent_name_ = agent_name;
-  configuration_ = configuration;
-  enable_logging_ = enable_logging;
+    std::size_t size() const override { return static_cast<int>(ciphertext_data_.size()); }
+    bool success() const override { return success_; }
+    const std::string& error_message() const override { return error_message_; }
+    const std::map<std::string, std::string>& error_fields() const override { return error_fields_; }
 
-  if (enable_logging_) {
-    std::cout << "DBPATestAgent initialized with name: " << agent_name_ 
-              << ", config: " << configuration_ << std::endl;
-  }
+private:
+    std::vector<uint8_t> ciphertext_data_;
+    bool success_;
+    std::string error_message_;
+    std::map<std::string, std::string> error_fields_;
+};
+
+// Concrete implementation of DecryptionResult for testing
+class TestDecryptionResult : public DecryptionResult {
+public:
+    TestDecryptionResult(std::vector<uint8_t> data, bool success = true, 
+                        std::string error_msg = "", 
+                        std::map<std::string, std::string> error_fields = {})
+        : plaintext_data_(std::move(data)), success_(success), 
+          error_message_(std::move(error_msg)), error_fields_(std::move(error_fields)) {}
+
+    span<const uint8_t> plaintext() const override {
+        return span<const uint8_t>(plaintext_data_.data(), plaintext_data_.size());
+    }
+
+    std::size_t size() const override { return plaintext_data_.size(); }
+    bool success() const override { return success_; }
+    const std::string& error_message() const override { return error_message_; }
+    const std::map<std::string, std::string>& error_fields() const override { return error_fields_; }
+
+private:
+    std::vector<uint8_t> plaintext_data_;
+    bool success_;
+    std::string error_message_;
+    std::map<std::string, std::string> error_fields_;
+};
+
+DBPATestAgent::DBPATestAgent() {
 }
 
 std::unique_ptr<EncryptionResult> DBPATestAgent::Encrypt(
-    span<const uint8_t> plaintext, 
-    span<uint8_t> ciphertext) {
+    span<const uint8_t> plaintext) {
   
-  if (enable_logging_) {
-    std::cout << "Encrypting " << plaintext.size() << " bytes" << std::endl;
-  }
-
   // Simple XOR encryption for testing purposes
   // In a real implementation, this would use proper encryption
-  if (ciphertext.size() < plaintext.size()) {
-    throw std::runtime_error("Ciphertext buffer too small");
-  }
-
-  for (size_t i = 0; i < plaintext.size(); ++i) {
-    ciphertext[i] = plaintext[i] ^ 0xAA; // Simple XOR with 0xAA
-  }
-
-  auto result = std::make_unique<EncryptionResult>();
-  if (enable_logging_) {
-    std::cout << "Encryption completed successfully" << std::endl;
-  }
+  std::vector<uint8_t> ciphertext_data(plaintext.size());
   
-  return result;
+  for (size_t i = 0; i < plaintext.size(); ++i) {
+    ciphertext_data[i] = plaintext[i] ^ 0xAA; // Simple XOR with 0xAA
+  }
+
+  return std::make_unique<TestEncryptionResult>(std::move(ciphertext_data));
 }
 
 std::unique_ptr<DecryptionResult> DBPATestAgent::Decrypt(
     span<const uint8_t> ciphertext) {
   
-  if (enable_logging_) {
-    std::cout << "Decrypting " << ciphertext.size() << " bytes" << std::endl;
+  // Simple XOR decryption for testing purposes
+  // In a real implementation, this would perform actual decryption
+  std::vector<uint8_t> plaintext_data(ciphertext.size());
+  
+  for (size_t i = 0; i < ciphertext.size(); ++i) {
+    plaintext_data[i] = ciphertext[i] ^ 0xAA; // Simple XOR with 0xAA
   }
 
-  // For this test implementation, we're not actually decrypting
-  // In a real implementation, this would perform actual decryption
-  auto result = std::make_unique<DecryptionResult>();
-  if (enable_logging_) {
-    std::cout << "Decryption completed successfully" << std::endl;
-  }
-  
-  return result;
+  return std::make_unique<TestDecryptionResult>(std::move(plaintext_data));
 }
 
 DBPATestAgent::~DBPATestAgent() {
-  if (enable_logging_) {
-    std::cout << "Destroying DBPATestAgent: " << agent_name_ << std::endl;
-  }
 }
 
 // Export function for creating new instances from shared library
@@ -88,4 +110,4 @@ extern "C" {
   }
 }
 
-}  // namespace parquet::encryption::external 
+}  // namespace parquet::encryption::external

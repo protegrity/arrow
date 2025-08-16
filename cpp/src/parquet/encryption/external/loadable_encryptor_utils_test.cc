@@ -21,8 +21,6 @@
 #include <windows.h>
 #endif
 
-using ::arrow::util::span;
-
 namespace parquet::encryption::external::test {
 
 // Test fixture for LoadableEncryptorUtils tests

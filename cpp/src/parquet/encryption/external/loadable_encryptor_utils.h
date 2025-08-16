@@ -8,6 +8,8 @@
 #include "parquet/platform.h"
 #include "parquet/encryption/external/dbpa_interface.h"
 
+using dbps::external::DataBatchProtectionAgentInterface;
+
 namespace parquet::encryption::external {
 
 class PARQUET_EXPORT LoadableEncryptorUtils {

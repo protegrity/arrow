@@ -2,16 +2,13 @@
 
 #include "parquet/encryption/external/dbpa_library_wrapper.h"
 #include "parquet/encryption/external/dbpa_interface.h"
-#include "arrow/util/span.h"
-#include <dlfcn.h>
+
 #include <stdexcept>
 #include <functional>
 
 #include <iostream>
 
 #include "arrow/util/io_util.h"
-
-using ::arrow::util::span;
 
 namespace parquet::encryption::external {
 
@@ -61,4 +58,4 @@ DBPALibraryWrapper::~DBPALibraryWrapper() {
   handle_closing_fn_(library_handle_);
   library_handle_ = nullptr;
 } //DBPALibraryWrapper::~DBPALibraryWrapper()
-}  // namespace parquet::encryption::external 
+}  // namespace parquet::encryption::external

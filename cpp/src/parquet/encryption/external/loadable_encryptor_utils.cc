@@ -4,7 +4,6 @@
 #include "parquet/encryption/external/dbpa_interface.h"
 #include "parquet/encryption/external/dbpa_library_wrapper.h"
 
-#include "arrow/util/span.h"
 #include "arrow/util/io_util.h" //utils for loading shared libraries
 #include "arrow/result.h"
 
@@ -13,7 +12,6 @@
 #include <string>
 #include <memory>
 
-using ::arrow::util::span;
 using ::arrow::Result;
 
 namespace parquet::encryption::external {

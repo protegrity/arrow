@@ -6,11 +6,17 @@
 #include <functional>
 
 #include "parquet/encryption/external/dbpa_interface.h"
-#include "arrow/util/span.h"
+#include "span.hpp"
 
-using ::arrow::util::span;
+using tcb::span;
 
 namespace parquet::encryption::external {
+
+using dbps::external::DataBatchProtectionAgentInterface;
+using dbps::external::EncryptionResult;
+using dbps::external::DecryptionResult;
+using dbps::external::Type;
+using dbps::external::CompressionCodec;  
 
 // Default implementation for shared library closing function
 // This is passed into the constructor of DBPALibraryWrapper, 
@@ -44,13 +50,25 @@ class DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
   // Doing it in a different order, may cause issues, as by unloading the library may cause the class
   // definition to be unloaded before the destructor completes, and that is likely to cause issues 
   // (such as a segfault).
-  ~DBPALibraryWrapper() override;
+  ~DBPALibraryWrapper();
+
+  // Decorator implementation of init method
+  inline void init(
+      std::string column_name,
+      std::map<std::string, std::string> connection_config,
+      std::string app_context,
+      std::string column_key_id,
+      Type::type data_type,
+      CompressionCodec::type compression_type) override {
+    wrapped_agent_->init(std::move(column_name), std::move(connection_config),
+                        std::move(app_context), std::move(column_key_id),
+                        data_type, compression_type);
+  }
 
   // Decorator implementation of Encrypt method - inlined for performance
   inline std::unique_ptr<EncryptionResult> Encrypt(
-      span<const uint8_t> plaintext,
-      span<uint8_t> ciphertext) override {
-    return wrapped_agent_->Encrypt(plaintext, ciphertext);
+      span<const uint8_t> plaintext) override {
+    return wrapped_agent_->Encrypt(plaintext);
   }
 
   // Decorator implementation of Decrypt method - inlined for performance
@@ -60,4 +78,4 @@ class DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
   }
 };
 
-}  // namespace parquet::encryption::external 
+}  // namespace parquet::encryption::external
