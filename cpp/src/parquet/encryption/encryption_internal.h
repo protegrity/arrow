@@ -26,6 +26,7 @@
 #include "parquet/encryption/openssl_internal.h"
 #include "parquet/properties.h"
 #include "parquet/types.h"
+#include "parquet/encryption/external/dbpa_interface.h"
 
 using parquet::ParquetCipher;
 using ::arrow::util::span;
@@ -168,12 +169,7 @@ class PARQUET_EXPORT AesEncryptorImpl : public AesCryptoContext, public Encrypto
 
 class PARQUET_EXPORT ExternalEncryptorImpl : public EncryptorInterface {
   public:
-    explicit ExternalEncryptorImpl(ParquetCipher::type alg_id, int32_t key_len, 
-                                   std::string column_name, Type::type data_type, 
-                                   Compression::type compression_type, Encoding::type encoding_,
-                                   std::string ext_column_key, std::string user_id,
-                                   std::string app_context,
-                                   bool metadata, bool write_length);
+    explicit ExternalEncryptorImpl(std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance);
 
     static std::unique_ptr<ExternalEncryptorImpl> Make(
       ParquetCipher::type alg_id, int32_t key_len, std::string column_name, Type::type data_type, 
@@ -192,16 +188,8 @@ class PARQUET_EXPORT ExternalEncryptorImpl : public EncryptorInterface {
   private:
       void ConstructExternalCall(span<const uint8_t> plaintext);
 
-      std::string column_name_;
-      Type::type data_type_;
-      Compression::type compression_type_;
-      Encoding::type encoding_;
-      std::string ext_column_key_;
-      std::string user_id_;
-      std::string app_context_;
-      std::unique_ptr<AesEncryptorImpl> aes_encryptor_;
+      std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
 };
-
 
 class PARQUET_EXPORT DecryptorInterface {
   public:
@@ -273,11 +261,15 @@ class PARQUET_EXPORT AesDecryptorImpl : public AesCryptoContext, public Decrypto
 
 class PARQUET_EXPORT ExternalDecryptorImpl : public DecryptorInterface {
   public:
-    explicit ExternalDecryptorImpl(ParquetCipher::type alg_id, int32_t key_len, bool metadata,
-                                   bool contains_length = true);
+    explicit ExternalDecryptorImpl(std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance);
 
-    static std::unique_ptr<ExternalDecryptorImpl> Make(ParquetCipher::type alg_id, int32_t key_len,
-                                                       bool metadata);
+    static std::unique_ptr<ExternalDecryptorImpl> Make(
+      ParquetCipher::type alg_id, int32_t key_len, std::string column_name, Type::type data_type, 
+      Compression::type compression_type, Encoding::type encoding, std::string ext_column_key,
+      std::string user_id, std::string app_context, bool metadata, bool contains_length = true);
+
+    // Simple version for cases where we don't have all metadata (e.g., footer decryption)
+    static std::unique_ptr<ExternalDecryptorImpl> Make(ParquetCipher::type alg_id, int32_t key_len, bool metadata);
 
     int32_t Decrypt(span<const uint8_t> ciphertext, span<const uint8_t> key,
                     span<const uint8_t> aad, span<uint8_t> plaintext) override;
@@ -287,8 +279,9 @@ class PARQUET_EXPORT ExternalDecryptorImpl : public DecryptorInterface {
     [[nodiscard]] int32_t CiphertextLength(int32_t plaintext_len) const override;
 
   private:
-    void ConstructExternalCall();
-    std::unique_ptr<AesDecryptorImpl> aes_decryptor_;
+    void ConstructExternalCall(span<const uint8_t> ciphertext);
+
+    std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
 };
 
 std::string CreateModuleAad(const std::string& file_aad, int8_t module_type,

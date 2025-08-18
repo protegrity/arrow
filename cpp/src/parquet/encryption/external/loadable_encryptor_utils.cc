@@ -20,6 +20,7 @@ namespace parquet::encryption::external {
 // This needs to match the return type of the create_new_instance function in the shared library.
 typedef DataBatchProtectionAgentInterface* (*create_encryptor_t)();
 
+//TODO: this should be private
 std::unique_ptr<DataBatchProtectionAgentInterface> CreateInstance(void* library_handle) {
   auto symbol_result = arrow::internal::GetSymbol(library_handle, "create_new_instance");
   if (!symbol_result.ok()) {
@@ -46,7 +47,6 @@ std::unique_ptr<DataBatchProtectionAgentInterface> CreateInstance(void* library_
 
   return instance_ptr;
 } // CreateInstance()
-
 
 std::unique_ptr<DataBatchProtectionAgentInterface> LoadableEncryptorUtils::LoadFromLibrary(const std::string& library_path) {
   //TODO: remove this.

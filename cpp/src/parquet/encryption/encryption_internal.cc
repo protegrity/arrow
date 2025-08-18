@@ -32,11 +32,24 @@
 
 #include "parquet/encryption/openssl_internal.h"
 #include "parquet/exception.h"
+#include "parquet/encryption/external/loadable_encryptor_utils.h"
+#include "parquet/encryption/external/dbpa_utils.h"
+#include "parquet/types.h"
 
 using ::arrow::util::span;
 using parquet::ParquetException;
+using parquet::encryption::external::LoadableEncryptorUtils;
+using parquet::encryption::external::dbpa_utils;
+
+using dbps::external::EncryptionResult;
+using dbps::external::DecryptionResult;
+using dbps::external::DataBatchProtectionAgentInterface;
 
 namespace parquet::encryption {
+
+// Forward declarations for utility functions
+std::string HackTypeToString(Type::type t);
+std::string CompressName(Compression::type codec);
 
 #define ENCRYPT_INIT(CTX, ALG)                                        \
   if (1 != EVP_EncryptInit_ex(CTX, ALG, nullptr, nullptr, nullptr)) { \
@@ -586,31 +599,87 @@ void RandBytes(unsigned char* buf, size_t num) {
 
 void EnsureBackendInitialized() { openssl::EnsureInitialized(); }
 
-ExternalEncryptorImpl::ExternalEncryptorImpl(ParquetCipher::type alg_id, int32_t key_len, 
-                                            std::string column_name, Type::type data_type, 
-                                            Compression::type compression_type,
-                                            Encoding::type encoding, std::string ext_column_key,
-                                            std::string user_id, std::string app_context,
-                                            bool metadata, bool write_length) 
-        : column_name_(column_name), data_type_(data_type), compression_type_(compression_type),
-          encoding_(encoding), ext_column_key_(ext_column_key), user_id_(user_id),
-          app_context_(app_context), aes_encryptor_{std::unique_ptr<AesEncryptorImpl>(
-              new AesEncryptorImpl(alg_id, key_len, metadata, write_length))} {
-  std::cout << "Created ExternalEncryptorImpl" << std::endl;
+ExternalEncryptorImpl::ExternalEncryptorImpl(
+  std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
+    : agent_instance_(std::move(agent_instance)) {
+  std::cout << "[DEBUG] ExternalEncryptorImpl constructor called" << std::endl;
 }
 
 std::unique_ptr<ExternalEncryptorImpl> ExternalEncryptorImpl::Make(
     ParquetCipher::type alg_id, int32_t key_len, std::string column_name, Type::type data_type, 
     Compression::type compression_type, Encoding::type encoding, std::string ext_column_key,
     std::string user_id, std::string app_context, bool metadata, bool write_length) {
-  return std::make_unique<ExternalEncryptorImpl>(alg_id, key_len, column_name, data_type, 
-    compression_type, encoding, ext_column_key, user_id, app_context, metadata, write_length);
+
+  std::cout << "[DEBUG] ExternalEncryptorImpl::Make called with parameters:" << std::endl;
+  std::cout << "  alg_id: " << alg_id << std::endl;
+  std::cout << "  key_len: " << key_len << std::endl;
+  std::cout << "  column_name: " << column_name << std::endl;
+  std::cout << "  data_type: " << HackTypeToString(data_type) << std::endl;
+  std::cout << "  compression_type: " << CompressName(compression_type) << std::endl;
+  std::cout << "  encoding: " << encoding << std::endl;
+  std::cout << "  ext_column_key: " << ext_column_key << std::endl;
+  std::cout << "  user_id: " << user_id << std::endl;
+  std::cout << "  app_context: " << app_context << std::endl;
+  std::cout << "  metadata: " << (metadata ? "true" : "false") << std::endl;
+  std::cout << "  write_length: " << (write_length ? "true" : "false") << std::endl;
+
+  //TODO: this should be a config parameter
+  std::string dbpa_library_path = "libDBPATestAgent.so";
+  std::cout << "[DEBUG] Loading DBPA agent from: " << dbpa_library_path << std::endl;
+  auto dbpa_agent = LoadableEncryptorUtils::LoadFromLibrary(dbpa_library_path);
+  if (!dbpa_agent) {
+    std::cout << "[ERROR] Failed to create instance of DataBatchProtectionAgentInterface" << std::endl;
+    throw ParquetException("Failed to create instance of DataBatchProtectionAgentInterface");
+  }
+  std::cout << "[DEBUG] Successfully loaded DBPA agent" << std::endl;
+
+  std::cout << "[DEBUG] Initializing DBPA agent..." << std::endl;
+  dbpa_agent->init(
+    /*column_name*/ column_name,
+    /*connection_config*/ std::map<std::string, std::string>{},
+    /*app_context*/ app_context,
+    /*column_key_id*/ ext_column_key,
+    /*data_type*/ dbpa_utils::ParquetTypeToExternal(data_type), 
+    /*compression_type*/ dbpa_utils::ArrowCompressionToExternal(compression_type)
+  );
+  std::cout << "[DEBUG] DBPA agent initialized successfully" << std::endl;
+
+  auto result = std::make_unique<ExternalEncryptorImpl>(std::move(dbpa_agent));
+  std::cout << "[DEBUG] ExternalEncryptorImpl created successfully" << std::endl;
+  return result;
 }
 
 int32_t ExternalEncryptorImpl::Encrypt(span<const uint8_t> plaintext, span<const uint8_t> key,
                                        span<const uint8_t> aad, span<uint8_t> ciphertext) {
-  ConstructExternalCall(plaintext);
-  return aes_encryptor_->Encrypt(plaintext, key, aad, ciphertext);
+
+  std::cout << "[DEBUG] ExternalEncryptorImpl::Encrypt called" << std::endl;
+  std::cout << "  plaintext size: " << plaintext.size() << " bytes" << std::endl;
+  std::cout << "  key size: " << key.size() << " bytes" << std::endl;
+  std::cout << "  aad size: " << aad.size() << " bytes" << std::endl;
+  std::cout << "  ciphertext buffer size: " << ciphertext.size() << " bytes" << std::endl;
+
+  std::cout << "[DEBUG] Calling agent_instance_->Encrypt..." << std::endl;
+  std::unique_ptr<EncryptionResult> result = agent_instance_->Encrypt(plaintext);
+  
+  if (!result->success()) {
+    std::cout << "[ERROR] Encryption failed: " << result->error_message() << std::endl;
+    throw ParquetException(result->error_message());
+  }
+  std::cout << "[DEBUG] Encryption successful" << std::endl;
+  std::cout << "  result size: " << result->size() << " bytes" << std::endl;
+  std::cout << "  result ciphertext size: " << result->ciphertext().size() << " bytes" << std::endl;
+
+  if (ciphertext.size() < result->ciphertext().size()) {
+    std::cout << "[ERROR] Ciphertext buffer too small. Need " << result->ciphertext().size() 
+              << " bytes, have " << ciphertext.size() << " bytes" << std::endl;
+    throw ParquetException("Ciphertext buffer too small for encrypted result");
+  }
+  
+  std::cout << "[DEBUG] Copying result to ciphertext buffer..." << std::endl;
+  std::copy(result->ciphertext().begin(), result->ciphertext().end(), ciphertext.begin());
+  std::cout << "[DEBUG] Encryption completed successfully" << std::endl;
+
+  return result->size();
 }
 
 int32_t ExternalEncryptorImpl::SignedFooterEncrypt(span<const uint8_t> footer, 
@@ -618,11 +687,50 @@ int32_t ExternalEncryptorImpl::SignedFooterEncrypt(span<const uint8_t> footer,
                                                    span<const uint8_t> aad,
                                                    span<const uint8_t> nonce,
                                                    span<uint8_t> encrypted_footer) {
-  return aes_encryptor_->SignedFooterEncrypt(footer, key, aad, nonce, encrypted_footer);
+  std::cout << "[DEBUG] ExternalEncryptorImpl::SignedFooterEncrypt called" << std::endl;
+  std::cout << "  footer size: " << footer.size() << " bytes" << std::endl;
+  std::cout << "  key size: " << key.size() << " bytes" << std::endl;
+  std::cout << "  aad size: " << aad.size() << " bytes" << std::endl;
+  std::cout << "  nonce size: " << nonce.size() << " bytes" << std::endl;
+  std::cout << "  encrypted_footer buffer size: " << encrypted_footer.size() << " bytes" << std::endl;
+
+  std::cout << "[DEBUG] Calling agent_instance_->Encrypt for footer..." << std::endl;
+  std::unique_ptr<EncryptionResult> result = agent_instance_->Encrypt(footer);
+  if (!result->success()) {
+    std::cout << "[ERROR] Footer encryption failed: " << result->error_message() << std::endl;
+    throw ParquetException(result->error_message());
+  }
+  std::cout << "[DEBUG] Footer encryption successful" << std::endl;
+  std::cout << "  result size: " << result->size() << " bytes" << std::endl;
+
+  if (encrypted_footer.size() < result->ciphertext().size()) {
+    std::cout << "[ERROR] Encrypted footer buffer too small. Need " << result->ciphertext().size() 
+              << " bytes, have " << encrypted_footer.size() << " bytes" << std::endl;
+    throw ParquetException("Encrypted footer buffer too small for encrypted result");
+  }
+  
+  std::cout << "[DEBUG] Copying footer result to encrypted_footer buffer..." << std::endl;
+  std::copy(result->ciphertext().begin(), result->ciphertext().end(), encrypted_footer.begin());
+  std::cout << "[DEBUG] Footer encryption completed successfully" << std::endl;
+
+  return result->size();
 }
 
 int32_t ExternalEncryptorImpl::CiphertextLength(int64_t plaintext_len) const {
-  return aes_encryptor_->CiphertextLength(plaintext_len);
+  std::cout << "[DEBUG] ExternalEncryptorImpl::CiphertextLength called with plaintext_len: " << plaintext_len << std::endl;
+  //TODO
+  // This is not production code. We know that the one DPBA Agent we have uses XOR encryption.
+  // Therefore it's safe to assume that the ciphertext length is the same as the plaintext length.
+  // This is not true for all DPBA Agents.
+  if (plaintext_len < 0) {
+    std::cout << "[ERROR] Negative plaintext length: " << plaintext_len << std::endl;
+    std::stringstream ss;
+    ss << "Negative plaintext length " << plaintext_len;
+    throw ParquetException(ss.str());
+  }
+  int32_t result = static_cast<int32_t>(plaintext_len);
+  std::cout << "[DEBUG] CiphertextLength returning: " << result << std::endl;
+  return result;
 }
 
 std::string HackTypeToString(Type::type t) {
@@ -680,99 +788,170 @@ void ExternalEncryptorImpl::ConstructExternalCall(span<const uint8_t> plaintext)
 
   std::cout << "Payload:" << std::endl;
   
-  std::cout << "{" << std::endl;
-  std::cout << "  \"columnReference\": {" << std::endl;
-  std::cout << "    \"column\": \"" << column_name_ << "\"" << std::endl;
-  std::cout << "  }," << std::endl;
-  
-  std::cout << "  \"dataBatch\": {" << std::endl;
-  std::cout << "    \"compressed value (hex)\": \"";
-  PrintSpan(plaintext);
-  std::cout << "    \"datatype\": \"" << HackTypeToString(data_type_) << "\"," << std::endl;
-  std::cout << "    \"serialization\": {" << std::endl;
-  std::cout << "      \"compression\": \"" << CompressName(compression_type_) << "\"," << std::endl;
-  std::cout << "      \"format\": \"" << MapArrowEncodingToExternalFormat(encoding_) << "\"," 
-            << std::endl;
-  std::cout << "      \"encoding\": \"" << MapArrowEncodingToExternalEncoding(encoding_) << "\"," 
-            << std::endl;
-  std::cout << "    }," << std::endl;
-  std::cout << "  }," << std::endl;
-  
-  std::cout << "  \"encryption\": {" << std::endl;
-  std::cout << "    " << ext_column_key_ << std::endl;
-  std::cout << "  }," << std::endl;
-  
-  std::cout << "  \"access\": {" << std::endl;
-  std::cout << "    \"userId\": \"" << user_id_ << "\"," << std::endl;
-  std::cout << "  }," << std::endl;
-  
-  std::cout << "  \"application_context\": {" << std::endl;
-  std::cout << app_context_ << "\"," << std::endl;
-  std::cout << "  }," << std::endl;
-
-  std::cout << "}" << std::endl;
-
-
   std::cout << "!*!*!*!*!*!* END ExternalEncryptorImpl:ConstructExternalCall!*!*!*!*!*!*\n\n"
             << std::endl;
 }
 
-ExternalDecryptorImpl::ExternalDecryptorImpl(ParquetCipher::type alg_id, int32_t key_len,
-                                             bool metadata, bool contains_length)
-        : aes_decryptor_{std::unique_ptr<AesDecryptorImpl>(
-            new AesDecryptorImpl(alg_id, key_len, metadata, contains_length))} {
-  std::cout << "Created ExternalDecryptorImpl" << std::endl;
+ExternalDecryptorImpl::ExternalDecryptorImpl(
+  std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
+    : agent_instance_(std::move(agent_instance)) {
+  std::cout << "[DEBUG] ExternalDecryptorImpl constructor called" << std::endl;
 }
 
-std::unique_ptr<ExternalDecryptorImpl> ExternalDecryptorImpl::Make(ParquetCipher::type alg_id,
-                                            int32_t key_len, bool metadata){
-  return std::make_unique<ExternalDecryptorImpl>(alg_id, key_len, metadata);
+std::unique_ptr<ExternalDecryptorImpl> ExternalDecryptorImpl::Make(
+    ParquetCipher::type alg_id, int32_t key_len, std::string column_name, Type::type data_type, 
+    Compression::type compression_type, Encoding::type encoding, std::string ext_column_key,
+    std::string user_id, std::string app_context, bool metadata, bool contains_length) {
+
+  std::cout << "[DEBUG] ExternalDecryptorImpl::Make (full) called with parameters:" << std::endl;
+  std::cout << "  alg_id: " << alg_id << std::endl;
+  std::cout << "  key_len: " << key_len << std::endl;
+  std::cout << "  column_name: " << column_name << std::endl;
+  std::cout << "  data_type: " << HackTypeToString(data_type) << std::endl;
+  std::cout << "  compression_type: " << CompressName(compression_type) << std::endl;
+  std::cout << "  encoding: " << encoding << std::endl;
+  std::cout << "  ext_column_key: " << ext_column_key << std::endl;
+  std::cout << "  user_id: " << user_id << std::endl;
+  std::cout << "  app_context: " << app_context << std::endl;
+  std::cout << "  metadata: " << (metadata ? "true" : "false") << std::endl;
+  std::cout << "  contains_length: " << (contains_length ? "true" : "false") << std::endl;
+
+  //TODO: this should be a config parameter
+  std::string dbpa_library_path = "libDBPATestAgent.so";
+  std::cout << "[DEBUG] Loading DBPA agent from: " << dbpa_library_path << std::endl;
+  auto dbpa_agent = LoadableEncryptorUtils::LoadFromLibrary(dbpa_library_path);
+  if (!dbpa_agent) {
+    std::cout << "[ERROR] Failed to create instance of DataBatchProtectionAgentInterface" << std::endl;
+    throw ParquetException("Failed to create instance of DataBatchProtectionAgentInterface");
+  }
+  std::cout << "[DEBUG] Successfully loaded DBPA agent" << std::endl;
+
+  std::cout << "[DEBUG] Initializing DBPA agent..." << std::endl;
+  dbpa_agent->init(
+    /*column_name*/ column_name,
+    /*connection_config*/ std::map<std::string, std::string>{},
+    /*app_context*/ app_context,
+    /*column_key_id*/ ext_column_key,
+    /*data_type*/ dbpa_utils::ParquetTypeToExternal(data_type), 
+    /*compression_type*/ dbpa_utils::ArrowCompressionToExternal(compression_type)
+  );
+  std::cout << "[DEBUG] DBPA agent initialized successfully" << std::endl;
+
+  auto result = std::make_unique<ExternalDecryptorImpl>(std::move(dbpa_agent));
+  std::cout << "[DEBUG] ExternalDecryptorImpl created successfully" << std::endl;
+  return result;
+}
+
+std::unique_ptr<ExternalDecryptorImpl> ExternalDecryptorImpl::Make(ParquetCipher::type alg_id, int32_t key_len, bool metadata) {
+  std::cout << "[DEBUG] ExternalDecryptorImpl::Make (simple) called with parameters:" << std::endl;
+  std::cout << "  alg_id: " << alg_id << std::endl;
+  std::cout << "  key_len: " << key_len << std::endl;
+  std::cout << "  metadata: " << (metadata ? "true" : "false") << std::endl;
+
+  //TODO: this should be a config parameter
+  std::string dbpa_library_path = "dbpa_agent.so";
+  std::cout << "[DEBUG] Loading DBPA agent from: " << dbpa_library_path << std::endl;
+  auto dbpa_agent = LoadableEncryptorUtils::LoadFromLibrary(dbpa_library_path);
+  if (!dbpa_agent) {
+    std::cout << "[ERROR] Failed to create instance of DataBatchProtectionAgentInterface" << std::endl;
+    throw ParquetException("Failed to create instance of DataBatchProtectionAgentInterface");
+  }
+  std::cout << "[DEBUG] Successfully loaded DBPA agent" << std::endl;
+
+  // For simple cases (like footer decryption), we use default values
+  std::cout << "[DEBUG] Initializing DBPA agent with default values..." << std::endl;
+  dbpa_agent->init(
+    /*column_name*/ "footer",  // Default column name for footer
+    /*connection_config*/ std::map<std::string, std::string>{},
+    /*app_context*/ "default",  // Default app context
+    /*column_key_id*/ "default",  // Default column key
+    /*data_type*/ dbps::external::Type::BYTE_ARRAY,  // Default to byte array for footer
+    /*compression_type*/ dbps::external::CompressionCodec::UNCOMPRESSED  // Default to uncompressed
+  );
+  std::cout << "[DEBUG] DBPA agent initialized successfully with default values" << std::endl;
+
+  auto result = std::make_unique<ExternalDecryptorImpl>(std::move(dbpa_agent));
+  std::cout << "[DEBUG] ExternalDecryptorImpl created successfully" << std::endl;
+  return result;
 }
 
 int32_t ExternalDecryptorImpl::Decrypt(span<const uint8_t> ciphertext, span<const uint8_t> key,
                                        span<const uint8_t> aad, span<uint8_t> plaintext) {
-  std::cout << "ExternalDecryptorImpl::Decrypt called" << std::endl;
-  std::cout << "ciphertext size: " << ciphertext.size() << std::endl;
-  std::cout << "key size: " << key.size() << std::endl;
-  std::cout << "aad size: " << aad.size() << std::endl;
-  std::cout << "plaintext size: " << plaintext.size() << std::endl;
 
-  ConstructExternalCall();
+  std::cout << "[DEBUG] ExternalDecryptorImpl::Decrypt called" << std::endl;
+  std::cout << "  ciphertext size: " << ciphertext.size() << " bytes" << std::endl;
+  std::cout << "  key size: " << key.size() << " bytes" << std::endl;
+  std::cout << "  aad size: " << aad.size() << " bytes" << std::endl;
+  std::cout << "  plaintext buffer size: " << plaintext.size() << " bytes" << std::endl;
 
-  std::cout << "About to call aes_decryptor_->Decrypt()" << std::endl;
-  std::cout << "About to call aes_decryptor_->Decrypt()" << std::endl;
-  std::cout << "ciphertext first few bytes: ";
-  for (int i = 0; i < std::min(8, (int)ciphertext.size()); i++) {
-      std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)ciphertext[i] << " ";
+  std::cout << "[DEBUG] Calling agent_instance_->Decrypt..." << std::endl;
+  std::unique_ptr<DecryptionResult> result = agent_instance_->Decrypt(ciphertext);
+  
+  if (!result->success()) {
+    std::cout << "[ERROR] Decryption failed: " << result->error_message() << std::endl;
+    throw ParquetException(result->error_message());
   }
-  std::cout << std::dec << std::endl;
+  std::cout << "[DEBUG] Decryption successful" << std::endl;
+  std::cout << "  result size: " << result->size() << " bytes" << std::endl;
+  std::cout << "  result plaintext size: " << result->plaintext().size() << " bytes" << std::endl;
 
-  std::cout << "key first few bytes: ";
-  for (int i = 0; i < std::min(8, (int)key.size()); i++) {
-      std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)key[i] << " ";
+  if (plaintext.size() < result->plaintext().size()) {
+    std::cout << "[ERROR] Plaintext buffer too small. Need " << result->plaintext().size() 
+              << " bytes, have " << plaintext.size() << " bytes" << std::endl;
+    throw ParquetException("Plaintext buffer too small for decrypted result");
   }
-  std::cout << std::dec << std::endl;
+  
+  std::cout << "[DEBUG] Copying result to plaintext buffer..." << std::endl;
+  std::copy(result->plaintext().begin(), result->plaintext().end(), plaintext.begin());
+  std::cout << "[DEBUG] Decryption completed successfully" << std::endl;
 
-  std::cout << "aad first few bytes: ";
-  for (int i = 0; i < std::min(8, (int)aad.size()); i++) {
-      std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)aad[i] << " ";
-  }
-  std::cout << std::dec << std::endl;
-  int32_t result = aes_decryptor_->Decrypt(ciphertext, key, aad, plaintext);
-  std::cout << "aes_decryptor_->Decrypt() returned: " << result << std::endl;
-  return result;
+  return result->size();
 }
 
 int32_t ExternalDecryptorImpl::PlaintextLength(int32_t ciphertext_len) const {
-  return aes_decryptor_->PlaintextLength(ciphertext_len);
+  std::cout << "[DEBUG] ExternalDecryptorImpl::PlaintextLength called with ciphertext_len: " << ciphertext_len << std::endl;
+  //TODO
+  // This is not production code. We know that the one DPBA Agent we have uses XOR encryption.
+  // Therefore it's safe to assume that the plaintext length is the same as the ciphertext length.
+  // This is not true for all DPBA Agents.
+  if (ciphertext_len < 0) {
+    std::cout << "[ERROR] Negative ciphertext length: " << ciphertext_len << std::endl;
+    std::stringstream ss;
+    ss << "Negative ciphertext length " << ciphertext_len;
+    throw ParquetException(ss.str());
+  }
+  int32_t result = ciphertext_len;
+  std::cout << "[DEBUG] PlaintextLength returning: " << result << std::endl;
+  return result;
 }
 
 int32_t ExternalDecryptorImpl::CiphertextLength(int32_t plaintext_len) const {
-  return aes_decryptor_->CiphertextLength(plaintext_len);
+  std::cout << "[DEBUG] ExternalDecryptorImpl::CiphertextLength called with plaintext_len: " << plaintext_len << std::endl;
+  //TODO
+  // This is not production code. We know that the one DPBA Agent we have uses XOR encryption.
+  // Therefore it's safe to assume that the ciphertext length is the same as the plaintext length.
+  // This is not true for all DPBA Agents.
+  if (plaintext_len < 0) {
+    std::cout << "[ERROR] Negative plaintext length: " << plaintext_len << std::endl;
+    std::stringstream ss;
+    ss << "Negative plaintext length " << plaintext_len;
+    throw ParquetException(ss.str());
+  }
+  int32_t result = plaintext_len;
+  std::cout << "[DEBUG] CiphertextLength returning: " << result << std::endl;
+  return result;
 }
 
-void ExternalDecryptorImpl::ConstructExternalCall() {
-  std::cout << "Here I would call the external decryption service. Hold for params." << std::endl;
+void ExternalDecryptorImpl::ConstructExternalCall(span<const uint8_t> ciphertext) {
+  std::cout << "\n\n!*!*!*!*!*!* START ExternalDecryptorImpl:ConstructExternalCall!*!*!*!*!*!*"
+            << std::endl;
+
+  std::cout << "Calling ExternalDecryptorService." << std::endl;
+
+  std::cout << "Payload:" << std::endl;
+  
+  std::cout << "!*!*!*!*!*!* END ExternalDecryptorImpl:ConstructExternalCall!*!*!*!*!*!*\n\n"
+            << std::endl;
 }
 
 #undef ENCRYPT_INIT
