@@ -96,34 +96,24 @@ def external_decryption_config():
 
 
 @pytest.fixture
-def external_decryption_config():
-    config = pe.ExternalDecryptionConfiguration(
-        cache_lifetime=timedelta(minutes=5.0),
-        app_context={
-            "user_id": "Picard1701",
-            "location": "Presidio"
-        },
-        connection_config={
-            "AES_GCM_V1": {
-                "config_file": "path/to/config/file",
-                "config_file_decryption_key": "some_key"
-            }
-        }
-    )
-    config.cache_lifetime=timedelta(minutes=5.0)
-    return config
-
-@pytest.fixture
-def encrypted_parquet_file(tmp_path, dummy_kms_client, kms_config, external_decryption_config):
+def encrypted_parquet_file(tmp_path, dummy_kms_client, kms_config, external_encryption_config):
     """
     Fixture that creates a Parquet file encrypted with external encryption.
     Other tests can depend on this fixture.
     """
     file_path = tmp_path / "test_ext.parquet"
-    table = pa.Table.from_arrays([[1, 2, 3]], names=["col"])
+    
+    # Create table with columns matching the per_column_encryption keys in the config
+    table = pa.Table.from_arrays(
+        [
+            [1, 2, 3],  # column "a"
+            ["A", "B", "C"]  # column "b"
+        ],
+        names=["a", "b"]
+    )
 
     factory = pe.CryptoFactory(dummy_kms_client)
-    encryption_props = factory.external_file_encryption_properties(kms_config, external_decryption_config)
+    encryption_props = factory.external_file_encryption_properties(kms_config, external_encryption_config)
 
     writer = pq.ParquetWriter(str(file_path), table.schema, encryption_properties=encryption_props)
     writer.write_table(table)
@@ -365,22 +355,27 @@ def test_external_file_decryption_properties_valid(dummy_kms_client, kms_config,
     assert result.__class__.__name__ == "ExternalFileDecryptionProperties"
     assert result.__class__.__module__ == "pyarrow._parquet"
 
-def test_open_with_external_decryption(encrypted_parquet_file, dummy_kms_client, kms_config, external_encryption_config):
+def test_open_with_external_decryption(
+    encrypted_parquet_file, dummy_kms_client, kms_config, external_decryption_config
+):
     file_path, table = encrypted_parquet_file
 
     # Create decryption properties
     factory = pe.CryptoFactory(dummy_kms_client)
-    decryption_props = factory.external_file_decryption_properties(kms_config, external_encryption_config)
+    decryption_props = factory.external_file_decryption_properties(
+        kms_config, external_decryption_config
+    )
 
     # Read the file
     reader = ParquetReader()
     reader.open(str(file_path), decryption_properties=decryption_props)
     read_table = reader.read_table()
 
-    # Assertions
+    # Assertions: check schema, number of rows and columns
     assert read_table.num_rows == table.num_rows
     assert read_table.num_columns == table.num_columns
     assert read_table.schema.equals(table.schema)
+    assert read_table.column_names == table.column_names
 
     reader.close()
     assert reader.closed

@@ -1507,7 +1507,7 @@ cdef class ParquetReader(_Weakrefable):
                 thrift_container_size_limit)
 
         if decryption_properties is not None:
-            if isinstance(decryption_properties, ExternalFileEncryptionProperties):
+            if isinstance(decryption_properties, ExternalFileDecryptionProperties):
                 properties.file_decryption_properties(
                     static_pointer_cast[CFileDecryptionProperties, CExternalFileDecryptionProperties] (
                         (<ExternalFileDecryptionProperties>decryption_properties).unwrap_external()))
