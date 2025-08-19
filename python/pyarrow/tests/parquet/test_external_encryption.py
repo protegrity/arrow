@@ -15,11 +15,14 @@
 # specific language governing permissions and limitations
 # under the License.
 
+<<<<<<< HEAD
 import pytest
 import pyarrow.parquet.encryption as pe
 import re
 from datetime import  timedelta
 
+=======
+>>>>>>> 749fc44a0 (Adding the bases for external file decryptor)
 @pytest.fixture
 def dummy_kms_client():
     class DummyKmsClient(pe.KmsClient):
@@ -40,8 +43,13 @@ def kms_config():
     return pe.KmsConnectionConfig(
         custom_kms_conf={
             "footer_key": "012footer_secret",
+<<<<<<< HEAD
             "key_1": "column_secret001",
             "key_2": "column_secret002"
+=======
+            "orderid_key": "column_secret001",
+            "productid_key": "column_secret002"
+>>>>>>> 749fc44a0 (Adding the bases for external file decryptor)
         }
     )
 
@@ -264,15 +272,13 @@ def test_decryption_configuration_properties():
 def test_external_decryption_configuration_properties(external_decryption_config):
     """Test the ExternalDecryptionConfiguration properties including external-specific fields."""
 
-    config = external_decryption_config
-
-    assert isinstance(config, pe.ExternalDecryptionConfiguration)
-    assert config.cache_lifetime == timedelta(minutes=5.0)
-    assert config.app_context == {
+    assert isinstance(external_decryption_config, pe.ExternalDecryptionConfiguration)
+    assert external_decryption_config.cache_lifetime == timedelta(minutes=5.0)
+    assert external_decryption_config.app_context == {
         "user_id": "Picard1701",
         "location": "Presidio"
     }
-    assert config.connection_config == {
+    assert external_decryption_config.connection_config == {
         "AES_GCM_V1": {
             "config_file": "path/to/config/file",
             "config_file_decryption_key": "some_key"
@@ -315,3 +321,11 @@ def test_external_decryption_connection_config_invalid_types():
                 "config_file": ["not", "a", "string"]  # invalid inner value
             }
         }
+
+def test_external_file_decryption_properties_valid(dummy_kms_client, kms_config, external_decryption_config):
+    factory = pe.CryptoFactory(dummy_kms_client)
+    result = factory.external_file_decryption_properties(kms_config, external_decryption_config)
+
+    # Instead of isinstance, check class name and module dynamically because ExternalFileDecryptionProperties is not visbile
+    assert result.__class__.__name__ == "ExternalFileDecryptionProperties"
+    assert result.__class__.__module__ == "pyarrow._parquet"

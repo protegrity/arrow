@@ -759,6 +759,40 @@ cdef class CryptoFactory(_Weakrefable):
             c_file_decryption_properties)
         return FileDecryptionProperties.wrap(file_decryption_properties)
 
+    def external_file_decryption_properties(
+            self,
+            KmsConnectionConfig kms_connection_config,
+            ExternalDecryptionConfiguration decryption_config=None):
+        """Create file decryption properties.
+        Parameters
+        ----------
+        kms_connection_config : KmsConnectionConfig
+            Configuration of connection to KMS
+        decryption_config : ExternalDecryptionConfiguration, default None
+            Configuration of the decryption, such as cache timeout.
+            Can be None.
+        Returns
+        -------
+        file_decryption_properties : ExternalFileDecryptionProperties
+            File decryption properties.
+        """
+        cdef:
+            CExternalDecryptionConfiguration c_decryption_config
+            CResult[shared_ptr[CExternalFileDecryptionProperties]] \
+                c_file_decryption_properties
+        if decryption_config is None:
+            c_decryption_config = CExternalDecryptionConfiguration()
+        else:
+            c_decryption_config = deref(decryption_config.unwrap_external().get())
+        with nogil:
+            c_file_decryption_properties = \
+                self.factory.get().SafeGetExternalFileDecryptionProperties(
+                    deref(kms_connection_config.unwrap().get()),
+                    c_decryption_config)
+        file_decryption_properties = GetResultValue(
+            c_file_decryption_properties)
+        return ExternalFileDecryptionProperties.wrap(file_decryption_properties)
+
     def remove_cache_entries_for_token(self, access_token):
         self.factory.get().RemoveCacheEntriesForToken(tobytes(access_token))
 
