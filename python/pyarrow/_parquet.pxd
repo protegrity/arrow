@@ -709,7 +709,7 @@ cdef class FileDecryptionProperties:
     cdef inline shared_ptr[CFileDecryptionProperties] unwrap(self):
         return self.properties
 
-cdef class ExternalFileDecryptionProperties:
+cdef class ExternalFileDecryptionProperties(FileDecryptionProperties):
     """File-level decryption properties for the low-level API"""
     cdef:
         shared_ptr[CExternalFileDecryptionProperties] properties
