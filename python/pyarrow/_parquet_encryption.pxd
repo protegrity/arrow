@@ -22,8 +22,10 @@ from pyarrow.includes.common cimport *
 from pyarrow.includes.libparquet_encryption cimport *
 from pyarrow._parquet cimport (ParquetCipher,
                                CFileEncryptionProperties,
+                               CExternalFileEncryptionProperties,
                                CFileDecryptionProperties,
                                FileEncryptionProperties,
+                               ExternalFileEncryptionProperties,
                                FileDecryptionProperties,
                                ParquetCipher_AES_GCM_V1,
                                ParquetCipher_AES_GCM_CTR_V1,

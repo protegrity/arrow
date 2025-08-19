@@ -426,7 +426,7 @@ cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
             self.app_context = app_context
         if connection_config is not None:
             self.connection_config = connection_config
-            
+
     @property
     def app_context(self):
         """Get the application context as a dictionary."""
@@ -706,7 +706,22 @@ cdef class CryptoFactory(_Weakrefable):
         file_encryption_properties = GetResultValue(
             file_encryption_properties_result)
         return FileEncryptionProperties.wrap(file_encryption_properties)
-       
+
+    def external_file_encryption_properties(self,
+                                            KmsConnectionConfig kms_connection_config,
+                                            ExternalEncryptionConfiguration external_encryption_config):
+        cdef:
+            CResult[shared_ptr[CExternalFileEncryptionProperties]] \
+                external_file_encryption_properties_result
+        with nogil:
+            external_file_encryption_properties_result = \
+                self.factory.get().SafeGetExternalFileEncryptionProperties(
+                    deref(kms_connection_config.unwrap().get()),
+                    deref(external_encryption_config.unwrap_external().get()))
+        external_file_encryption_properties = GetResultValue(
+            external_file_encryption_properties_result)
+        return ExternalFileEncryptionProperties.wrap_external(external_file_encryption_properties)
+        
     def file_decryption_properties(
             self,
             KmsConnectionConfig kms_connection_config,

@@ -290,7 +290,7 @@ def test_external_decryption_connection_config_invalid_types():
                 "config_file": "should-fail"
             }
         }
-
+    
     # Outer value is not a dict
     with pytest.raises(TypeError, match="Inner value for cipher AES_GCM_V1 must be a dict"):
         config = pe.ExternalDecryptionConfiguration()
