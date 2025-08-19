@@ -215,6 +215,7 @@ cdef class ExternalEncryptionConfiguration(EncryptionConfiguration):
             self.per_column_encryption = per_column_encryption
 
     """ Forward all attributes get/set methods to the superclass """
+    """ The superclass already converts to/from bytes and does additional processing needed """
     @property
     def column_keys(self):
         return EncryptionConfiguration.column_keys.__get__(self)
