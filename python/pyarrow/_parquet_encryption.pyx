@@ -420,6 +420,7 @@ cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
 
     def __init__(self, *, cache_lifetime=None, app_context=None, connection_config=None):
         # Initialize the pointer first so the get/set forwards work.
+        # Super init will run the setters/getters below so we need the pointer to exist.
         self.external_configuration.reset(new CExternalDecryptionConfiguration())
         super().__init__(cache_lifetime=cache_lifetime)
 
