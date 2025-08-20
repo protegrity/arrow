@@ -315,9 +315,9 @@ ColumnPathToEncryptionPropertiesMap CryptoFactory::GetColumnEncryptionProperties
 }
 
 std::shared_ptr<FileDecryptionProperties> CryptoFactory::GetFileDecryptionProperties(
-    const KmsConnectionConfig& kms_connection_config,
-    const DecryptionConfiguration& decryption_config, const std::string& file_path,
-    const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
+  const KmsConnectionConfig& kms_connection_config,
+  const DecryptionConfiguration& decryption_config, const std::string& file_path,
+  const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
   auto key_retriever = std::make_shared<FileKeyUnwrapper>(
       key_toolkit_, kms_connection_config, decryption_config.cache_lifetime_seconds,
       file_path, file_system);
@@ -330,10 +330,9 @@ std::shared_ptr<FileDecryptionProperties> CryptoFactory::GetFileDecryptionProper
 
 std::shared_ptr<ExternalFileDecryptionProperties>
 CryptoFactory::GetExternalFileDecryptionProperties(
-    const KmsConnectionConfig& kms_connection_config,
-    const ExternalDecryptionConfiguration& external_decryption_config,
-    const std::string& file_path, const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
-  
+  const KmsConnectionConfig& kms_connection_config,
+  const ExternalDecryptionConfiguration& external_decryption_config,
+  const std::string& file_path, const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
   // Use the same FileKeyUnwrapper as in the FileDecryptionProperties.
   // TODO(sbrenes): Check what needs to change in the case of external decryptors (Issue #52).
   auto key_retriever = std::make_shared<FileKeyUnwrapper>(

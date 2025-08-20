@@ -419,13 +419,28 @@ cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
     __slots__ = ()
 
     def __init__(self, *, cache_lifetime=None, app_context=None, connection_config=None):
-        super().__init__(cache_lifetime=cache_lifetime)
+        # Initialize the pointer first so the get/set forwards work.
         self.external_configuration.reset(new CExternalDecryptionConfiguration())
+        super().__init__(cache_lifetime=cache_lifetime)
+
+        self.external_configuration.get().cache_lifetime_seconds = \
+            self.configuration.get().cache_lifetime_seconds
 
         if app_context is not None:
             self.app_context = app_context
         if connection_config is not None:
             self.connection_config = connection_config
+    
+    """ Forward all attributes get/set methods to the superclass """
+    """ The superclass already converts to/from bytes and does additional processing needed """
+    @property
+    def cache_lifetime(self):
+        return DecryptionConfiguration.cache_lifetime.__get__(self)
+    
+    @cache_lifetime.setter
+    def cache_lifetime(self, value):
+        DecryptionConfiguration.cache_lifetime.__set__(self, value)
+        self.external_configuration.get().cache_lifetime_seconds = value.total_seconds()
 
     @property
     def app_context(self):
