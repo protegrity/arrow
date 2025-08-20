@@ -1,7 +1,7 @@
 //TODO: figure out the licensing.
 
 #include "parquet/encryption/external/loadable_encryptor_utils.h"
-#include "parquet/encryption/external/dbpa_interface.h"
+#include "parquet/encryption/external/borrowed/dbpa_interface.h"
 #include "parquet/encryption/external/dbpa_library_wrapper.h"
 
 #include "arrow/util/io_util.h" //utils for loading shared libraries

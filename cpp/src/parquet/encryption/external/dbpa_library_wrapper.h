@@ -5,8 +5,8 @@
 #include <memory>
 #include <functional>
 
-#include "parquet/encryption/external/dbpa_interface.h"
-#include "span.hpp"
+#include "parquet/encryption/external/borrowed/dbpa_interface.h"
+#include "borrowed/span.hpp"
 
 using tcb::span;
 

@@ -10,8 +10,8 @@
 
 #include "parquet/exception.h"
 #include "parquet/encryption/external/dbpa_test_agent.h"
-#include "parquet/encryption/external/dbpa_interface.h"
-#include "span.hpp"
+#include "parquet/encryption/external/borrowed/dbpa_interface.h"
+#include "borrowed/span.hpp"
 
 using tcb::span;
 using dbps::external::EncryptionResult;

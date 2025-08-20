@@ -23,11 +23,11 @@
 #include <map>
 
 #include "gtest/gtest.h"
-#include "parquet/encryption/external/dbpa_interface.h"
+#include "parquet/encryption/external/borrowed/dbpa_interface.h"
 #include "parquet/encryption/external/dbpa_library_wrapper.h"
 
 #include "parquet/test_util.h"
-#include "span.hpp"
+#include "borrowed/span.hpp"
 
 using tcb::span;
 

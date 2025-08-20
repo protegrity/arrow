@@ -26,7 +26,7 @@
 #include "parquet/encryption/openssl_internal.h"
 #include "parquet/properties.h"
 #include "parquet/types.h"
-#include "parquet/encryption/external/dbpa_interface.h"
+#include "parquet/encryption/external/borrowed/dbpa_interface.h"
 
 using parquet::ParquetCipher;
 using ::arrow::util::span;
