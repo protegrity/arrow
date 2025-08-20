@@ -238,7 +238,7 @@ endif()
 
 if(PARQUET_REQUIRE_ENCRYPTION)
   list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS ${ARROW_OPENSSL_LIBS})
-  set(PARQUET_SRCS ${PARQUET_SRCS} encryption/encryption_internal.cc
+  set(PARQUET_SRCS ${PARQUET_SRCS} encryption/aes_encryption.cc
                    encryption/encryption_utils.cc
                    encryption/openssl_internal.cc)
   # Encryption key management
