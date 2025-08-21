@@ -132,6 +132,17 @@ class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyCryptoFactory
   SafeGetFileDecryptionProperties(
       const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,
       const ::parquet::encryption::DecryptionConfiguration& decryption_config);
+
+  /// The returned FileDecryptionProperties object will use the cache inside this
+  /// CryptoFactory object, so please keep this
+  /// CryptoFactory object alive along with the returned
+  /// FileDecryptionProperties object.
+  arrow::Result<std::shared_ptr<::parquet::FileDecryptionProperties>>
+  SafeGetExternalFileDecryptionProperties(
+      const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,
+      const ::parquet::encryption::DecryptionConfiguration& decryption_config,
+      const ::parquet::encryption::ExternalEncryptionConfiguration& external_encryption_config,
+      const ::parquet::encryption::ExternalConnectionConfiguration& external_connection_config);
 };
 
 }  // namespace encryption

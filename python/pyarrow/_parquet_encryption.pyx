@@ -439,21 +439,20 @@ cdef class CryptoFactory(_Weakrefable):
     def file_decryption_properties(
             self,
             KmsConnectionConfig kms_connection_config,
-            DecryptionConfiguration decryption_config=None):
-        """Create file decryption properties.
+            DecryptionConfiguration decryption_config = None):
+        """
+        Get file decryption properties.
 
         Parameters
         ----------
         kms_connection_config : KmsConnectionConfig
-            Configuration of connection to KMS
-
-        decryption_config : DecryptionConfiguration, default None
-            Configuration of the decryption, such as cache timeout.
-            Can be None.
+            KMS connection configuration.
+        decryption_config : DecryptionConfiguration, optional
+            Decryption configuration.
 
         Returns
         -------
-        file_decryption_properties : FileDecryptionProperties
+        FileDecryptionProperties
             File decryption properties.
         """
         cdef:
@@ -469,6 +468,45 @@ cdef class CryptoFactory(_Weakrefable):
                 self.factory.get().SafeGetFileDecryptionProperties(
                     deref(kms_connection_config.unwrap().get()),
                     c_decryption_config)
+        file_decryption_properties = GetResultValue(
+            c_file_decryption_properties)
+        return FileDecryptionProperties.wrap(file_decryption_properties)
+
+    def external_file_decryption_properties(
+            self,
+            KmsConnectionConfig kms_connection_config,
+            DecryptionConfiguration decryption_config,
+            ExternalEncryptionConfiguration external_encryption_config,
+            ExternalConnectionConfiguration external_connection_config):
+        """
+        Get external file decryption properties.
+
+        Parameters
+        ----------
+        kms_connection_config : KmsConnectionConfig
+            KMS connection configuration.
+        decryption_config : DecryptionConfiguration
+            Decryption configuration.
+        external_encryption_config : ExternalEncryptionConfiguration
+            External encryption configuration.
+        external_connection_config : ExternalConnectionConfiguration
+            External connection configuration.
+
+        Returns
+        -------
+        FileDecryptionProperties
+            File decryption properties.
+        """
+        cdef:
+            CResult[shared_ptr[CFileDecryptionProperties]] \
+                c_file_decryption_properties
+        with nogil:
+            c_file_decryption_properties = \
+                self.factory.get().SafeGetExternalFileDecryptionProperties(
+                    deref(kms_connection_config.unwrap().get()),
+                    deref(decryption_config.unwrap().get()),
+                    deref(external_encryption_config.unwrap().get()),
+                    deref(external_connection_config.unwrap().get()))
         file_decryption_properties = GetResultValue(
             c_file_decryption_properties)
         return FileDecryptionProperties.wrap(file_decryption_properties)

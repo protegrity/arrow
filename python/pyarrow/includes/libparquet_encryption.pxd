@@ -159,3 +159,9 @@ cdef extern from "arrow/python/parquet_encryption.h" \
             SafeGetFileDecryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CDecryptionConfiguration& decryption_config)
+        CResult[shared_ptr[CFileDecryptionProperties]] \
+            SafeGetExternalFileDecryptionProperties(
+            const CKmsConnectionConfig& kms_connection_config,
+            const CDecryptionConfiguration& decryption_config,
+            const CExternalEncryptionConfiguration& external_encryption_config,
+            const CExternalConnectionConfiguration& external_connection_config)
