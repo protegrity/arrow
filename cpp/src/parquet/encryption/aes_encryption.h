@@ -69,6 +69,8 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
 
   ~AesEncryptor() = default;
 
+  /// Start of Encryptor Interface methods.
+
   /// The size of the ciphertext, for this cipher and the specified plaintext length.
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override;
 
@@ -85,6 +87,8 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
                               ::arrow::util::span<const uint8_t> aad,
                               ::arrow::util::span<const uint8_t> nonce,
                               ::arrow::util::span<uint8_t> encrypted_footer) override;
+
+  /// End of Encryptor Interface methods.
 
  private:
    [[nodiscard]] CipherContext MakeCipherContext() const;
@@ -118,6 +122,8 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
 
   ~AesDecryptor() = default;
 
+  /// Start of Decryptor Interface methods.
+
   /// The size of the plaintext, for this cipher and the specified ciphertext length.
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override;
 
@@ -132,6 +138,8 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
                   ::arrow::util::span<const uint8_t> key,
                   ::arrow::util::span<const uint8_t> aad,
                   ::arrow::util::span<uint8_t> plaintext) override;
+
+  /// End of Decryptor Interface methods.
 
  private:
     [[nodiscard]] CipherContext MakeCipherContext() const;
