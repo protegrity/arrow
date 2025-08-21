@@ -105,6 +105,22 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
                       ::arrow::util::span<uint8_t> ciphertext);
 };
 
+// AesEncryptor supports only three key lengths: 16, 24, 32 bytes, so at most there could be
+// up to three types of meta_encryptors and data_encryptors. This factory uses a cache to
+// store the encryptors for the different key lengths.
+class AesEncryptorFactory {
+ public:
+  AesEncryptor* GetMetaAesEncryptor(ParquetCipher::type alg_id, int32_t key_size);
+  AesEncryptor* GetDataAesEncryptor(ParquetCipher::type alg_id, int32_t key_size);
+
+ private:
+  int32_t MapKeyLenToEncryptorArrayIndex(int32_t key_len);
+
+  std::unique_ptr<AesEncryptor> meta_encryptor_[3];
+  std::unique_ptr<AesEncryptor> data_encryptor_[3];
+  //static std::mutex encryptor_cache_mutex_;
+};
+
 /// Performs AES decryption operations with GCM or CTR ciphers.
 class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInterface {
  public:
