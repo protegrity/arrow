@@ -17,8 +17,9 @@
 
 #include "arrow/util/base64.h"
 
-#include "parquet/encryption/aes_encryption.h"
 #include "parquet/encryption/encryption.h"
+#include "parquet/encryption/aes_encryption.h"
+#include "parquet/encryption/key_toolkit_internal.h"
 
 namespace parquet::encryption::internal {
 
