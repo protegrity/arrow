@@ -99,12 +99,14 @@ std::string InternalFileDecryptor::GetFooterKey() {
 
 std::unique_ptr<encryption::DecryptorInterface> GetDecryptorImpl(ParquetCipher::type algorithm, 
                                                      int32_t key_len, bool metadata) {
-  if (algorithm == ParquetCipher::type::EXTERNAL_V1) {
-    std::cout << "Heeey I found an external decryptor!! woot!!!" << std::endl;
-    return encryption::ExternalDecryptorImpl::Make(algorithm, key_len, metadata);
+
+  //TODO: verify this. It may be a hack.
+  if (metadata || (algorithm != ParquetCipher::type::EXTERNAL_V1)) { 
+    return encryption::AesDecryptorImpl::Make(algorithm, key_len, metadata);  
   }
-  std::cout << "Going with regular AesDecryptor" << std::endl;
-  return encryption::AesDecryptorImpl::Make(algorithm, key_len, metadata);
+
+  std::cout << "GetDecryptorImpl - Going with regular ExternalDecryptorImpl" << std::endl;
+  return encryption::ExternalDecryptorImpl::Make(algorithm, key_len, metadata);  
 }
 
 std::unique_ptr<Decryptor> InternalFileDecryptor::GetFooterDecryptor() {
