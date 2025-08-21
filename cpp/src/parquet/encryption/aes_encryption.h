@@ -118,7 +118,6 @@ class AesEncryptorFactory {
 
   std::unique_ptr<AesEncryptor> meta_encryptor_[3];
   std::unique_ptr<AesEncryptor> data_encryptor_[3];
-  //static std::mutex encryptor_cache_mutex_;
 };
 
 /// Performs AES decryption operations with GCM or CTR ciphers.
