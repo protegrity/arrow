@@ -252,6 +252,41 @@ std::shared_ptr<FileDecryptionProperties> CryptoFactory::GetFileDecryptionProper
       ->build();
 }
 
+std::shared_ptr<FileDecryptionProperties> CryptoFactory::GetExternalFileDecryptionProperties(
+    const KmsConnectionConfig& kms_connection_config,
+    const DecryptionConfiguration& decryption_config,
+    const ExternalEncryptionConfiguration& external_encryption_config,
+    const ExternalConnectionConfiguration& external_connection_config,
+    const std::string& file_path,
+    const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
+  std::cout << "Getting external file decryption properties!!" << std::endl;
+  std::cout << "User ID: " << external_encryption_config.user_id << std::endl;
+  std::cout << "External column keys: " << external_encryption_config.ext_column_keys << std::endl;
+  std::cout << "App context: " << external_encryption_config.app_context << std::endl;
+  std::cout << "Config path: " << external_connection_config.config_path << std::endl;
+  
+  auto key_retriever = std::make_shared<FileKeyUnwrapper>(
+      key_toolkit_, kms_connection_config, decryption_config.cache_lifetime_seconds,
+      file_path, file_system);
+  std::cout << "Key retriever: " << key_retriever << std::endl;
+  std::cout << "Going to external decryption properties builder" << std::endl;
+  
+  // Create AAD prefix from external configuration
+  std::string aad_prefix = external_encryption_config.user_id + "_" + 
+                          external_encryption_config.ext_column_keys + "_" +
+                          external_connection_config.config_path;
+  std::cout << "AAD prefix: " << aad_prefix << std::endl;
+  
+
+  //TODO: aad prefix is needed by column_reader.
+  // in particular in SerializedPageReader::InitDecryption()
+  return FileDecryptionProperties::Builder()
+      .key_retriever(key_retriever)
+      ->aad_prefix(aad_prefix)
+      ->plaintext_files_allowed()
+      ->build();
+}
+
 void CryptoFactory::RotateMasterKeys(
     const KmsConnectionConfig& kms_connection_config,
     const std::string& parquet_file_path,

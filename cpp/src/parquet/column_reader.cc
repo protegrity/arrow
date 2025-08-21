@@ -338,7 +338,10 @@ void SerializedPageReader::InitDecryption() {
   if (crypto_ctx_.data_decryptor_factory) {
     data_decryptor_ = crypto_ctx_.data_decryptor_factory();
     if (data_decryptor_) {
+      //TODO: we will likely need to modify this. AAD will not always be available for
+      // external decryptors. Notice this is for data decryption (not metadata)
       ARROW_DCHECK(!data_decryptor_->file_aad().empty());
+
       data_page_aad_ = encryption::CreateModuleAad(
           data_decryptor_->file_aad(), encryption::kDataPage,
           crypto_ctx_.row_group_ordinal, crypto_ctx_.column_ordinal, kNonPageOrdinal);

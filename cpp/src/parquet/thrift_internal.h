@@ -243,6 +243,9 @@ static inline EncryptionAlgorithm FromThrift(format::EncryptionAlgorithm encrypt
     encryption_algorithm.aad = FromThrift(encryption.AES_GCM_CTR_V1);
   } else if (encryption.__isset.EXTERNAL_V1) {
     encryption_algorithm.algorithm = ParquetCipher::EXTERNAL_V1;
+    //TODO: this (supply_aad_prefix = false) is likely not a hack and we will want to keep it
+    // in the final code.
+    encryption_algorithm.aad.supply_aad_prefix = false;
   } else {
     throw ParquetException("Unsupported algorithm");
   }

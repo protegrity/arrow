@@ -744,7 +744,25 @@ std::string SerializedFile::HandleAadPrefix(
   bool file_has_aad_prefix = algo.aad.aad_prefix.empty() ? false : true;
   std::string aad_prefix_in_file = algo.aad.aad_prefix;
 
+  // Debug prints to understand the if statement behavior
+  std::cout << "[DEBUG] HandleAadPrefix - Algorithm: " << algo.algorithm << std::endl;
+  std::cout << "[DEBUG] HandleAadPrefix - algo.aad.supply_aad_prefix: " 
+            << (algo.aad.supply_aad_prefix ? "true" : "false") << std::endl;
+  std::cout << "[DEBUG] HandleAadPrefix - aad_prefix_in_properties.empty(): " 
+            << (aad_prefix_in_properties.empty() ? "true" : "false") << std::endl;
+  std::cout << "[DEBUG] HandleAadPrefix - aad_prefix_in_properties: '" 
+            << aad_prefix_in_properties << "'" << std::endl;
+  std::cout << "[DEBUG] HandleAadPrefix - file_has_aad_prefix: " 
+            << (file_has_aad_prefix ? "true" : "false") << std::endl;
+  std::cout << "[DEBUG] HandleAadPrefix - aad_prefix_in_file: '" 
+            << aad_prefix_in_file << "'" << std::endl;
+  std::cout << "[DEBUG] HandleAadPrefix - Condition (algo.aad.supply_aad_prefix && aad_prefix_in_properties.empty()): " 
+            << ((algo.aad.supply_aad_prefix && aad_prefix_in_properties.empty()) ? "true" : "false") << std::endl;
+  std::cout << "[DEBUG] HandleAadPrefix - Condition (!algo.aad.supply_aad_prefix && !aad_prefix_in_properties.empty()): " 
+  << ((!algo.aad.supply_aad_prefix && !aad_prefix_in_properties.empty()) ? "true" : "false") << std::endl;
+
   if (algo.aad.supply_aad_prefix && aad_prefix_in_properties.empty()) {
+    std::cout << "[DEBUG] HandleAadPrefix - ENTERING if block: AAD prefix required but not provided!" << std::endl;
     throw ParquetException(
         "AAD prefix used for file encryption, "
         "but not stored in file and not supplied "
@@ -765,9 +783,12 @@ std::string SerializedFile::HandleAadPrefix(
     if (aad_prefix_verifier != nullptr) aad_prefix_verifier->Verify(aad_prefix);
   } else {
     if (!algo.aad.supply_aad_prefix && !aad_prefix_in_properties.empty()) {
-      throw ParquetException(
-          "AAD Prefix set in decryption properties, but was not used "
-          "for file encryption");
+      //TODO: this (excluding EXTERNAL_V1 from the check)) may be a hack.
+      if (algo.algorithm != ParquetCipher::type::EXTERNAL_V1) {
+        throw ParquetException(
+            "AAD Prefix set in decryption properties, but was not used "
+            "for file encryption");
+      }
     }
     std::shared_ptr<AADPrefixVerifier> aad_prefix_verifier =
         file_decryption_properties->aad_prefix_verifier();
