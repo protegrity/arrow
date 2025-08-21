@@ -718,6 +718,7 @@ int32_t ExternalEncryptorImpl::SignedFooterEncrypt(span<const uint8_t> footer,
 
 int32_t ExternalEncryptorImpl::CiphertextLength(int64_t plaintext_len) const {
   std::cout << "[DEBUG] ExternalEncryptorImpl::CiphertextLength called with plaintext_len: " << plaintext_len << std::endl;
+
   //TODO
   // This is not production code. We know that the one DPBA Agent we have uses XOR encryption.
   // Therefore it's safe to assume that the ciphertext length is the same as the plaintext length.
@@ -844,12 +845,14 @@ std::unique_ptr<ExternalDecryptorImpl> ExternalDecryptorImpl::Make(
 
 std::unique_ptr<ExternalDecryptorImpl> ExternalDecryptorImpl::Make(ParquetCipher::type alg_id, int32_t key_len, bool metadata) {
   std::cout << "[DEBUG] ExternalDecryptorImpl::Make (simple) called with parameters:" << std::endl;
+
   std::cout << "  alg_id: " << alg_id << std::endl;
   std::cout << "  key_len: " << key_len << std::endl;
   std::cout << "  metadata: " << (metadata ? "true" : "false") << std::endl;
 
   //TODO: this should be a config parameter
-  std::string dbpa_library_path = "dbpa_agent.so";
+  std::string dbpa_library_path = "libDBPATestAgent.so";
+
   std::cout << "[DEBUG] Loading DBPA agent from: " << dbpa_library_path << std::endl;
   auto dbpa_agent = LoadableEncryptorUtils::LoadFromLibrary(dbpa_library_path);
   if (!dbpa_agent) {
@@ -878,7 +881,7 @@ std::unique_ptr<ExternalDecryptorImpl> ExternalDecryptorImpl::Make(ParquetCipher
 int32_t ExternalDecryptorImpl::Decrypt(span<const uint8_t> ciphertext, span<const uint8_t> key,
                                        span<const uint8_t> aad, span<uint8_t> plaintext) {
 
-  std::cout << "[DEBUG] ExternalDecryptorImpl::Decrypt called" << std::endl;
+  std::cout << "🔥 [DEBUG] ExternalDecryptorImpl::Decrypt called" << std::endl;
   std::cout << "  ciphertext size: " << ciphertext.size() << " bytes" << std::endl;
   std::cout << "  key size: " << key.size() << " bytes" << std::endl;
   std::cout << "  aad size: " << aad.size() << " bytes" << std::endl;
@@ -894,6 +897,14 @@ int32_t ExternalDecryptorImpl::Decrypt(span<const uint8_t> ciphertext, span<cons
   std::cout << "[DEBUG] Decryption successful" << std::endl;
   std::cout << "  result size: " << result->size() << " bytes" << std::endl;
   std::cout << "  result plaintext size: " << result->plaintext().size() << " bytes" << std::endl;
+
+  // Debug: Log the first few bytes of decrypted data
+  std::cout << "[DEBUG] First 16 bytes of decrypted data: ";
+  for (size_t i = 0; i < std::min(size_t(16), result->plaintext().size()); ++i) {
+    std::cout << std::hex << std::setw(2) << std::setfill('0') 
+              << static_cast<int>(result->plaintext()[i]) << " ";
+  }
+  std::cout << std::dec << std::endl;
 
   if (plaintext.size() < result->plaintext().size()) {
     std::cout << "[ERROR] Plaintext buffer too small. Need " << result->plaintext().size() 
