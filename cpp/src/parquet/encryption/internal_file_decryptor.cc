@@ -26,10 +26,10 @@
 namespace parquet {
 
 // Decryptor
-Decryptor::Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor_interface,
+Decryptor::Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor_instance,
                      const std::string& key, const std::string& file_aad,
                      const std::string& aad, ::arrow::MemoryPool* pool)
-    : decryptor_interface_(std::move(decryptor_interface)),
+    : decryptor_instance_(std::move(decryptor_instance)),
       key_(key),
       file_aad_(file_aad),
       aad_(aad),
@@ -38,16 +38,16 @@ Decryptor::Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor_i
 Decryptor::~Decryptor() = default;
 
 int32_t Decryptor::PlaintextLength(int32_t ciphertext_len) const {
-  return decryptor_interface_->PlaintextLength(ciphertext_len);
+  return decryptor_instance_->PlaintextLength(ciphertext_len);
 }
 
 int32_t Decryptor::CiphertextLength(int32_t plaintext_len) const {
-  return decryptor_interface_->CiphertextLength(plaintext_len);
+  return decryptor_instance_->CiphertextLength(plaintext_len);
 }
 
 int32_t Decryptor::Decrypt(::arrow::util::span<const uint8_t> ciphertext,
                            ::arrow::util::span<uint8_t> plaintext) {
-  return decryptor_interface_->Decrypt(ciphertext, str2span(key_), str2span(aad_), plaintext);
+  return decryptor_instance_->Decrypt(ciphertext, str2span(key_), str2span(aad_), plaintext);
 }
 
 // InternalFileDecryptor
@@ -104,8 +104,8 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetFooterDecryptor(
 
   auto key_len = static_cast<int32_t>(footer_key.size());
   // Metadata is decrypted with AES.
-  auto decryptor_interface = encryption::AesDecryptor::Make(algorithm_, key_len, metadata);
-  return std::make_unique<Decryptor>(std::move(decryptor_interface), footer_key, file_aad_, aad,
+  auto decryptor_instance = encryption::AesDecryptor::Make(algorithm_, key_len, metadata);
+  return std::make_unique<Decryptor>(std::move(decryptor_instance), footer_key, file_aad_, aad,
                                      pool_);
 }
 
@@ -137,9 +137,9 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetColumnDecryptor(
   std::string column_key = GetColumnKey(column_path, column_key_metadata);
   auto key_len = static_cast<int32_t>(column_key.size());
   // TODO(sbrenes): If this is not metadata, check the algorithm and return the appropriate
-  // decryptor interface.
-  auto decryptor_interface = encryption::AesDecryptor::Make(algorithm_, key_len, metadata);
-  return std::make_unique<Decryptor>(std::move(decryptor_interface), column_key, file_aad_, aad,
+  // decryptor instance.
+  auto decryptor_instance = encryption::AesDecryptor::Make(algorithm_, key_len, metadata);
+  return std::make_unique<Decryptor>(std::move(decryptor_instance), column_key, file_aad_, aad,
                                      pool_);
 }
 
@@ -159,9 +159,9 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
   return [this, aad, metadata, column_key = std::move(column_key)]() {
     auto key_len = static_cast<int32_t>(column_key.size());
     // TODO(sbrenes): If this is not metadata, check the algorithm and return the appropriate
-    // decryptor interface.
-    auto decryptor_interface = encryption::AesDecryptor::Make(algorithm_, key_len, metadata);
-    return std::make_unique<Decryptor>(std::move(decryptor_interface), column_key, file_aad_,
+    // decryptor instance.
+    auto decryptor_instance = encryption::AesDecryptor::Make(algorithm_, key_len, metadata);
+    return std::make_unique<Decryptor>(std::move(decryptor_instance), column_key, file_aad_,
                                        aad, pool_);
   };
 }

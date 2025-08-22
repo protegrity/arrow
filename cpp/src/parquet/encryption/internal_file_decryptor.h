@@ -49,7 +49,7 @@ class PARQUET_EXPORT Decryptor {
                   ::arrow::util::span<uint8_t> plaintext);
 
  private:
-  std::unique_ptr<encryption::DecryptorInterface> decryptor_interface_;
+  std::unique_ptr<encryption::DecryptorInterface> decryptor_instance_;
   std::string key_;
   std::string file_aad_;
   std::string aad_;

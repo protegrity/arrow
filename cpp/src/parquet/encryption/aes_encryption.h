@@ -114,10 +114,12 @@ class AesEncryptorFactory {
   AesEncryptor* GetDataAesEncryptor(ParquetCipher::type alg_id, int32_t key_size);
 
  private:
+  /// Map the key length to the index of the encryptor array. Since only 16, 24, or 32 bytes
+  /// are allowed for key length, these correspond to the indices 0, 1, and 2.
   int32_t MapKeyLenToEncryptorArrayIndex(int32_t key_len);
 
-  std::unique_ptr<AesEncryptor> meta_encryptor_[3];
-  std::unique_ptr<AesEncryptor> data_encryptor_[3];
+  std::unique_ptr<AesEncryptor> meta_encryptor_cache_[3];
+  std::unique_ptr<AesEncryptor> data_encryptor_cache_[3];
 };
 
 /// Performs AES decryption operations with GCM or CTR ciphers.

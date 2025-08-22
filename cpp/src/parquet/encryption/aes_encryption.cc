@@ -331,10 +331,10 @@ AesEncryptor* AesEncryptorFactory::GetMetaAesEncryptor(
   auto key_len = static_cast<int32_t>(key_size);
   int index = MapKeyLenToEncryptorArrayIndex(key_len);
 
-  if (meta_encryptor_[index] == nullptr) {
-    meta_encryptor_[index] = AesEncryptor::Make(alg_id, key_len, true);
+  if (meta_encryptor_cache_[index] == nullptr) {
+    meta_encryptor_cache_[index] = AesEncryptor::Make(alg_id, key_len, true);
   }
-  return meta_encryptor_[index].get();
+  return meta_encryptor_cache_[index].get();
 }
 
 AesEncryptor* AesEncryptorFactory::GetDataAesEncryptor(
@@ -342,10 +342,10 @@ AesEncryptor* AesEncryptorFactory::GetDataAesEncryptor(
   auto key_len = static_cast<int32_t>(key_size);
   int index = MapKeyLenToEncryptorArrayIndex(key_len);
 
-  if (data_encryptor_[index] == nullptr) {
-    data_encryptor_[index] = AesEncryptor::Make(alg_id, key_len, false);
+  if (data_encryptor_cache_[index] == nullptr) {
+    data_encryptor_cache_[index] = AesEncryptor::Make(alg_id, key_len, false);
   }
-  return data_encryptor_[index].get();
+  return data_encryptor_cache_[index].get();
 }
 
 AesDecryptor::AesDecryptor(

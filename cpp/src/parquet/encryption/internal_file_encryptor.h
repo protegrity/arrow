@@ -58,7 +58,7 @@ class PARQUET_EXPORT Encryptor {
   }
 
  private:
-  encryption::EncryptorInterface* encryptor_interface_;
+  encryption::EncryptorInterface* encryptor_instance_;
   std::string key_;
   std::string file_aad_;
   std::string aad_;
