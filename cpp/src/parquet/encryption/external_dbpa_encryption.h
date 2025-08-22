@@ -11,15 +11,6 @@
 namespace parquet::encryption {
 
 /// Call an external Data Batch Protection Agent (DBPA) to encrypt data.
-/// The DBPA must receive a key_id, not the key itself, as it is responsible for resolving
-/// the key on its end.
-/// The DBPA also requires metadata information about the column (data type, compression algorithm
-/// used, and encoding type) in order to encrypt the data correctly.
-/// An application context can be provided to the DBPA to help it identify the application
-/// and user that is encrypting the data, including user id, location, and other identifiers.
-/// A connection configuration specific to the DBPA (identified by its algorithm) must be
-/// provided. The DBPA can be a locally loaded library or a remote service, depending on the
-/// connection configuration provided.
 class ExternalDBPAEncryptor : public EncryptorInterface {
  public:
   explicit ExternalDBPAEncryptor(
@@ -67,14 +58,6 @@ class ExternalDBPAEncryptor : public EncryptorInterface {
 };
 
 /// Call an external Data Batch Protection Agent (DBPA) to decrypt data.
-/// The DBPA must receive a key_id, not the key itself, as it is responsible for resolving
-/// the key on its end.
-/// The DBPA also requires metadata information about the column (data type, compression algorithm
-/// used, and encoding type) in order to decrypt the data correctly.
-/// An application context can be provided to the DBPA to help it identify the application
-/// and user that is decrypting the data, including user id, location, and other identifiers.
-/// A connection configuration specific to the DBPA (identified by its algorithm) must be
-/// provided. The DBPA can be a locally loaded library or a remote service, depending on the
 /// connection configuration provided.
 class ExternalDBPADecryptor : public DecryptorInterface {
  public:
