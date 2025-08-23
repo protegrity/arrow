@@ -112,6 +112,12 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
   }
 
   ParquetCipher::type algorithm = properties_->algorithm().algorithm;
+  if (!metadata) {
+    // Column data encryption might specify a different algorithm
+    if (column_prop->parquet_cipher().has_value()) {
+      algorithm = column_prop->parquet_cipher().value();
+    }
+  }
   auto encryptor_instance = metadata ? GetMetaEncryptor(algorithm, key.size())
                                       : GetDataEncryptor(algorithm, key.size(),
                                                          column_chunk_metadata);
