@@ -20,7 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-
+#include <iostream>
 #include <snappy.h>
 
 #include "arrow/result.h"
@@ -47,6 +47,7 @@ class SnappyCodec : public Codec {
     if (!snappy::GetUncompressedLength(reinterpret_cast<const char*>(input),
                                        static_cast<size_t>(input_len),
                                        &decompressed_size)) {
+                                        std::cout << "GetUncompressedLength failed" << std::endl;
       return Status::IOError("Corrupt snappy compressed data.");
     }
     if (output_buffer_len < static_cast<int64_t>(decompressed_size)) {
@@ -56,6 +57,7 @@ class SnappyCodec : public Codec {
     if (!snappy::RawUncompress(reinterpret_cast<const char*>(input),
                                static_cast<size_t>(input_len),
                                reinterpret_cast<char*>(output_buffer))) {
+      std::cout << "RawUncompress failed" << std::endl;
       return Status::IOError("Corrupt snappy compressed data.");
     }
     return static_cast<int64_t>(decompressed_size);

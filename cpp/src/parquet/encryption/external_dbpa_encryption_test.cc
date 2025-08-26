@@ -41,8 +41,9 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     std::string ciphertext_str(ciphertext_buffer.begin(), ciphertext_buffer.end());
     ASSERT_EQ(plaintext, ciphertext_str);
 
+
     ExternalDBPADecryptorAdapter decryptor(algorithm, column_name, key_id, data_type,
-                                           compression_type, encoding_type, app_context_,
+                                           compression_type, {encoding_type}, app_context_,
                                            connection_config_);
 
     int32_t expected_plaintext_length = ciphertext_str.size();

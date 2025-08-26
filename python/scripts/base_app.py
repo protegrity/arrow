@@ -80,7 +80,7 @@ def read_and_print_parquet():
     print(metadata)
     print("\n")
 
-    decryption_config = get_decryption_config()
+    decryption_config = get_external_decryption_config()
     read_data_table = read_parquet(parquet_path,
                                    decryption_config=decryption_config)
     data_frame = read_data_table.to_pandas()
@@ -94,7 +94,7 @@ def read_parquet(location, decryption_config=None, read_metadata=False):
 
     if decryption_config:
         crypto_factory = ppe.CryptoFactory(kms_client_factory)
-        decryption_properties = crypto_factory.file_decryption_properties(
+        decryption_properties = crypto_factory.external_file_decryption_properties(
             get_kms_connection_config(), decryption_config)
     
     if read_metadata:
