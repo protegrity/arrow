@@ -369,7 +369,9 @@ AesDecryptor::AesDecryptor(
 
 std::unique_ptr<AesDecryptor> AesDecryptor::Make(
     ParquetCipher::type alg_id, int32_t key_len, bool metadata) {
-  return std::make_unique<AesDecryptor>(alg_id, key_len, metadata);
+  // For data pages (metadata == false) do not expect a length prefix; keep it for metadata.
+  //bool contains_length = true;
+  return std::make_unique<AesDecryptor>(alg_id, key_len, metadata);//, contains_length);
 }  
 
 int32_t AesDecryptor::PlaintextLength(int32_t ciphertext_len) const {
