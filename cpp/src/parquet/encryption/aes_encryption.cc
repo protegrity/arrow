@@ -323,8 +323,11 @@ int32_t AesEncryptor::CtrEncrypt(
 uint64_t AesEncryptorFactory::MakeCacheKey(
     ParquetCipher::type alg_id, int32_t key_len, bool metadata) {
   uint64_t key = 0;
+  // Set the algorithm id in the most significant 32 bits.
   key |= static_cast<uint64_t>(static_cast<uint32_t>(alg_id)) << 32;
+  // Set the key length in the next 8 bits.
   key |= static_cast<uint64_t>(static_cast<uint8_t>(key_len));
+  // Set the metadata flag in the next 8 bits.
   key |= static_cast<uint64_t>(metadata ? 1 : 0) << 8;
   return key;
 }
@@ -332,8 +335,11 @@ uint64_t AesEncryptorFactory::MakeCacheKey(
 AesEncryptor* AesEncryptorFactory::GetMetaAesEncryptor(
     ParquetCipher::type alg_id, int32_t key_size) {
   auto key_len = static_cast<int32_t>(key_size);
+  // Create the cache key using the algorithm id, key length, and metadata flag
+  // to avoid collisions for encryptors with the same key length.
   uint64_t cache_key = MakeCacheKey(alg_id, key_len, /*metadata=*/true);
 
+  // If no encryptor exists for this cache key, create one.
   if (encryptor_cache_.find(cache_key) == encryptor_cache_.end()) {
     encryptor_cache_[cache_key] = AesEncryptor::Make(
         alg_id, key_len, /*metadata=*/true);
@@ -345,8 +351,11 @@ AesEncryptor* AesEncryptorFactory::GetMetaAesEncryptor(
 AesEncryptor* AesEncryptorFactory::GetDataAesEncryptor(
     ParquetCipher::type alg_id, int32_t key_size) {
   auto key_len = static_cast<int32_t>(key_size);
+  // Create the cache key using the algorithm id, key length, and metadata flag
+  // to avoid collisions for encryptors with the same key length.
   uint64_t cache_key = MakeCacheKey(alg_id, key_len, /*metadata=*/false);
 
+  // If no encryptor exists for this cache key, create one.
   if (encryptor_cache_.find(cache_key) == encryptor_cache_.end()) {
     encryptor_cache_[cache_key] = AesEncryptor::Make(
         alg_id, key_len, /*metadata=*/false);
