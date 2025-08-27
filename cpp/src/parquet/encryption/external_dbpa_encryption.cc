@@ -46,7 +46,7 @@ int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
 
 int32_t ExternalDBPAEncryptorAdapter::CallExternalDBPA(
     ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<uint8_t> ciphertext) {
-  /*std::cout << "\n*-*-*- START: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-" << std::endl;
+  std::cout << "\n*-*-*- START: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-" << std::endl;
   std::cout << "Encryption Algorithm: [" << algorithm_ << "]" << std::endl;
   std::cout << "Column Name: [" << column_name_ << "]" << std::endl;
   std::cout << "Key ID: [" << key_id_ << "]" << std::endl;
@@ -57,15 +57,15 @@ int32_t ExternalDBPAEncryptorAdapter::CallExternalDBPA(
   std::cout << "Connection Config:" << std::endl;
   for (const auto& [key, value] : connection_config_) {
     std::cout << "  [" << key << "]: [" << value << "]" << std::endl;
-  }*/
+  }
 
   std::copy(plaintext.begin(), plaintext.end(), ciphertext.begin());
 
-  /*std::string plaintext_str(plaintext.begin(), plaintext.end());
+  std::string plaintext_str(plaintext.begin(), plaintext.end());
   std::string ciphertext_str(ciphertext.begin(), ciphertext.end());
   std::cout << "Plaintext: [" << plaintext_str << "]" << std::endl;
   std::cout << "Ciphertext: [" << ciphertext_str << "]" << std::endl;
-  std::cout << "*-*-*- END: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-\n" << std::endl;*/
+  std::cout << "*-*-*- END: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-\n" << std::endl;
 
   return ciphertext.size();
 }
@@ -143,7 +143,7 @@ int32_t ExternalDBPADecryptorAdapter::Decrypt(
 
 int32_t ExternalDBPADecryptorAdapter::CallExternalDBPA(
     ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<uint8_t> plaintext) {
-  /*std::cout << "\n*-*-*- START: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-" << std::endl;
+  std::cout << "\n*-*-*- START: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-" << std::endl;
   std::cout << "Decryption Algorithm: [" << algorithm_ << "]" << std::endl;
   std::cout << "Column Name: [" << column_name_ << "]" << std::endl;
   std::cout << "Key ID: [" << key_id_ << "]" << std::endl;
@@ -158,16 +158,16 @@ int32_t ExternalDBPADecryptorAdapter::CallExternalDBPA(
   std::cout << "Connection Config:" << std::endl;
   for (const auto& [key, value] : connection_config_) {
     std::cout << "  [" << key << "]: [" << value << "]" << std::endl;
-  }*/
+  }
 
   std::copy(ciphertext.begin(), ciphertext.end(), plaintext.begin());
 
-  /*std::string plaintext_str(plaintext.begin(), plaintext.end());
+  std::string plaintext_str(plaintext.begin(), plaintext.end());
   std::string ciphertext_str(ciphertext.begin(), ciphertext.end());
   std::cout << "Plaintext: [" << plaintext_str << "]" << std::endl;
   std::cout << "Ciphertext: [" << ciphertext_str << "]" << std::endl;
   std::cout << "*-*-*- END: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-\n" << std::endl;
-*/
+
   return plaintext.size();
 }
 
