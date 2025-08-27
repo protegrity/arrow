@@ -51,7 +51,8 @@ def write_parquet(table, location, encryption_config=None):
 
 def encrypted_data_and_footer_sample(data_table):
     parquet_path = "sample.parquet"
-    encryption_config = get_external_encryption_config()
+    #encryption_config = get_external_encryption_config()
+    encryption_config = tmp_get_external_encryption_config()
     write_parquet(data_table, parquet_path,
                   encryption_config=encryption_config)
     print(f"Written to [{parquet_path}]")
@@ -63,8 +64,13 @@ def create_and_encrypt_parquet():
         "productId": [152, 268, 6548],
         "price": [3.25, 6.48, 2.12],
         "vat": [0.0, 0.2, 0.05]
-    }    
-    data_table = pyarrow.Table.from_pydict(sample_data)
+    }   
+    tmp_sample_data = {
+        "kDoubleFieldName": [1.0, 2.0, 3.0],
+        "kFloatFieldName": [1.0, 2.0, 3.0]
+    } 
+    #data_table = pyarrow.Table.from_pydict(sample_data)
+    data_table = pyarrow.Table.from_pydict(tmp_sample_data)
 
     print("\nPyarrow table created. Writing parquet.")
 
@@ -106,12 +112,49 @@ def read_parquet(location, decryption_config=None, read_metadata=False):
 
 
 def get_kms_connection_config():
+    """
     return ppe.KmsConnectionConfig(
         custom_kms_conf={
             "footer_key": "012footer_secret",
             "orderid_key": "column_secret001",
             "productid_key": "column_secret002",
             "price_key": "column_secret003"
+        }
+    )
+    """
+    return ppe.KmsConnectionConfig(
+        custom_kms_conf={
+            "kf": "0123456789012345",
+            "kc1": "1234567890123450",
+            "kc2": "1234567890123451"
+        }
+    )
+
+def tmp_get_external_encryption_config(plaintext_footer=True):
+    return ppe.ExternalEncryptionConfiguration(
+        footer_key = "kf",
+        column_keys = {
+            "kc1": ["kDoubleFieldName"]
+        },
+        encryption_algorithm = "AES_GCM_V1",
+        cache_lifetime=datetime.timedelta(minutes=2.0),
+        data_key_length_bits = 128,
+        plaintext_footer=plaintext_footer,
+        per_column_encryption = {
+            "kFloatFieldName": {
+                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_key": "kc2"
+            }
+        },
+        app_context = {
+            "user_id": "Picard1701",
+            "location": "Presidio"
+        },
+        connection_config = {
+            "EXTERNAL_DBPA_V1": {
+                "config_file": "path/to/config/file",
+                "config_file_decryption_key": "some_key"
+            }
         }
     )
 
