@@ -224,29 +224,26 @@ TEST_F(TestEncryptionConfiguration, EncryptTwoColumnsAndFooterUseAES_GCM_CTR) {
 }
 
 TEST_F(TestEncryptionConfiguration, EncryptOneColumnAndUseExternalDBPA) {
-    std::map<std::string, std::shared_ptr<parquet::ColumnEncryptionProperties>>
-        encryption_cols;
-    parquet::ColumnEncryptionProperties::Builder encryption_col_builder(
-        path_to_double_field_);
-        encryption_col_builder.key(kColumnEncryptionKey1_)->key_id("kc1");
+  std::map<std::string, std::shared_ptr<parquet::ColumnEncryptionProperties>>
+      encryption_cols;
+  parquet::ColumnEncryptionProperties::Builder encryption_col_builder(
+      path_to_double_field_);
+  encryption_col_builder.key(kColumnEncryptionKey1_)->key_id("kc1");
 
-    encryption_cols[path_to_double_field_] = encryption_col_builder.build();
+  encryption_cols[path_to_double_field_] = encryption_col_builder.build();
 
-    parquet::ExternalFileEncryptionProperties::Builder file_encryption_builder(
-        kFooterEncryptionKey_);
-    file_encryption_builder.connection_config({
-            {parquet::ParquetCipher::EXTERNAL_DBPA_V1, {
-                {"file_path", "/tmp/test"},
-                {"other_config", "value"}
-            }}
-        });
+  parquet::ExternalFileEncryptionProperties::Builder file_encryption_builder(
+      kFooterEncryptionKey_);
+  file_encryption_builder.connection_config(
+      {{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
+        {{"file_path", "/tmp/test"}, {"other_config", "value"}}}});
 
-    EXPECT_NO_THROW(
-        this->EncryptFile(file_encryption_builder.footer_key_metadata("kf")
-                            ->encrypted_columns(encryption_cols)
-                            ->algorithm(parquet::ParquetCipher::EXTERNAL_DBPA_V1)
-                            ->build_external(),
-                        "tmp_encrypt_one_column_and_use_external_dbpa.parquet.encrypted"));
+  EXPECT_NO_THROW(this->EncryptFile(
+      file_encryption_builder.footer_key_metadata("kf")
+          ->encrypted_columns(encryption_cols)
+          ->algorithm(parquet::ParquetCipher::EXTERNAL_DBPA_V1)
+          ->build_external(),
+      "tmp_encrypt_one_column_and_use_external_dbpa.parquet.encrypted"));
 }
 
 // Set temp_dir before running the write/read tests. The encrypted files will

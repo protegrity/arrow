@@ -17,14 +17,14 @@
 
 #pragma once
 
-#include <memory>
 #include <openssl/evp.h>
+#include <memory>
 
 #include "arrow/util/span.h"
-#include "parquet/encryption/encryptor_interface.h"
 #include "parquet/encryption/decryptor_interface.h"
-#include "parquet/types.h"
+#include "parquet/encryption/encryptor_interface.h"
 #include "parquet/exception.h"
+#include "parquet/types.h"
 
 using parquet::ParquetCipher;
 
@@ -91,23 +91,23 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
   /// End of Encryptor Interface methods.
 
  private:
-   [[nodiscard]] CipherContext MakeCipherContext() const;
+  [[nodiscard]] CipherContext MakeCipherContext() const;
 
-   int32_t GcmEncrypt(::arrow::util::span<const uint8_t> plaintext,
-                      ::arrow::util::span<const uint8_t> key,
-                      ::arrow::util::span<const uint8_t> nonce,
-                      ::arrow::util::span<const uint8_t> aad,
-                      ::arrow::util::span<uint8_t> ciphertext);
- 
-   int32_t CtrEncrypt(::arrow::util::span<const uint8_t> plaintext,
-                      ::arrow::util::span<const uint8_t> key,
-                      ::arrow::util::span<const uint8_t> nonce,
-                      ::arrow::util::span<uint8_t> ciphertext);
+  int32_t GcmEncrypt(::arrow::util::span<const uint8_t> plaintext,
+                     ::arrow::util::span<const uint8_t> key,
+                     ::arrow::util::span<const uint8_t> nonce,
+                     ::arrow::util::span<const uint8_t> aad,
+                     ::arrow::util::span<uint8_t> ciphertext);
+
+  int32_t CtrEncrypt(::arrow::util::span<const uint8_t> plaintext,
+                     ::arrow::util::span<const uint8_t> key,
+                     ::arrow::util::span<const uint8_t> nonce,
+                     ::arrow::util::span<uint8_t> ciphertext);
 };
 
-// AesEncryptor supports only three key lengths: 16, 24, 32 bytes, so at most there could be
-// up to three types of meta_encryptors and data_encryptors. This factory uses a cache to
-// store the encryptors for the different key lengths.
+// AesEncryptor supports only three key lengths: 16, 24, 32 bytes, so at most there could
+// be up to three types of meta_encryptors and data_encryptors. This factory uses a cache
+// to store the encryptors for the different key lengths.
 class AesEncryptorFactory {
  public:
   AesEncryptor* GetMetaAesEncryptor(ParquetCipher::type alg_id, int32_t key_size);
@@ -115,8 +115,8 @@ class AesEncryptorFactory {
 
  private:
   /// Build a cache key including algorithm id, key length, and metadata flag.
-  static uint64_t MakeCacheKey(
-     ParquetCipher::type alg_id, int32_t key_len, bool metadata);
+  static uint64_t MakeCacheKey(ParquetCipher::type alg_id, int32_t key_len,
+                               bool metadata);
 
   std::unordered_map<uint64_t, std::unique_ptr<AesEncryptor>> encryptor_cache_;
 };
@@ -158,20 +158,21 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
   /// End of Decryptor Interface methods.
 
  private:
-    [[nodiscard]] CipherContext MakeCipherContext() const;
+  [[nodiscard]] CipherContext MakeCipherContext() const;
 
-    /// Get the actual ciphertext length, inclusive of the length buffer length,
-    /// and validate that the provided buffer size is large enough.
-    [[nodiscard]] int32_t GetCiphertextLength(::arrow::util::span<const uint8_t> ciphertext) const;
+  /// Get the actual ciphertext length, inclusive of the length buffer length,
+  /// and validate that the provided buffer size is large enough.
+  [[nodiscard]] int32_t GetCiphertextLength(
+      ::arrow::util::span<const uint8_t> ciphertext) const;
 
-    int32_t GcmDecrypt(::arrow::util::span<const uint8_t> ciphertext,
-                       ::arrow::util::span<const uint8_t> key,
-                       ::arrow::util::span<const uint8_t> aad,
-                       ::arrow::util::span<uint8_t> plaintext);
-  
-    int32_t CtrDecrypt(::arrow::util::span<const uint8_t> ciphertext,
-                       ::arrow::util::span<const uint8_t> key,
-                       ::arrow::util::span<uint8_t> plaintext);
+  int32_t GcmDecrypt(::arrow::util::span<const uint8_t> ciphertext,
+                     ::arrow::util::span<const uint8_t> key,
+                     ::arrow::util::span<const uint8_t> aad,
+                     ::arrow::util::span<uint8_t> plaintext);
+
+  int32_t CtrDecrypt(::arrow::util::span<const uint8_t> ciphertext,
+                     ::arrow::util::span<const uint8_t> key,
+                     ::arrow::util::span<uint8_t> plaintext);
 };
 
 }  // namespace parquet::encryption

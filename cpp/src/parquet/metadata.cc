@@ -499,7 +499,9 @@ Compression::type ColumnChunkMetaData::compression() const {
 
 const ColumnDescriptor* ColumnChunkMetaData::descr() const { return impl_->descr(); }
 
-const ReaderProperties* ColumnChunkMetaData::properties() const { return impl_->properties(); }
+const ReaderProperties* ColumnChunkMetaData::properties() const {
+  return impl_->properties();
+}
 
 bool ColumnChunkMetaData::can_decompress() const {
   return ::arrow::util::Codec::IsAvailable(compression());

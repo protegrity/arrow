@@ -1,4 +1,19 @@
-// What license shall we use for this file?
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 #include <iostream>
 
@@ -11,17 +26,23 @@ namespace parquet::encryption {
 
 ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
-    Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
-    std::string app_context, std::map<std::string, std::string> connection_config)
-    : algorithm_(algorithm), column_name_(column_name), key_id_(key_id),
-      data_type_(data_type), compression_type_(compression_type),
-      encoding_type_(encoding_type), app_context_(app_context),
+    Type::type data_type, Compression::type compression_type,
+    Encoding::type encoding_type, std::string app_context,
+    std::map<std::string, std::string> connection_config)
+    : algorithm_(algorithm),
+      column_name_(column_name),
+      key_id_(key_id),
+      data_type_(data_type),
+      compression_type_(compression_type),
+      encoding_type_(encoding_type),
+      app_context_(app_context),
       connection_config_(connection_config) {}
-  
+
 std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
-    Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
-    std::string app_context, std::map<std::string, std::string> connection_config) {
+    Type::type data_type, Compression::type compression_type,
+    Encoding::type encoding_type, std::string app_context,
+    std::map<std::string, std::string> connection_config) {
   return std::make_unique<ExternalDBPAEncryptorAdapter>(
       algorithm, column_name, key_id, data_type, compression_type, encoding_type,
       app_context, connection_config);
@@ -30,7 +51,7 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
 int32_t ExternalDBPAEncryptorAdapter::CiphertextLength(int64_t plaintext_len) const {
   return plaintext_len;
 }
-  
+
 int32_t ExternalDBPAEncryptorAdapter::Encrypt(
     ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<const uint8_t> key,
     ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<uint8_t> ciphertext) {
@@ -45,8 +66,10 @@ int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
 }
 
 int32_t ExternalDBPAEncryptorAdapter::CallExternalDBPA(
-    ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<uint8_t> ciphertext) {
-  std::cout << "\n*-*-*- START: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-" << std::endl;
+    ::arrow::util::span<const uint8_t> plaintext,
+    ::arrow::util::span<uint8_t> ciphertext) {
+  std::cout << "\n*-*-*- START: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-"
+            << std::endl;
   std::cout << "Encryption Algorithm: [" << algorithm_ << "]" << std::endl;
   std::cout << "Column Name: [" << column_name_ << "]" << std::endl;
   std::cout << "Key ID: [" << key_id_ << "]" << std::endl;
@@ -65,13 +88,15 @@ int32_t ExternalDBPAEncryptorAdapter::CallExternalDBPA(
   std::string ciphertext_str(ciphertext.begin(), ciphertext.end());
   std::cout << "Plaintext: [" << plaintext_str << "]" << std::endl;
   std::cout << "Ciphertext: [" << ciphertext_str << "]" << std::endl;
-  std::cout << "*-*-*- END: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-\n" << std::endl;
+  std::cout << "*-*-*- END: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-\n"
+            << std::endl;
 
   return ciphertext.size();
 }
 
 ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
-    ParquetCipher::type algorithm, const ColumnChunkMetaDataBuilder* column_chunk_metadata,
+    ParquetCipher::type algorithm,
+    const ColumnChunkMetaDataBuilder* column_chunk_metadata,
     ExternalFileEncryptionProperties* external_file_encryption_properties) {
   if (column_chunk_metadata == nullptr) {
     throw ParquetException("External DBPA encryption requires column chunk metadata");
@@ -80,11 +105,13 @@ ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
   if (encryptor_cache_.find(column_path->ToDotString()) == encryptor_cache_.end()) {
     auto connection_config = external_file_encryption_properties->connection_config();
     if (connection_config.find(algorithm) == connection_config.end()) {
-      throw ParquetException("External DBPA encryption requires its connection configuration");
+      throw ParquetException(
+          "External DBPA encryption requires its connection configuration");
     }
 
-    auto column_encryption_properties = external_file_encryption_properties
-        ->column_encryption_properties(column_path->ToDotString());
+    auto column_encryption_properties =
+        external_file_encryption_properties->column_encryption_properties(
+            column_path->ToDotString());
     if (column_encryption_properties == nullptr) {
       std::stringstream ss;
       ss << "External DBPA encryption requires column encryption properties for column ["
@@ -109,17 +136,23 @@ ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
 
 ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
-    Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
-    std::string app_context, std::map<std::string, std::string> connection_config)
-    : algorithm_(algorithm), column_name_(column_name), key_id_(key_id),
-      data_type_(data_type), compression_type_(compression_type),
-      encoding_type_(encoding_type), app_context_(app_context),
+    Type::type data_type, Compression::type compression_type,
+    Encoding::type encoding_type, std::string app_context,
+    std::map<std::string, std::string> connection_config)
+    : algorithm_(algorithm),
+      column_name_(column_name),
+      key_id_(key_id),
+      data_type_(data_type),
+      compression_type_(compression_type),
+      encoding_type_(encoding_type),
+      app_context_(app_context),
       connection_config_(connection_config) {}
 
 std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
-    Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
-    std::string app_context, std::map<std::string, std::string> connection_config) {
+    Type::type data_type, Compression::type compression_type,
+    Encoding::type encoding_type, std::string app_context,
+    std::map<std::string, std::string> connection_config) {
   return std::make_unique<ExternalDBPADecryptorAdapter>(
       algorithm, column_name, key_id, data_type, compression_type, encoding_type,
       app_context, connection_config);
@@ -140,8 +173,10 @@ int32_t ExternalDBPADecryptorAdapter::Decrypt(
 }
 
 int32_t ExternalDBPADecryptorAdapter::CallExternalDBPA(
-    ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<uint8_t> plaintext) {
-  std::cout << "\n*-*-*- START: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-" << std::endl;
+    ::arrow::util::span<const uint8_t> ciphertext,
+    ::arrow::util::span<uint8_t> plaintext) {
+  std::cout << "\n*-*-*- START: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-"
+            << std::endl;
   std::cout << "Decryption Algorithm: [" << algorithm_ << "]" << std::endl;
   std::cout << "Column Name: [" << column_name_ << "]" << std::endl;
   std::cout << "Key ID: [" << key_id_ << "]" << std::endl;
@@ -160,7 +195,8 @@ int32_t ExternalDBPADecryptorAdapter::CallExternalDBPA(
   std::string ciphertext_str(ciphertext.begin(), ciphertext.end());
   std::cout << "Plaintext: [" << plaintext_str << "]" << std::endl;
   std::cout << "Ciphertext: [" << ciphertext_str << "]" << std::endl;
-  std::cout << "*-*-*- END: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-\n" << std::endl;
+  std::cout << "*-*-*- END: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-\n"
+            << std::endl;
 
   return plaintext.size();
 }

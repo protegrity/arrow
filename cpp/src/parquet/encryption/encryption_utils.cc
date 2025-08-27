@@ -31,15 +31,15 @@ static std::string ShortToBytesLe(int16_t input) {
 
   return std::string(reinterpret_cast<char const*>(output), 2);
 }
-    
+
 static void CheckPageOrdinal(int32_t page_ordinal) {
   if (ARROW_PREDICT_FALSE(page_ordinal > std::numeric_limits<int16_t>::max())) {
     throw ParquetException("Encrypted Parquet files can't have more than " +
-                            std::to_string(std::numeric_limits<int16_t>::max()) +
-                            " pages per chunk: got " + std::to_string(page_ordinal));
-    }
+                           std::to_string(std::numeric_limits<int16_t>::max()) +
+                           " pages per chunk: got " + std::to_string(page_ordinal));
+  }
 }
-    
+
 std::string CreateModuleAad(const std::string& file_aad, int8_t module_type,
                             int16_t row_group_ordinal, int16_t column_ordinal,
                             int32_t page_ordinal) {
@@ -47,7 +47,8 @@ std::string CreateModuleAad(const std::string& file_aad, int8_t module_type,
   const int16_t page_ordinal_short = static_cast<int16_t>(page_ordinal);
   int8_t type_ordinal_bytes[1];
   type_ordinal_bytes[0] = module_type;
-  std::string type_ordinal_bytes_str(reinterpret_cast<char const*>(type_ordinal_bytes), 1);
+  std::string type_ordinal_bytes_str(reinterpret_cast<char const*>(type_ordinal_bytes),
+                                     1);
   if (kFooter == module_type) {
     std::string result = file_aad + type_ordinal_bytes_str;
     return result;
@@ -66,20 +67,21 @@ std::string CreateModuleAad(const std::string& file_aad, int8_t module_type,
       << column_ordinal_bytes << page_ordinal_bytes;
   return out.str();
 }
-    
+
 std::string CreateFooterAad(const std::string& aad_prefix_bytes) {
   return CreateModuleAad(aad_prefix_bytes, kFooter, static_cast<int16_t>(-1),
                          static_cast<int16_t>(-1), static_cast<int16_t>(-1));
 }
-    
-// Update last two bytes with new page ordinal (instead of creating new page AAD from scratch)
+
+// Update last two bytes with new page ordinal (instead of creating new page AAD from
+// scratch)
 void QuickUpdatePageAad(int32_t new_page_ordinal, std::string* AAD) {
   CheckPageOrdinal(new_page_ordinal);
   const std::string page_ordinal_bytes =
-    ShortToBytesLe(static_cast<int16_t>(new_page_ordinal));
+      ShortToBytesLe(static_cast<int16_t>(new_page_ordinal));
   std::memcpy(AAD->data() + AAD->length() - 2, page_ordinal_bytes.data(), 2);
 }
-    
+
 void RandBytes(unsigned char* buf, size_t num) {
   if (num > static_cast<size_t>(std::numeric_limits<int>::max())) {
     std::stringstream ss;
@@ -97,7 +99,7 @@ void RandBytes(unsigned char* buf, size_t num) {
     throw ParquetException(ss.str());
   }
 }
-    
+
 void EnsureBackendInitialized() { openssl::EnsureInitialized(); }
 
-} // namespace parquet::encryption
+}  // namespace parquet::encryption

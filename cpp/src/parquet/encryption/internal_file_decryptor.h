@@ -21,8 +21,8 @@
 #include <mutex>
 #include <string>
 
-#include "parquet/metadata.h"
 #include "parquet/encryption/decryptor_interface.h"
+#include "parquet/metadata.h"
 
 namespace parquet {
 
@@ -34,8 +34,8 @@ class FileDecryptionProperties;
 // CAUTION: Decryptor objects are not thread-safe.
 class PARQUET_EXPORT Decryptor {
  public:
-  Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor, const std::string& key,
-            const std::string& file_aad, const std::string& aad,
+  Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor,
+            const std::string& key, const std::string& file_aad, const std::string& aad,
             ::arrow::MemoryPool* pool);
   ~Decryptor();
 
@@ -93,8 +93,8 @@ class InternalFileDecryptor {
       const std::string& column_path, const std::string& column_key_metadata,
       const ColumnChunkMetaData* column_chunk_metadata = nullptr,
       const std::string& aad = "") {
-    return GetColumnDecryptor(
-      column_path, column_key_metadata, aad, /*metadata=*/false, column_chunk_metadata);
+    return GetColumnDecryptor(column_path, column_key_metadata, aad, /*metadata=*/false,
+                              column_chunk_metadata);
   }
 
   // Get a Decryptor factory for column chunk metadata.
@@ -133,9 +133,9 @@ class InternalFileDecryptor {
   std::unique_ptr<Decryptor> GetFooterDecryptor(const std::string& aad, bool metadata);
 
   std::unique_ptr<Decryptor> GetColumnDecryptor(
-    const std::string& column_path, const std::string& column_key_metadata,
-    const std::string& aad, bool metadata,
-    const ColumnChunkMetaData* column_chunk_metadata = nullptr);
+      const std::string& column_path, const std::string& column_key_metadata,
+      const std::string& aad, bool metadata,
+      const ColumnChunkMetaData* column_chunk_metadata = nullptr);
 
   std::function<std::unique_ptr<Decryptor>()> GetColumnDecryptorFactory(
       const ColumnCryptoMetaData* crypto_metadata, const std::string& aad, bool metadata,

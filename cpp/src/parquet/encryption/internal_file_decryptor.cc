@@ -47,7 +47,8 @@ int32_t Decryptor::CiphertextLength(int32_t plaintext_len) const {
 
 int32_t Decryptor::Decrypt(::arrow::util::span<const uint8_t> ciphertext,
                            ::arrow::util::span<uint8_t> plaintext) {
-  return decryptor_instance_->Decrypt(ciphertext, str2span(key_), str2span(aad_), plaintext);
+  return decryptor_instance_->Decrypt(ciphertext, str2span(key_), str2span(aad_),
+                                      plaintext);
 }
 
 // InternalFileDecryptor
@@ -105,8 +106,8 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetFooterDecryptor(
   auto key_len = static_cast<int32_t>(footer_key.size());
   // Metadata is decrypted with AES.
   auto decryptor_instance = encryption::AesDecryptor::Make(algorithm_, key_len, metadata);
-  return std::make_unique<Decryptor>(std::move(decryptor_instance), footer_key, file_aad_, aad,
-                                     pool_);
+  return std::make_unique<Decryptor>(std::move(decryptor_instance), footer_key, file_aad_,
+                                     aad, pool_);
 }
 
 std::string InternalFileDecryptor::GetColumnKey(const std::string& column_path,
@@ -136,11 +137,11 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetColumnDecryptor(
     const ColumnChunkMetaData* column_chunk_metadata) {
   std::string column_key = GetColumnKey(column_path, column_key_metadata);
   auto key_len = static_cast<int32_t>(column_key.size());
-  // TODO(sbrenes): If this is not metadata, check the algorithm and return the appropriate
-  // decryptor instance.
+  // TODO(sbrenes): If this is not metadata, check the algorithm and return the
+  // appropriate decryptor instance.
   auto decryptor_instance = encryption::AesDecryptor::Make(algorithm_, key_len, metadata);
-  return std::make_unique<Decryptor>(std::move(decryptor_instance), column_key, file_aad_, aad,
-                                     pool_);
+  return std::make_unique<Decryptor>(std::move(decryptor_instance), column_key, file_aad_,
+                                     aad, pool_);
 }
 
 std::function<std::unique_ptr<Decryptor>()>
@@ -158,11 +159,12 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
 
   return [this, aad, metadata, column_key = std::move(column_key)]() {
     auto key_len = static_cast<int32_t>(column_key.size());
-    // TODO(sbrenes): If this is not metadata, check the algorithm and return the appropriate
-    // decryptor instance.
-    auto decryptor_instance = encryption::AesDecryptor::Make(algorithm_, key_len, metadata);
-    return std::make_unique<Decryptor>(std::move(decryptor_instance), column_key, file_aad_,
-                                       aad, pool_);
+    // TODO(sbrenes): If this is not metadata, check the algorithm and return the
+    // appropriate decryptor instance.
+    auto decryptor_instance =
+        encryption::AesDecryptor::Make(algorithm_, key_len, metadata);
+    return std::make_unique<Decryptor>(std::move(decryptor_instance), column_key,
+                                       file_aad_, aad, pool_);
   };
 }
 
@@ -177,7 +179,8 @@ InternalFileDecryptor::GetColumnMetaDecryptorFactory(
   if (file_decryptor == nullptr) {
     throw ParquetException("Column is noted as encrypted but no file decryptor");
   }
-  return file_decryptor->GetColumnDecryptorFactory(crypto_metadata, aad, /*metadata=*/true);
+  return file_decryptor->GetColumnDecryptorFactory(crypto_metadata, aad,
+                                                   /*metadata=*/true);
 }
 
 std::function<std::unique_ptr<Decryptor>()>
@@ -192,7 +195,8 @@ InternalFileDecryptor::GetColumnDataDecryptorFactory(
     throw ParquetException("Column is noted as encrypted but no file decryptor");
   }
   return file_decryptor->GetColumnDecryptorFactory(crypto_metadata, aad,
-                                                    /*metadata=*/false, column_chunk_metadata);
+                                                   /*metadata=*/false,
+                                                   column_chunk_metadata);
 }
 
 void UpdateDecryptor(Decryptor* decryptor, int16_t row_group_ordinal,

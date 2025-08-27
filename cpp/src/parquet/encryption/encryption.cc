@@ -17,10 +17,10 @@
 
 #include "parquet/encryption/encryption.h"
 
-#include <map>
-#include <optional>
 #include <rapidjson/document.h>
 #include <string.h>
+#include <map>
+#include <optional>
 #include <utility>
 
 #include "arrow/util/logging_internal.h"
@@ -30,12 +30,12 @@
 namespace parquet {
 
 namespace {
-  /// Helper method for validating JSON strings in app_context.
-  bool IsValidJson(const std::string& json_str) {
-    rapidjson::Document doc;
-    doc.Parse(json_str.c_str());
-    return doc.IsObject() && !doc.HasParseError();
-  }
+/// Helper method for validating JSON strings in app_context.
+bool IsValidJson(const std::string& json_str) {
+  rapidjson::Document doc;
+  doc.Parse(json_str.c_str());
+  return doc.IsObject() && !doc.HasParseError();
+}
 }  // Anonymous namespace
 
 // integer key retriever
@@ -145,8 +145,8 @@ FileDecryptionProperties::Builder* FileDecryptionProperties::Builder::aad_prefix
   return this;
 }
 
-ExternalFileDecryptionProperties::Builder* ExternalFileDecryptionProperties::Builder::app_context(
-    const std::string& context) {
+ExternalFileDecryptionProperties::Builder*
+ExternalFileDecryptionProperties::Builder::app_context(const std::string& context) {
   if (!app_context_.empty()) {
     throw ParquetException("App context already set");
   }
@@ -161,7 +161,7 @@ ExternalFileDecryptionProperties::Builder* ExternalFileDecryptionProperties::Bui
   return this;
 }
 
-ExternalFileDecryptionProperties::Builder* 
+ExternalFileDecryptionProperties::Builder*
 ExternalFileDecryptionProperties::Builder::connection_config(
     const std::map<ParquetCipher::type, std::map<std::string, std::string>>& config) {
   if (connection_config_.size() != 0) {
@@ -175,26 +175,26 @@ ExternalFileDecryptionProperties::Builder::connection_config(
   return this;
 }
 
-std::shared_ptr<ExternalFileDecryptionProperties> 
+std::shared_ptr<ExternalFileDecryptionProperties>
 ExternalFileDecryptionProperties::Builder::build_external() {
-  return std::shared_ptr<ExternalFileDecryptionProperties>(new ExternalFileDecryptionProperties(
-    footer_key_, key_retriever_, check_plaintext_footer_integrity_, aad_prefix_,
-    aad_prefix_verifier_, column_decryption_properties_, plaintext_files_allowed_,
-    app_context_, connection_config_));
+  return std::shared_ptr<ExternalFileDecryptionProperties>(
+      new ExternalFileDecryptionProperties(
+          footer_key_, key_retriever_, check_plaintext_footer_integrity_, aad_prefix_,
+          aad_prefix_verifier_, column_decryption_properties_, plaintext_files_allowed_,
+          app_context_, connection_config_));
 }
 
 ExternalFileDecryptionProperties::ExternalFileDecryptionProperties(
-    const std::string& footer_key,
-    std::shared_ptr<DecryptionKeyRetriever> key_retriever,
+    const std::string& footer_key, std::shared_ptr<DecryptionKeyRetriever> key_retriever,
     bool check_plaintext_footer_integrity, const std::string& aad_prefix,
     std::shared_ptr<AADPrefixVerifier> aad_prefix_verifier,
     const ColumnPathToDecryptionPropertiesMap& column_decryption_properties,
-    bool plaintext_files_allowed,
-    const std::string& app_context,
-    const std::map<ParquetCipher::type, std::map<std::string, std::string>>& connection_config)
-    : FileDecryptionProperties(footer_key, key_retriever, check_plaintext_footer_integrity,
-                               aad_prefix, aad_prefix_verifier, column_decryption_properties,
-                               plaintext_files_allowed),
+    bool plaintext_files_allowed, const std::string& app_context,
+    const std::map<ParquetCipher::type, std::map<std::string, std::string>>&
+        connection_config)
+    : FileDecryptionProperties(
+          footer_key, key_retriever, check_plaintext_footer_integrity, aad_prefix,
+          aad_prefix_verifier, column_decryption_properties, plaintext_files_allowed),
       app_context_(app_context),
       connection_config_(connection_config) {}
 
@@ -257,8 +257,8 @@ FileEncryptionProperties::Builder::disable_aad_prefix_storage() {
 }
 
 ColumnEncryptionProperties::ColumnEncryptionProperties(
-        bool encrypted, const std::string& column_path, const std::string& key,
-        const std::string& key_metadata, std::optional<ParquetCipher::type> parquet_cipher)
+    bool encrypted, const std::string& column_path, const std::string& key,
+    const std::string& key_metadata, std::optional<ParquetCipher::type> parquet_cipher)
     : column_path_(column_path), parquet_cipher_(parquet_cipher) {
   DCHECK(!column_path.empty());
   if (!encrypted) {
@@ -280,8 +280,8 @@ ColumnEncryptionProperties::ColumnEncryptionProperties(
 }
 
 ColumnDecryptionProperties::ColumnDecryptionProperties(
-        const std::string& column_path, const std::string& key, 
-        std::optional<ParquetCipher::type> parquet_cipher)
+    const std::string& column_path, const std::string& key,
+    std::optional<ParquetCipher::type> parquet_cipher)
     : column_path_(column_path), parquet_cipher_(parquet_cipher) {
   DCHECK(!column_path.empty());
 
@@ -393,8 +393,8 @@ FileEncryptionProperties::FileEncryptionProperties(
   }
 }
 
-ExternalFileEncryptionProperties::Builder* ExternalFileEncryptionProperties::Builder::app_context(
-    const std::string& context) {
+ExternalFileEncryptionProperties::Builder*
+ExternalFileEncryptionProperties::Builder::app_context(const std::string& context) {
   if (!app_context_.empty()) {
     throw ParquetException("App context already set");
   }
@@ -417,7 +417,7 @@ ExternalFileEncryptionProperties::Builder::connection_config(
   if (connection_config_.size() != 0) {
     throw ParquetException("Connection config already set");
   }
-  
+
   if (config.size() == 0) {
     return this;
   }
@@ -426,11 +426,13 @@ ExternalFileEncryptionProperties::Builder::connection_config(
   return this;
 }
 
-std::shared_ptr<ExternalFileEncryptionProperties> 
+std::shared_ptr<ExternalFileEncryptionProperties>
 ExternalFileEncryptionProperties::Builder::build_external() {
-  return std::shared_ptr<ExternalFileEncryptionProperties>(new ExternalFileEncryptionProperties(
-    parquet_cipher_, footer_key_, footer_key_metadata_, encrypted_footer_, aad_prefix_,
-    store_aad_prefix_in_file_, encrypted_columns_, app_context_, connection_config_));
+  return std::shared_ptr<ExternalFileEncryptionProperties>(
+      new ExternalFileEncryptionProperties(
+          parquet_cipher_, footer_key_, footer_key_metadata_, encrypted_footer_,
+          aad_prefix_, store_aad_prefix_in_file_, encrypted_columns_, app_context_,
+          connection_config_));
 }
 
 ExternalFileEncryptionProperties::ExternalFileEncryptionProperties(
@@ -439,7 +441,8 @@ ExternalFileEncryptionProperties::ExternalFileEncryptionProperties(
     const std::string& aad_prefix, bool store_aad_prefix_in_file,
     const ColumnPathToEncryptionPropertiesMap& encrypted_columns,
     const std::string& app_context,
-    const std::map<ParquetCipher::type, std::map<std::string, std::string>>& connection_config)
+    const std::map<ParquetCipher::type, std::map<std::string, std::string>>&
+        connection_config)
     : FileEncryptionProperties(cipher, footer_key, footer_key_metadata, encrypted_footer,
                                aad_prefix, store_aad_prefix_in_file, encrypted_columns),
       app_context_(app_context),

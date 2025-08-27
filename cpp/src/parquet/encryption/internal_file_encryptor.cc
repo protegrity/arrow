@@ -24,9 +24,9 @@
 namespace parquet {
 
 // Encryptor
-Encryptor::Encryptor(encryption::EncryptorInterface* encryptor_instance, const std::string& key,
-                     const std::string& file_aad, const std::string& aad,
-                     ::arrow::MemoryPool* pool)
+Encryptor::Encryptor(encryption::EncryptorInterface* encryptor_instance,
+                     const std::string& key, const std::string& file_aad,
+                     const std::string& aad, ::arrow::MemoryPool* pool)
     : encryptor_instance_(encryptor_instance),
       key_(key),
       file_aad_(file_aad),
@@ -39,7 +39,8 @@ int32_t Encryptor::CiphertextLength(int64_t plaintext_len) const {
 
 int32_t Encryptor::Encrypt(::arrow::util::span<const uint8_t> plaintext,
                            ::arrow::util::span<uint8_t> ciphertext) {
-  return encryptor_instance_->Encrypt(plaintext, str2span(key_), str2span(aad_), ciphertext);
+  return encryptor_instance_->Encrypt(plaintext, str2span(key_), str2span(aad_),
+                                      ciphertext);
 }
 
 // InternalFileEncryptor
@@ -57,7 +58,7 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterEncryptor() {
   std::string footer_key = properties_->footer_key();
   auto encryptor_instance = GetMetaEncryptor(algorithm, footer_key.size());
   footer_encryptor_ = std::make_shared<Encryptor>(
-    encryptor_instance, footer_key, properties_->file_aad(), footer_aad, pool_);
+      encryptor_instance, footer_key, properties_->file_aad(), footer_aad, pool_);
   return footer_encryptor_;
 }
 
@@ -71,7 +72,7 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterSigningEncryptor() {
   std::string footer_signing_key = properties_->footer_key();
   auto encryptor_instance = GetMetaEncryptor(algorithm, footer_signing_key.size());
   footer_signing_encryptor_ = std::make_shared<Encryptor>(
-    encryptor_instance, footer_signing_key, properties_->file_aad(), footer_aad, pool_);
+      encryptor_instance, footer_signing_key, properties_->file_aad(), footer_aad, pool_);
   return footer_signing_encryptor_;
 }
 
@@ -81,7 +82,8 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetColumnMetaEncryptor(
 }
 
 std::shared_ptr<Encryptor> InternalFileEncryptor::GetColumnDataEncryptor(
-    const std::string& column_path, const ColumnChunkMetaDataBuilder* column_chunk_metadata) {
+    const std::string& column_path,
+    const ColumnChunkMetaDataBuilder* column_chunk_metadata) {
   return GetColumnEncryptor(column_path, false, column_chunk_metadata);
 }
 
@@ -118,9 +120,9 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
       algorithm = column_prop->parquet_cipher().value();
     }
   }
-  auto encryptor_instance = metadata ? GetMetaEncryptor(algorithm, key.size())
-                                      : GetDataEncryptor(algorithm, key.size(),
-                                                         column_chunk_metadata);
+  auto encryptor_instance =
+      metadata ? GetMetaEncryptor(algorithm, key.size())
+               : GetDataEncryptor(algorithm, key.size(), column_chunk_metadata);
 
   std::string file_aad = properties_->file_aad();
   std::shared_ptr<Encryptor> encryptor =
@@ -144,7 +146,8 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
     const ColumnChunkMetaDataBuilder* column_chunk_metadata) {
   if (algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
     if (dynamic_cast<ExternalFileEncryptionProperties*>(properties_) == nullptr) {
-      throw ParquetException("External DBPA encryption requires ExternalFileEncryptionProperties.");
+      throw ParquetException(
+          "External DBPA encryption requires ExternalFileEncryptionProperties.");
     }
 
     return external_dbpa_encryptor_factory_.GetEncryptor(

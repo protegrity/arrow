@@ -303,13 +303,14 @@ TEST(TestExternalFileEncryptionProperties, SuperClassFieldsSetCorrectly) {
 
 // The subclass adds two additional fields
 TEST(TestExternalFileEncryptionProperties, SetExternalContextAndConfig) {
-  std::string app_context = "{\n"
-                   "  \"user_id\": \"abc123\",\n"
-                   "  \"location\": {\n"
-                   "    \"lat\": 10.0,\n"
-                   "    \"lon\": -84.0\n"
-                   "  }\n"
-                   "}";
+  std::string app_context =
+      "{\n"
+      "  \"user_id\": \"abc123\",\n"
+      "  \"location\": {\n"
+      "    \"lat\": 10.0,\n"
+      "    \"lon\": -84.0\n"
+      "  }\n"
+      "}";
   std::map<ParquetCipher::type, std::map<std::string, std::string>> connection_config;
   connection_config[ParquetCipher::AES_GCM_V1]["lib_location"] = "path/to/lib.so";
   connection_config[ParquetCipher::AES_GCM_V1]["config_file"] = "path/to/config/file";
@@ -439,13 +440,14 @@ TEST(TestExternalFileDecryptionProperties, SuperClassFieldsSetCorrectly) {
   string_kr1->PutKey("kc2", kColumnEncryptionKey2);
   std::shared_ptr<parquet::DecryptionKeyRetriever> kr1 =
       std::static_pointer_cast<parquet::StringKeyIdRetriever>(string_kr1);
-  
+
   parquet::ExternalFileDecryptionProperties::Builder* builder =
       parquet::ExternalFileDecryptionProperties::Builder()
           .footer_key(kFooterEncryptionKey)
           ->plaintext_files_allowed()
           ->key_retriever(kr1);
-  std::shared_ptr<parquet::ExternalFileDecryptionProperties> props = builder->build_external();
+  std::shared_ptr<parquet::ExternalFileDecryptionProperties> props =
+      builder->build_external();
 
   ASSERT_EQ(true, props->plaintext_files_allowed());
   ASSERT_EQ(kFooterEncryptionKey, props->footer_key());
@@ -461,13 +463,14 @@ TEST(TestExternalFileDecryptionProperties, SuperClassFieldsSetCorrectly) {
 TEST(TestExternalFileDecryptionProperties, SetExternalContextAndConfig) {
   std::shared_ptr<parquet::StringKeyIdRetriever> string_kr1 =
       std::make_shared<parquet::StringKeyIdRetriever>();
-  std::string app_context = "{\n"
-                   "  \"user_id\": \"abc123\",\n"
-                   "  \"location\": {\n"
-                   "    \"lat\": 10.0,\n"
-                   "    \"lon\": -84.0\n"
-                   "  }\n"
-                   "}";
+  std::string app_context =
+      "{\n"
+      "  \"user_id\": \"abc123\",\n"
+      "  \"location\": {\n"
+      "    \"lat\": 10.0,\n"
+      "    \"lon\": -84.0\n"
+      "  }\n"
+      "}";
   std::map<ParquetCipher::type, std::map<std::string, std::string>> connection_config;
   std::map<std::string, std::string> inner_config;
   inner_config["lib_location"] = "path/to/lib.so";
@@ -477,9 +480,9 @@ TEST(TestExternalFileDecryptionProperties, SetExternalContextAndConfig) {
   ExternalFileDecryptionProperties::Builder builder;
   builder.app_context(app_context);
   builder.connection_config(connection_config);
-    
-  std::shared_ptr<parquet::ExternalFileDecryptionProperties> props = builder.build_external();
-  
+
+  std::shared_ptr<parquet::ExternalFileDecryptionProperties> props =
+      builder.build_external();
 
   ASSERT_EQ(false, props->app_context().empty());
   ASSERT_EQ(app_context, props->app_context());

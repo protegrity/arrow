@@ -1,11 +1,26 @@
-// What license shall we use for this file?
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 #pragma once
 
 #include <map>
 
-#include "parquet/encryption/encryptor_interface.h"
 #include "parquet/encryption/decryptor_interface.h"
+#include "parquet/encryption/encryptor_interface.h"
 #include "parquet/metadata.h"
 #include "parquet/types.h"
 
@@ -15,14 +30,14 @@ namespace parquet::encryption {
 class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
  public:
   explicit ExternalDBPAEncryptorAdapter(
-      ParquetCipher::type algorithm, std::string column_name,
-      std::string key_id, Type::type data_type, Compression::type compression_type,
+      ParquetCipher::type algorithm, std::string column_name, std::string key_id,
+      Type::type data_type, Compression::type compression_type,
       Encoding::type encoding_type, std::string app_context,
       std::map<std::string, std::string> connection_config);
 
   static std::unique_ptr<ExternalDBPAEncryptorAdapter> Make(
-      ParquetCipher::type algorithm, std::string column_name,
-      std::string key_id, Type::type data_type, Compression::type compression_type,
+      ParquetCipher::type algorithm, std::string column_name, std::string key_id,
+      Type::type data_type, Compression::type compression_type,
       Encoding::type encoding_type, std::string app_context,
       std::map<std::string, std::string> connection_config);
 
@@ -43,31 +58,32 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
                               ::arrow::util::span<const uint8_t> aad,
                               ::arrow::util::span<const uint8_t> nonce,
                               ::arrow::util::span<uint8_t> encrypted_footer) override;
- 
-  private:   
-    int32_t CallExternalDBPA(
-      ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<uint8_t> ciphertext);
-    
-    ParquetCipher::type algorithm_;
-    std::string column_name_;
-    std::string key_id_;
-    Type::type data_type_;
-    Compression::type compression_type_;
-    Encoding::type encoding_type_;
-    std::string app_context_;
-    std::map<std::string, std::string> connection_config_;
+
+ private:
+  int32_t CallExternalDBPA(::arrow::util::span<const uint8_t> plaintext,
+                           ::arrow::util::span<uint8_t> ciphertext);
+
+  ParquetCipher::type algorithm_;
+  std::string column_name_;
+  std::string key_id_;
+  Type::type data_type_;
+  Compression::type compression_type_;
+  Encoding::type encoding_type_;
+  std::string app_context_;
+  std::map<std::string, std::string> connection_config_;
 };
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
 /// operation is open, and is used to guarantee the lifetime of the encryptor.
 class ExternalDBPAEncryptorAdapterFactory {
-  public:
-    ExternalDBPAEncryptorAdapter* GetEncryptor(
-      ParquetCipher::type algorithm, const ColumnChunkMetaDataBuilder* column_chunk_metadata,
+ public:
+  ExternalDBPAEncryptorAdapter* GetEncryptor(
+      ParquetCipher::type algorithm,
+      const ColumnChunkMetaDataBuilder* column_chunk_metadata,
       ExternalFileEncryptionProperties* external_file_encryption_properties);
 
-  private:
-    std::map<std::string, std::unique_ptr<ExternalDBPAEncryptorAdapter>> encryptor_cache_;
+ private:
+  std::map<std::string, std::unique_ptr<ExternalDBPAEncryptorAdapter>> encryptor_cache_;
 };
 
 /// Call an external Data Batch Protection Agent (DBPA) to decrypt data.
@@ -75,17 +91,17 @@ class ExternalDBPAEncryptorAdapterFactory {
 class ExternalDBPADecryptorAdapter : public DecryptorInterface {
  public:
   explicit ExternalDBPADecryptorAdapter(
-      ParquetCipher::type algorithm, std::string column_name,
-      std::string key_id, Type::type data_type, Compression::type compression_type,
+      ParquetCipher::type algorithm, std::string column_name, std::string key_id,
+      Type::type data_type, Compression::type compression_type,
       Encoding::type encoding_type, std::string app_context,
       std::map<std::string, std::string> connection_config);
 
   static std::unique_ptr<ExternalDBPADecryptorAdapter> Make(
-      ParquetCipher::type algorithm, std::string column_name,
-      std::string key_id, Type::type data_type, Compression::type compression_type,
+      ParquetCipher::type algorithm, std::string column_name, std::string key_id,
+      Type::type data_type, Compression::type compression_type,
       Encoding::type encoding_type, std::string app_context,
       std::map<std::string, std::string> connection_config);
-  
+
   ~ExternalDBPADecryptorAdapter() = default;
 
   /// The size of the plaintext, for this cipher and the specified ciphertext length.
@@ -102,18 +118,18 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
                   ::arrow::util::span<const uint8_t> aad,
                   ::arrow::util::span<uint8_t> plaintext) override;
 
-  private:   
-    int32_t CallExternalDBPA(
-      ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<uint8_t> plaintext);
-    
-    ParquetCipher::type algorithm_;
-    std::string column_name_;
-    std::string key_id_;
-    Type::type data_type_;
-    Compression::type compression_type_;
-    Encoding::type encoding_type_;
-    std::string app_context_;
-    std::map<std::string, std::string> connection_config_;
+ private:
+  int32_t CallExternalDBPA(::arrow::util::span<const uint8_t> ciphertext,
+                           ::arrow::util::span<uint8_t> plaintext);
+
+  ParquetCipher::type algorithm_;
+  std::string column_name_;
+  std::string key_id_;
+  Type::type data_type_;
+  Compression::type compression_type_;
+  Encoding::type encoding_type_;
+  std::string app_context_;
+  std::map<std::string, std::string> connection_config_;
 };
 
 }  // namespace parquet::encryption

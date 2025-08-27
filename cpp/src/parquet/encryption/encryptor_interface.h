@@ -26,7 +26,7 @@ class PARQUET_EXPORT EncryptorInterface {
   virtual ~EncryptorInterface() = default;
 
   /// Calculate the size of the ciphertext for a given plaintext length.
-  [[nodiscard]]virtual int32_t CiphertextLength(int64_t plaintext_len) const = 0;
+  [[nodiscard]] virtual int32_t CiphertextLength(int64_t plaintext_len) const = 0;
 
   /// Encrypt the plaintext and leave the results in the ciphertext buffer.
   /// Most implementations will require the key and aad to be provided, but it is up to

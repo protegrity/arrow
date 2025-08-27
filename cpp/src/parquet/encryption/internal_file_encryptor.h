@@ -22,9 +22,9 @@
 #include <string>
 
 #include "parquet/encryption/aes_encryption.h"
-#include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryptor_interface.h"
+#include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/metadata.h"
 
 namespace parquet {
@@ -75,8 +75,8 @@ class InternalFileEncryptor {
   std::shared_ptr<Encryptor> GetFooterSigningEncryptor();
   std::shared_ptr<Encryptor> GetColumnMetaEncryptor(const std::string& column_path);
   std::shared_ptr<Encryptor> GetColumnDataEncryptor(
-    const std::string& column_path,
-    const ColumnChunkMetaDataBuilder* column_chunk_metadata = nullptr);
+      const std::string& column_path,
+      const ColumnChunkMetaDataBuilder* column_chunk_metadata = nullptr);
 
  private:
   FileEncryptionProperties* properties_;
@@ -92,14 +92,15 @@ class InternalFileEncryptor {
   encryption::ExternalDBPAEncryptorAdapterFactory external_dbpa_encryptor_factory_;
 
   std::shared_ptr<Encryptor> GetColumnEncryptor(
-    const std::string& column_path, bool metadata,
-    const ColumnChunkMetaDataBuilder* column_chunk_metadata = nullptr);
+      const std::string& column_path, bool metadata,
+      const ColumnChunkMetaDataBuilder* column_chunk_metadata = nullptr);
 
-  encryption::EncryptorInterface* GetMetaEncryptor(ParquetCipher::type algorithm, size_t key_len);
+  encryption::EncryptorInterface* GetMetaEncryptor(ParquetCipher::type algorithm,
+                                                   size_t key_len);
 
   encryption::EncryptorInterface* GetDataEncryptor(
-    ParquetCipher::type algorithm, size_t key_len,
-    const ColumnChunkMetaDataBuilder* column_chunk_metadata = nullptr);
+      ParquetCipher::type algorithm, size_t key_len,
+      const ColumnChunkMetaDataBuilder* column_chunk_metadata = nullptr);
 };
 
 }  // namespace parquet
