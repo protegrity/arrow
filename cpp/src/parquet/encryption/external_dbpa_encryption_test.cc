@@ -29,7 +29,7 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
         algorithm, column_name, key_id, data_type, compression_type, encoding_type,
         app_context_, connection_config_);
 
-    int32_t expected_ciphertext_length = plaintext.size();
+    int32_t expected_ciphertext_length = static_cast<int32_t>(plaintext.size());
     int32_t actual_ciphertext_length = encryptor.CiphertextLength(plaintext.size());
     ASSERT_EQ(expected_ciphertext_length, actual_ciphertext_length);
 
@@ -45,8 +45,8 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
                                            compression_type, {encoding_type}, app_context_,
                                            connection_config_);
 
-    int32_t expected_plaintext_length = ciphertext_str.size();
-    int32_t actual_plaintext_length = decryptor.PlaintextLength(ciphertext_str.size());
+    int32_t expected_plaintext_length = static_cast<int32_t>(ciphertext_str.size());
+    int32_t actual_plaintext_length = decryptor.PlaintextLength(static_cast<int32_t>(ciphertext_str.size()));
     ASSERT_EQ(expected_plaintext_length, actual_plaintext_length);
 
     std::vector<uint8_t> plaintext_buffer(expected_plaintext_length, '\0');

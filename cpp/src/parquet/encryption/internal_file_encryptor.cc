@@ -136,7 +136,7 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
 encryption::EncryptorInterface* InternalFileEncryptor::GetMetaEncryptor(
     ParquetCipher::type algorithm, size_t key_size) {
   // Metadata is encrypted with AES.
-  return aes_encryptor_factory_.GetMetaAesEncryptor(algorithm, key_size);
+  return aes_encryptor_factory_.GetMetaAesEncryptor(algorithm, static_cast<int32_t>(key_size));
 }
 
 encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(

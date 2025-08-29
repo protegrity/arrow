@@ -29,7 +29,7 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
 }
 
 int32_t ExternalDBPAEncryptorAdapter::CiphertextLength(int64_t plaintext_len) const {
-  return plaintext_len;
+  return static_cast<int32_t>(plaintext_len);
 }
   
 int32_t ExternalDBPAEncryptorAdapter::Encrypt(
@@ -68,7 +68,7 @@ int32_t ExternalDBPAEncryptorAdapter::CallExternalDBPA(
   std::cout << "Ciphertext: [" << ciphertext_str << "]" << std::endl;
   std::cout << "*-*-*- END: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-\n" << std::endl;
 
-  return ciphertext.size();
+  return static_cast<int32_t>(ciphertext.size());
 }
 
 ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
@@ -179,7 +179,7 @@ int32_t ExternalDBPADecryptorAdapter::CallExternalDBPA(
   std::cout << "Ciphertext: [" << ciphertext_str << "]" << std::endl;
   std::cout << "*-*-*- END: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-\n" << std::endl;
 
-  return plaintext.size();
+  return static_cast<int32_t>(plaintext.size());
 }
 
 std::unique_ptr<DecryptorInterface> ExternalDBPADecryptorAdapterFactory::GetDecryptor(
