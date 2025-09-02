@@ -243,6 +243,7 @@ if(PARQUET_REQUIRE_ENCRYPTION)
                    encryption/external_dbpa_encryption.cc
                    encryption/openssl_internal.cc
                    encryption/external/dbpa_library_wrapper.cc
+                   encryption/external/loadable_encryptor_utils.cc
                    )
   # Encryption key management
   set(PARQUET_SRCS
