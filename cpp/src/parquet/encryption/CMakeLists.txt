@@ -17,3 +17,12 @@
 
 # Headers: public api
 arrow_install_all_headers("parquet/encryption")
+
+if(ARROW_TESTING)
+  
+  # Add test for DBPALibraryWrapper
+  add_parquet_test(dbpa-library-wrapper-test
+                   SOURCES external/dbpa_library_wrapper_test.cc
+                   LABELS "parquet-tests" "encryption-tests")
+  
+endif()
