@@ -184,6 +184,7 @@ class TestDecryptionConfiguration
     file_decryption_builder_5.key_retriever(kr5);
     file_decryption_builder_5.connection_config({
       {parquet::ParquetCipher::EXTERNAL_DBPA_V1, {
+          {"agent_library_path", "libDBPATestAgent.so"},
           {"file_path", "/tmp/test"},
           {"other_config", "value"}
       }}

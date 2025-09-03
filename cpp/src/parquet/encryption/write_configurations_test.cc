@@ -244,6 +244,7 @@ TEST_F(TestEncryptionConfiguration, EncryptWithPerColumnEncryption) {
                             ->algorithm(parquet::ParquetCipher::AES_GCM_V1)
                             ->connection_config({
                                 {parquet::ParquetCipher::EXTERNAL_DBPA_V1, {
+                                    {"agent_library_path", "libDBPATestAgent.so"},
                                     {"file_path", "/tmp/test"},
                                     {"other_config", "value"}
                                 }}

@@ -17,7 +17,8 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
       "{\"user_id\": \"abc123\", \"location\": {\"lat\": 9.7489, \"lon\": -83.7534}}";
     connection_config_ = {
       {"lib_name", "dbpa_lib.so"},
-      {"config_path", "path/to/file"}
+      {"config_path", "path/to/file"}, 
+      {"agent_library_path", "libDBPATestAgent.so"}
     };
   }
 
@@ -25,9 +26,9 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
       ParquetCipher::type algorithm, std::string column_name, std::string key_id, 
       Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
       std::string plaintext) {
-    ExternalDBPAEncryptorAdapter encryptor(
-        algorithm, column_name, key_id, data_type, compression_type, encoding_type,
-        app_context_, connection_config_);
+    ExternalDBPAEncryptorAdapter encryptor(algorithm, column_name, key_id, data_type, 
+                                           compression_type, encoding_type, app_context_, 
+                                           connection_config_);
 
     int32_t expected_ciphertext_length = plaintext.size();
     int32_t actual_ciphertext_length = encryptor.CiphertextLength(plaintext.size());
@@ -39,7 +40,19 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     ASSERT_EQ(expected_ciphertext_length, encryption_length);
 
     std::string ciphertext_str(ciphertext_buffer.begin(), ciphertext_buffer.end());
-    ASSERT_EQ(plaintext, ciphertext_str);
+
+    // We know this uses XOR encryption. Therefore, the ciphertext is the same as the plaintext.
+    // XOR encrytion encrypts each byte of the plaintext with 0xAA.
+    // See external/dbpa_test_agent.cc for the implementation.
+
+    // Assert that plaintext and ciphertext have the same length
+    ASSERT_EQ(plaintext.size(), ciphertext_str.size());
+
+    // Assert that ciphertext is plaintext XOR'd with 0xAA
+    for (size_t i = 0; i < plaintext.size(); i++) {
+      ASSERT_EQ(static_cast<uint8_t>(ciphertext_str[i]), 
+                static_cast<uint8_t>(plaintext[i]) ^ 0xAA);
+    }
 
     ExternalDBPADecryptorAdapter decryptor(algorithm, column_name, key_id, data_type,
                                            compression_type, {encoding_type}, app_context_,
@@ -55,6 +68,8 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     ASSERT_EQ(expected_plaintext_length, decryption_length);
 
     std::string plaintext_str(plaintext_buffer.begin(), plaintext_buffer.end());
+
+    // Assert that the decrypted plaintext matches the original plaintext
     ASSERT_EQ(plaintext, plaintext_str);
   }
   
