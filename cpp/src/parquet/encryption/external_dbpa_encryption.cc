@@ -1,14 +1,74 @@
 // What license shall we use for this file?
 
 #include <iostream>
+#include <map>
 
 #include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/encryption/key_metadata.h"
+#include "parquet/encryption/external/loadable_encryptor_utils.h"
+#include "parquet/encryption/external/dbpa_utils.h"
+#include "parquet/exception.h"
+#include "parquet/types.h"
 
-/// TODO(sbrenes): Add proper implementation. Right now we are just going to return
-/// the plaintext as the ciphertext.
+using parquet::encryption::external::LoadableEncryptorUtils;
+using parquet::encryption::external::dbpa_utils;
+
+using dbps::external::EncryptionResult;
+using dbps::external::DecryptionResult;
 
 namespace parquet::encryption {
+
+// Utility function to load and initialize a DataBatchProtectionAgentInterface instance
+// Shared between the encryptor and decryptor.
+std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitializeAgent(
+    const std::string& column_name,
+    const std::map<std::string, std::string>& connection_config,
+    const std::string& app_context,
+    const std::string& key_id,
+    Type::type data_type,
+    Compression::type compression_type) {
+  
+  // Load a new DataBatchProtectionAgentInterface instance from the shared library
+  std::cout << "[DEBUG] Loading agent from library..." << std::endl;
+
+  const std::string SHARED_LIBRARY_PATH_KEY = "agent_library_path";
+  
+  // Step 1: Get path to the shared library  
+  auto it = connection_config.find(SHARED_LIBRARY_PATH_KEY);
+  if (it == connection_config.end()) {
+    auto const msg = "Required configuration key '" + SHARED_LIBRARY_PATH_KEY + "' not found in connection_config";
+    std::cout << "[ERROR] " << msg << std::endl;
+    throw ParquetException(msg);
+  }
+  auto library_path = it->second;
+  std::cout << "[DEBUG] library_path = " << library_path << std::endl;
+
+  // Step 2: Load an instance of the DataBatchProtectionAgentInterface
+  std::cout << "[DEBUG] Loading agent instance from library..." << std::endl;
+  auto agent_instance = LoadableEncryptorUtils::LoadFromLibrary(library_path);
+  if (!agent_instance) {
+    std::cout << "[ERROR] Failed to create instance of DataBatchProtectionAgentInterface" << std::endl;
+    throw ParquetException("Failed to create instance of DataBatchProtectionAgentInterface");
+  }        
+  std::cout << "[DEBUG] Successfully loaded agent_instance" << std::endl;
+  std::cout << "[DEBUG] Initializing agent instance" << std::endl;
+
+  // Step 3: Initialize the agent.
+  agent_instance->init(
+    /*column_name*/ column_name,
+    /*connection_config*/ connection_config,
+    /*app_context*/ app_context,
+    /*column_key_id*/ key_id,
+    /*data_type*/ dbpa_utils::ParquetTypeToExternal(data_type), 
+    /*compression_type*/ dbpa_utils::ArrowCompressionToExternal(compression_type)
+  ); //LoadAndInitializeAgent()
+  
+  //TODO: what to do  if agent was not initialized? should exception be thrown?
+
+  std::cout << "[DEBUG] Successfully initialized agent instance" << std::endl;
+
+  return agent_instance;
+}
 
 ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
@@ -17,7 +77,32 @@ ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
     : algorithm_(algorithm), column_name_(column_name), key_id_(key_id),
       data_type_(data_type), compression_type_(compression_type),
       encoding_type_(encoding_type), app_context_(app_context),
-      connection_config_(connection_config) {}
+      connection_config_(connection_config) {
+
+        //TODO: figure out logging
+        std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter() -- constructor" << std::endl;
+        std::cout << "[DEBUG]   algorithm = " << algorithm << std::endl;
+        std::cout << "[DEBUG]   column_name = " << column_name << std::endl;
+        std::cout << "[DEBUG]   key_id = " << key_id << std::endl;
+        std::cout << "[DEBUG]   data_type = " << data_type << std::endl;
+        std::cout << "[DEBUG]   compression_type = " << compression_type << std::endl;
+        std::cout << "[DEBUG]   encoding_type = " << encoding_type << std::endl;
+        std::cout << "[DEBUG]   app_context = " << app_context << std::endl;
+        std::cout << "[DEBUG]   connection_config:" << std::endl;
+        for (const auto& [key, value] : connection_config) {
+          std::cout << "[DEBUG]    " << key << " = " << value << std::endl;
+        }
+
+        std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter() -- loading and initializing agent" << std::endl;
+        // Load and initialize the agent using the utility function
+        agent_instance_ = LoadAndInitializeAgent(
+            column_name, connection_config, app_context, key_id, data_type, compression_type);
+
+        //TODO: what to do  if agent was not initialized?
+        agent_initialized_ = true;
+
+        std::cout << "[DEBUG] Successfully loaded and initialized agent" << std::endl;
+      }
   
 std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
@@ -29,47 +114,71 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
 }
 
 int32_t ExternalDBPAEncryptorAdapter::CiphertextLength(int64_t plaintext_len) const {
+  std::cout << "ExternalDBPAEncryptorAdapter::CiphertextLength" << std::endl;
+  std::cout << "  plaintext_len = " << plaintext_len << std::endl;
+  int return_value = plaintext_len;
+  std::cout << "  return_value = " << return_value << std::endl;
   return plaintext_len;
 }
   
 int32_t ExternalDBPAEncryptorAdapter::Encrypt(
     ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<const uint8_t> key,
     ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<uint8_t> ciphertext) {
-  return CallExternalDBPA(plaintext, ciphertext);
+
+  return InvokeExternalEncrypt(plaintext, ciphertext);
 }
 
 int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
     ::arrow::util::span<const uint8_t> footer, ::arrow::util::span<const uint8_t> key,
     ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<const uint8_t> nonce,
     ::arrow::util::span<uint8_t> encrypted_footer) {
-  return CallExternalDBPA(footer, encrypted_footer);
+  return InvokeExternalEncrypt(footer, encrypted_footer);
 }
 
-int32_t ExternalDBPAEncryptorAdapter::CallExternalDBPA(
+int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
     ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<uint8_t> ciphertext) {
-  std::cout << "\n*-*-*- START: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-" << std::endl;
-  std::cout << "Encryption Algorithm: [" << algorithm_ << "]" << std::endl;
-  std::cout << "Column Name: [" << column_name_ << "]" << std::endl;
-  std::cout << "Key ID: [" << key_id_ << "]" << std::endl;
-  std::cout << "Data Type: [" << data_type_ << "]" << std::endl;
-  std::cout << "Compression Type: [" << compression_type_ << "]" << std::endl;
-  std::cout << "Encoding Type: [" << encoding_type_ << "]" << std::endl;
-  std::cout << "App Context: [" << app_context_ << "]" << std::endl;
-  std::cout << "Connection Config:" << std::endl;
-  for (const auto& [key, value] : connection_config_) {
-    std::cout << "  [" << key << "]: [" << value << "]" << std::endl;
+
+      std::cout << "\n*-*-*- START: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-" << std::endl;
+      std::cout << "Encryption Algorithm: [" << algorithm_ << "]" << std::endl;
+      std::cout << "Column Name: [" << column_name_ << "]" << std::endl;
+      std::cout << "Key ID: [" << key_id_ << "]" << std::endl;
+      std::cout << "Data Type: [" << data_type_ << "]" << std::endl;
+      std::cout << "Compression Type: [" << compression_type_ << "]" << std::endl;
+      std::cout << "Encoding Type: [" << encoding_type_ << "]" << std::endl;
+      std::cout << "App Context: [" << app_context_ << "]" << std::endl;
+      std::cout << "Connection Config:" << std::endl;
+      for (const auto& [cfg_key, cfg_value] : connection_config_) {
+        std::cout << "  [" << cfg_key << "]: [" << cfg_value << "]" << std::endl;
+      }
+  
+      if (!agent_initialized_) {
+        throw ParquetException("Underlying DBPA Agent was not initialized");
+      }
+
+      std::cout << "[DEBUG] Calling agent_instance_->Encrypt..." << std::endl;
+      std::unique_ptr<EncryptionResult> result = agent_instance_->Encrypt(plaintext);
+  
+      if (!result->success()) {
+        std::cout << "[ERROR] Encryption failed: " << result->error_message() << std::endl;
+        throw ParquetException(result->error_message());
+      }
+  
+      std::cout << "[DEBUG] Encryption successful" << std::endl;
+      std::cout << "  result size: " << result->size() << " bytes" << std::endl;
+      std::cout << "  result ciphertext size: " << result->ciphertext().size() << " bytes" << std::endl;
+  
+      if (ciphertext.size() < result->ciphertext().size()) {
+        std::cout << "[ERROR] Ciphertext buffer too small. Need " << result->ciphertext().size()
+                  << " bytes, have " << ciphertext.size() << " bytes" << std::endl;
+        throw ParquetException("Ciphertext buffer too small for encrypted result");
+      }
+  
+      std::cout << "[DEBUG] Copying result to ciphertext buffer..." << std::endl;
+      std::copy(result->ciphertext().begin(), result->ciphertext().end(), ciphertext.begin());
+      std::cout << "[DEBUG] Encryption completed successfully" << std::endl;
+  
+      return static_cast<int32_t>(result->size());
   }
-
-  std::copy(plaintext.begin(), plaintext.end(), ciphertext.begin());
-
-  std::string plaintext_str(plaintext.begin(), plaintext.end());
-  std::string ciphertext_str(ciphertext.begin(), ciphertext.end());
-  std::cout << "Plaintext: [" << plaintext_str << "]" << std::endl;
-  std::cout << "Ciphertext: [" << ciphertext_str << "]" << std::endl;
-  std::cout << "*-*-*- END: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-\n" << std::endl;
-
-  return ciphertext.size();
-}
 
 ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
     ParquetCipher::type algorithm, const ColumnChunkMetaDataBuilder* column_chunk_metadata,
@@ -126,7 +235,36 @@ ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(
     : algorithm_(algorithm), column_name_(column_name), key_id_(key_id),
       data_type_(data_type), compression_type_(compression_type),
       encoding_types_(encoding_types), app_context_(app_context),
-      connection_config_(connection_config) {}
+      connection_config_(connection_config) {
+
+        std::cout << "[DEBUG] ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter() -- constructor" << std::endl;
+        std::cout << "[DEBUG]   algorithm = " << algorithm << std::endl;
+        std::cout << "[DEBUG]   column_name = " << column_name << std::endl;
+        std::cout << "[DEBUG]   key_id = " << key_id << std::endl;
+        std::cout << "[DEBUG]   data_type = " << data_type << std::endl;
+        std::cout << "[DEBUG]   compression_type = " << compression_type << std::endl;
+        std::cout << "[DEBUG]   encoding_types = [";
+        for (const auto& encoding : encoding_types) {
+          std::cout << static_cast<int>(encoding) << " ";
+        }
+        std::cout << "]" << std::endl;
+        std::cout << "[DEBUG]   app_context = " << app_context << std::endl;
+        std::cout << "[DEBUG]   connection_config:" << std::endl;
+        for (const auto& [key, value] : connection_config) {
+          std::cout << "[DEBUG]    " << key << " = " << value << std::endl;
+        }
+
+        std::cout << "[DEBUG] ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter() -- loading and initializing agent" << std::endl;
+        
+        // Load and initialize the agent using the utility function
+        agent_instance_ = LoadAndInitializeAgent(
+            column_name, connection_config, app_context, key_id, data_type, compression_type);
+
+        //TODO: what to do  if agent was not initialized?
+        agent_initialized_ = true;
+
+        std::cout << "[DEBUG] Successfully loaded and initialized agent" << std::endl;
+      }
 
 std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
@@ -149,38 +287,58 @@ int32_t ExternalDBPADecryptorAdapter::CiphertextLength(int32_t plaintext_len) co
 int32_t ExternalDBPADecryptorAdapter::Decrypt(
     ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<const uint8_t> key,
     ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<uint8_t> plaintext) {
-  return CallExternalDBPA(ciphertext, plaintext);
+
+      return InvokeExternalDecrypt(ciphertext, plaintext);
 }
 
-int32_t ExternalDBPADecryptorAdapter::CallExternalDBPA(
+int32_t ExternalDBPADecryptorAdapter::InvokeExternalDecrypt(
     ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<uint8_t> plaintext) {
-  std::cout << "\n*-*-*- START: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-" << std::endl;
-  std::cout << "Decryption Algorithm: [" << algorithm_ << "]" << std::endl;
-  std::cout << "Column Name: [" << column_name_ << "]" << std::endl;
-  std::cout << "Key ID: [" << key_id_ << "]" << std::endl;
-  std::cout << "Data Type: [" << data_type_ << "]" << std::endl;
-  std::cout << "Compression Type: [" << compression_type_ << "]" << std::endl;
-  std::cout << "Encoding Types: [";
-  for (const auto& encoding_type : encoding_types_) {
-    std::cout << encoding_type << "\n";
+
+      std::cout << "\n*-*-*- START: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-" << std::endl;
+      std::cout << "Decryption Algorithm: [" << algorithm_ << "]" << std::endl;
+      std::cout << "Column Name: [" << column_name_ << "]" << std::endl;
+      std::cout << "Key ID: [" << key_id_ << "]" << std::endl;
+      std::cout << "Data Type: [" << data_type_ << "]" << std::endl;
+      std::cout << "Compression Type: [" << compression_type_ << "]" << std::endl;
+      std::cout << "Encoding Types: [";
+      for (const auto& encoding_type : encoding_types_) {
+        std::cout << encoding_type << "\n";
+      }
+      std::cout << "]" << std::endl;
+      std::cout << "App Context: [" << app_context_ << "]" << std::endl;
+      std::cout << "Connection Config:" << std::endl;
+      for (const auto& [key, value] : connection_config_) {
+        std::cout << "  [" << key << "]: [" << value << "]" << std::endl;
+      }
+  
+      if (!agent_initialized_) {
+        throw ParquetException("Underlying DBPA Agent was not initialized");
+      }
+
+      std::cout << "[DEBUG] Calling agent_instance_->Decrypt..." << std::endl;
+      std::unique_ptr<DecryptionResult> result = agent_instance_->Decrypt(ciphertext);
+      
+      if (!result->success()) {
+        std::cout << "[ERROR] Decryption failed: " << result->error_message() << std::endl;
+        throw ParquetException(result->error_message());
+      }
+  
+      std::cout << "[DEBUG] Decryption successful" << std::endl;
+      std::cout << "  result size: " << result->size() << " bytes" << std::endl;
+      std::cout << "  result plaintext size: " << result->plaintext().size() << " bytes" << std::endl;
+    
+      if (plaintext.size() < result->plaintext().size()) {
+        std::cout << "[ERROR] Plaintext buffer too small. Need " << result->plaintext().size() 
+                  << " bytes, have " << plaintext.size() << " bytes" << std::endl;
+        throw ParquetException("Plaintext buffer too small for decrypted result");
+      }
+      
+      std::cout << "[DEBUG] Copying result to plaintext buffer..." << std::endl;
+      std::copy(result->plaintext().begin(), result->plaintext().end(), plaintext.begin());
+      std::cout << "[DEBUG] Decryption completed successfully" << std::endl;
+    
+      return result->size();    
   }
-  std::cout << "]" << std::endl;
-  std::cout << "App Context: [" << app_context_ << "]" << std::endl;
-  std::cout << "Connection Config:" << std::endl;
-  for (const auto& [key, value] : connection_config_) {
-    std::cout << "  [" << key << "]: [" << value << "]" << std::endl;
-  }
-
-  std::copy(ciphertext.begin(), ciphertext.end(), plaintext.begin());
-
-  std::string plaintext_str(plaintext.begin(), plaintext.end());
-  std::string ciphertext_str(ciphertext.begin(), ciphertext.end());
-  std::cout << "Plaintext: [" << plaintext_str << "]" << std::endl;
-  std::cout << "Ciphertext: [" << ciphertext_str << "]" << std::endl;
-  std::cout << "*-*-*- END: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-\n" << std::endl;
-
-  return plaintext.size();
-}
 
 std::unique_ptr<DecryptorInterface> ExternalDBPADecryptorAdapterFactory::GetDecryptor(
   ParquetCipher::type algorithm, const ColumnCryptoMetaData* crypto_metadata,

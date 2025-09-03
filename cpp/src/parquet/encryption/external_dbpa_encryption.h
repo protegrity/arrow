@@ -5,6 +5,8 @@
 #include <map>
 #include <vector>
 
+#include "parquet/encryption/external/third_party/dbpa_interface.h"
+
 #include "parquet/encryption/encryptor_interface.h"
 #include "parquet/encryption/decryptor_interface.h"
 #include "parquet/metadata.h"
@@ -46,7 +48,7 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
                               ::arrow::util::span<uint8_t> encrypted_footer) override;
  
   private:   
-    int32_t CallExternalDBPA(
+    int32_t InvokeExternalEncrypt(
       ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<uint8_t> ciphertext);
     
     ParquetCipher::type algorithm_;
@@ -57,6 +59,9 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
     Encoding::type encoding_type_;
     std::string app_context_;
     std::map<std::string, std::string> connection_config_;
+    
+    std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
+    bool agent_initialized_ = false;
 };
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
@@ -104,7 +109,7 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
                   ::arrow::util::span<uint8_t> plaintext) override;
 
   private:   
-    int32_t CallExternalDBPA(
+    int32_t InvokeExternalDecrypt(
       ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<uint8_t> plaintext);
     
     ParquetCipher::type algorithm_;
@@ -116,6 +121,9 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
     std::vector<Encoding::type> encoding_types_;
     std::string app_context_;
     std::map<std::string, std::string> connection_config_;
+
+    std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
+    bool agent_initialized_ = false;
 };
 
 /// Factory for ExternalDBPADecryptorAdapter instances. No cache exists for decryptors.

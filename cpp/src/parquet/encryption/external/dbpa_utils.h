@@ -5,7 +5,7 @@
 
 #include <stdexcept>
 
-#include "parquet/encryption/external/borrowed/dbpa_interface.h"
+#include "parquet/encryption/external/third_party/dbpa_interface.h"
 #include "parquet/types.h"
 #include "arrow/type_fwd.h" // For arrow::Compression
 
