@@ -6,6 +6,7 @@ base_app.py
 
 import base64
 import datetime
+import os
 import pyarrow
 import pyarrow.parquet as pp
 import pyarrow.parquet.encryption as ppe
@@ -32,7 +33,6 @@ class FooKmsClient(ppe.KmsClient):
         raise ValueError(f"Bad master key used [{master_key_bytes}] - [{decrypted_key}]")
 
 
-
 def kms_client_factory(kms_connection_config):
     return FooKmsClient(kms_connection_config)
 
@@ -45,8 +45,19 @@ def write_parquet(table, location, encryption_config=None):
         encryption_properties = crypto_factory.external_file_encryption_properties(
             get_kms_connection_config(), encryption_config)
 
-    writer = pp.ParquetWriter(location, table.schema, encryption_properties=encryption_properties)
-    writer.write_table(table)
+    #writer = pp.ParquetWriter(location, table.schema, encryption_properties=encryption_properties)
+    #writer.write_table(table)
+
+    pp.write_table(table, location, use_dictionary=True,
+        encryption_properties=encryption_properties, 
+        compression="NONE",
+        use_byte_stream_split=False)#,
+        #column_encoding={
+        #    "orderId": "PLAIN",
+        #    "productId": "PLAIN",
+        #    "price": "PLAIN",
+        #    "vat": "PLAIN"
+        #})
 
 
 def encrypted_data_and_footer_sample(data_table):
@@ -62,11 +73,12 @@ def create_and_encrypt_parquet():
         "orderId": [1001, 1002, 1003],
         "productId": [152, 268, 6548],
         "price": [3.25, 6.48, 2.12],
-        "vat": [0.0, 0.2, 0.05]
+        "vat": [0.0, 0.2, 0.05],
+        "customer_name": ["Alice", "Bob", "Charlotte"]
     }
     data_table = pyarrow.Table.from_pydict(sample_data)
 
-    print("\nPyarrow table created. Writing parquet.")
+    print("\nWriting parquet.")
 
     encrypted_data_and_footer_sample(data_table)
 
@@ -84,7 +96,7 @@ def read_and_print_parquet():
     read_data_table = read_parquet(parquet_path,
                                    decryption_config=decryption_config)
     data_frame = read_data_table.to_pandas()
-    print("\nData:")
+    print("\Decrypted data:")
     print(data_frame.head())
     print("\n")
 
@@ -111,7 +123,8 @@ def get_kms_connection_config():
             "footer_key": "012footer_secret",
             "orderid_key": "column_secret001",
             "productid_key": "column_secret002",
-            "price_key": "column_secret003"
+            "price_key": "column_secret003",
+            "customer_key": "column_secret004"
         }
     )
 
@@ -131,20 +144,19 @@ def get_external_encryption_config(plaintext_footer=True):
                 "encryption_key": "orderid_key"
             },
             "price": {
-                "encryption_algorithm": "AES_GCM_CTR_V1",
+                "encryption_algorithm": "EXTERNAL_DBPA_V1", #"AES_GCM_CTR_V1",
                 "encryption_key": "price_key"
+            },
+            "customer_name": {
+                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_key": "customer_key"
             }
         },
         app_context = {
             "user_id": "Picard1701",
             "location": "Presidio"
         },
-        connection_config = {
-            "EXTERNAL_DBPA_V1": {
-                "config_file": "path/to/config/file",
-                "config_file_decryption_key": "some_key"
-            }
-        }
+        connection_config = get_dbpa_connection_config()
     )
 
 def get_encryption_config(plaintext_footer=True):
@@ -170,13 +182,34 @@ def get_external_decryption_config():
             "user_id": "Picard1701",
             "location": "Presidio"
         },
-        connection_config = {
-            "EXTERNAL_DBPA_V1": {
-                "config_file": "path/to/config/file",
-                "config_file_decryption_key": "some_key"
-            }
+        connection_config = get_dbpa_connection_config()
+    )
+
+def get_dbpa_connection_config():
+    #we read the name of the external DBPA agent library from the environment variable DBPA_LIBRARY_PATH.
+    #if not available, we use the default to 'libDBPATestAgent.so'.
+    #this library performs key-indenpendent, XOR encryption/decryption, and is built as part of the Parquet Arrow tests.
+    #It is located in cpp/src/parquet/encryption/external/dbpa_test_agent.cc
+    agent_library_path = os.environ.get('DBPA_LIBRARY_PATH', 'libDBPATestAgent.so')
+
+    connection_config = {
+        #TODO: in early discussions, we thought connection_config would be sent via a file.
+        #https://github.com/protegrity/arrow/issues/123
+        "EXTERNAL_DBPA_V1": {
+            "agent_library_path": agent_library_path,
+            "config_file": "path/to/config/file",
+            "config_file_decryption_key": "some_key"
         }
-)
+    }
+
+    #server_url is not needed by 'libDBPATestAgent.so'
+    server_url = os.environ.get('DBPA_SERVER_URL')
+
+    if server_url is not None:
+        connection_config["EXTERNAL_DBPA_V1"]["server_url"] = server_url
+
+    return connection_config
+
 
 if __name__ == "__main__":
     create_and_encrypt_parquet()
