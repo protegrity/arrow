@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <map>
+#include <memory>
 
 #include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/encryption/key_metadata.h"
@@ -63,24 +64,24 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
     /*compression_type*/ dbpa_utils::ArrowCompressionToExternal(compression_type)
   ); //LoadAndInitializeAgent()
   
-  //TODO: what to do  if agent was not initialized? should exception be thrown?
-
   std::cout << "[DEBUG] Successfully initialized agent instance" << std::endl;
 
   return agent_instance;
 }
 
-ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
+//this is  private constructor, invoked from Make()
+ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
+  : agent_instance_(std::move(agent_instance)) {
+    agent_initialized_ = true;
+}
+  
+std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
     Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
-    std::string app_context, std::map<std::string, std::string> connection_config)
-    : algorithm_(algorithm), column_name_(column_name), key_id_(key_id),
-      data_type_(data_type), compression_type_(compression_type),
-      encoding_type_(encoding_type), app_context_(app_context),
-      connection_config_(connection_config) {
+    std::string app_context, std::map<std::string, std::string> connection_config) {
 
         //TODO: figure out logging
-        std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter() -- constructor" << std::endl;
+        std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::Make() -- Make()" << std::endl;
         std::cout << "[DEBUG]   algorithm = " << algorithm << std::endl;
         std::cout << "[DEBUG]   column_name = " << column_name << std::endl;
         std::cout << "[DEBUG]   key_id = " << key_id << std::endl;
@@ -95,23 +96,19 @@ ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
 
         std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter() -- loading and initializing agent" << std::endl;
         // Load and initialize the agent using the utility function
-        agent_instance_ = LoadAndInitializeAgent(
+        auto agent_instance = LoadAndInitializeAgent(
             column_name, connection_config, app_context, key_id, data_type, compression_type);
 
-        //TODO: what to do  if agent was not initialized?
-        agent_initialized_ = true;
+        //if we got to this point, the agent was initialized successfully
 
-        std::cout << "[DEBUG] Successfully loaded and initialized agent" << std::endl;
-      }
-  
-std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
-    ParquetCipher::type algorithm, std::string column_name, std::string key_id,
-    Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
-    std::string app_context, std::map<std::string, std::string> connection_config) {
-  return std::make_unique<ExternalDBPAEncryptorAdapter>(
-      algorithm, column_name, key_id, data_type, compression_type, encoding_type,
-      app_context, connection_config);
-}
+        // create the instance of the ExternalDBPAEncryptorAdapter
+        auto result = std::unique_ptr<ExternalDBPAEncryptorAdapter>(
+          new ExternalDBPAEncryptorAdapter(std::move(agent_instance))
+        );
+        std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter created successfully" << std::endl;
+
+        return result;
+  }
 
 int32_t ExternalDBPAEncryptorAdapter::CiphertextLength(int64_t plaintext_len) const {
   std::cout << "ExternalDBPAEncryptorAdapter::CiphertextLength" << std::endl;
@@ -227,17 +224,20 @@ ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
   return encryptor_cache_[column_path->ToDotString()].get();
 }
 
-ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(
+//private constructor, invoked from Make()
+ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
+  : agent_instance_(std::move(agent_instance)) {
+    agent_initialized_ = true;
+}
+
+std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
     Type::type data_type, Compression::type compression_type,
     std::vector<Encoding::type> encoding_types, std::string app_context,
-    std::map<std::string, std::string> connection_config)
-    : algorithm_(algorithm), column_name_(column_name), key_id_(key_id),
-      data_type_(data_type), compression_type_(compression_type),
-      encoding_types_(encoding_types), app_context_(app_context),
-      connection_config_(connection_config) {
+    std::map<std::string, std::string> connection_config) {
 
-        std::cout << "[DEBUG] ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter() -- constructor" << std::endl;
+        //TODO: figure out logging
+        std::cout << "[DEBUG] ExternalDBPADecryptorAdapter::Make() -- Make()" << std::endl;
         std::cout << "[DEBUG]   algorithm = " << algorithm << std::endl;
         std::cout << "[DEBUG]   column_name = " << column_name << std::endl;
         std::cout << "[DEBUG]   key_id = " << key_id << std::endl;
@@ -255,26 +255,20 @@ ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(
         }
 
         std::cout << "[DEBUG] ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter() -- loading and initializing agent" << std::endl;
-        
         // Load and initialize the agent using the utility function
-        agent_instance_ = LoadAndInitializeAgent(
+        auto agent_instance = LoadAndInitializeAgent(
             column_name, connection_config, app_context, key_id, data_type, compression_type);
 
-        //TODO: what to do  if agent was not initialized?
-        agent_initialized_ = true;
+        //if we got to this point, the agent was initialized successfully
 
-        std::cout << "[DEBUG] Successfully loaded and initialized agent" << std::endl;
-      }
+        // create the instance of the ExternalDBPADecryptorAdapter
+        auto result = std::unique_ptr<ExternalDBPADecryptorAdapter>(
+          new ExternalDBPADecryptorAdapter(std::move(agent_instance))
+        );
+        std::cout << "[DEBUG] ExternalDBPADecryptorAdapter created successfully" << std::endl;
 
-std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make(
-    ParquetCipher::type algorithm, std::string column_name, std::string key_id,
-    Type::type data_type, Compression::type compression_type,
-    std::vector<Encoding::type> encoding_types, std::string app_context,
-    std::map<std::string, std::string> connection_config) {
-  return std::make_unique<ExternalDBPADecryptorAdapter>(
-      algorithm, column_name, key_id, data_type, compression_type, encoding_types,
-      app_context, connection_config);
-}
+        return result;
+  }
 
 int32_t ExternalDBPADecryptorAdapter::PlaintextLength(int32_t ciphertext_len) const {
   return ciphertext_len;

@@ -1,6 +1,7 @@
 // What license shall we use for this file?
 
 #include <gtest/gtest.h>
+#include <memory>
 
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/external_dbpa_encryption.h"
@@ -26,16 +27,17 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
       ParquetCipher::type algorithm, std::string column_name, std::string key_id, 
       Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
       std::string plaintext) {
-    ExternalDBPAEncryptorAdapter encryptor(algorithm, column_name, key_id, data_type, 
-                                           compression_type, encoding_type, app_context_, 
-                                           connection_config_);
+    std::unique_ptr<ExternalDBPAEncryptorAdapter> encryptor = ExternalDBPAEncryptorAdapter::Make(
+      algorithm, column_name, key_id, data_type, 
+      compression_type, encoding_type, app_context_, 
+      connection_config_);
 
     int32_t expected_ciphertext_length = plaintext.size();
-    int32_t actual_ciphertext_length = encryptor.CiphertextLength(plaintext.size());
+    int32_t actual_ciphertext_length = encryptor->CiphertextLength(plaintext.size());
     ASSERT_EQ(expected_ciphertext_length, actual_ciphertext_length);
 
     std::vector<uint8_t> ciphertext_buffer(expected_ciphertext_length, '\0');
-    int32_t encryption_length = encryptor.Encrypt(
+    int32_t encryption_length = encryptor->Encrypt(
       str2span(plaintext), str2span(empty_string), str2span(empty_string), ciphertext_buffer);
     ASSERT_EQ(expected_ciphertext_length, encryption_length);
 
@@ -54,16 +56,17 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
                 static_cast<uint8_t>(plaintext[i]) ^ 0xAA);
     }
 
-    ExternalDBPADecryptorAdapter decryptor(algorithm, column_name, key_id, data_type,
-                                           compression_type, {encoding_type}, app_context_,
-                                           connection_config_);
+    std::unique_ptr<ExternalDBPADecryptorAdapter> decryptor = ExternalDBPADecryptorAdapter::Make(
+      algorithm, column_name, key_id, data_type,
+      compression_type, {encoding_type}, app_context_,
+      connection_config_);
 
     int32_t expected_plaintext_length = ciphertext_str.size();
-    int32_t actual_plaintext_length = decryptor.PlaintextLength(ciphertext_str.size());
+    int32_t actual_plaintext_length = decryptor->PlaintextLength(ciphertext_str.size());
     ASSERT_EQ(expected_plaintext_length, actual_plaintext_length);
 
     std::vector<uint8_t> plaintext_buffer(expected_plaintext_length, '\0');
-    int32_t decryption_length = decryptor.Decrypt(
+    int32_t decryption_length = decryptor->Decrypt(
       str2span(ciphertext_str), str2span(empty_string), str2span(empty_string), plaintext_buffer);
     ASSERT_EQ(expected_plaintext_length, decryption_length);
 

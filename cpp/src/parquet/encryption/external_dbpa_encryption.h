@@ -3,6 +3,7 @@
 #pragma once
 
 #include <map>
+#include <memory>
 #include <vector>
 
 #include "parquet/encryption/external/third_party/dbpa_interface.h"
@@ -12,17 +13,13 @@
 #include "parquet/metadata.h"
 #include "parquet/types.h"
 
+using dbps::external::DataBatchProtectionAgentInterface;
+
 namespace parquet::encryption {
 
 /// Call an external Data Batch Protection Agent (DBPA) to encrypt data.
 class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
  public:
-  explicit ExternalDBPAEncryptorAdapter(
-      ParquetCipher::type algorithm, std::string column_name,
-      std::string key_id, Type::type data_type, Compression::type compression_type,
-      Encoding::type encoding_type, std::string app_context,
-      std::map<std::string, std::string> connection_config);
-
   static std::unique_ptr<ExternalDBPAEncryptorAdapter> Make(
       ParquetCipher::type algorithm, std::string column_name,
       std::string key_id, Type::type data_type, Compression::type compression_type,
@@ -47,7 +44,9 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
                               ::arrow::util::span<const uint8_t> nonce,
                               ::arrow::util::span<uint8_t> encrypted_footer) override;
  
-  private:   
+ private:
+    ExternalDBPAEncryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
+
     int32_t InvokeExternalEncrypt(
       ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<uint8_t> ciphertext);
     
@@ -108,7 +107,9 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
                   ::arrow::util::span<const uint8_t> aad,
                   ::arrow::util::span<uint8_t> plaintext) override;
 
-  private:   
+  private:
+    ExternalDBPADecryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance_);
+    
     int32_t InvokeExternalDecrypt(
       ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<uint8_t> plaintext);
     
