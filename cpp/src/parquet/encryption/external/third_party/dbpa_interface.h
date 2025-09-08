@@ -8,30 +8,37 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <stdexcept>
 #include "span.hpp"
 #include "enums.h"
 
-#ifndef DBPS_EXPORT
-#define DBPS_EXPORT
-#endif
+template <typename T>
+using span = tcb::span<T>;
 
 // TODO: this file was copied from
 // https://github.com/protegrity/DataBatchProtectionService
 // we need to find a better way to share it between repos.
 // https://github.com/protegrity/arrow/issues/110
 
-namespace dbps::external {
+#ifndef DBPS_EXPORT
+#define DBPS_EXPORT
+#endif
 
-template <typename T>
-using span = tcb::span<T>;
+class DBPS_EXPORT DBPSException : public std::runtime_error {
+public:
+    explicit DBPSException(const std::string& message) : std::runtime_error(message) {}
+};
+
+namespace dbps::external {
 
 /*
  * DataBatchProtectionAgentInterface, EncryptionResult and DecryptionResult implementation contracts:
  * - While handle to EncryptionResult/DecryptionResult exists, ciphertext()/plaintext() is guaranteed to return valid data
  * - Read operations are not destructive. Multiple calls return the same data
  * - Destructor must dispose of internal memory (either by delegation or cleanup)
- * - No throwing exceptions. Errors reported via success() flag and error methods.
  * - Library users must check size() to ensure the actual size of the returned payload.
+ * - Exceptions on init(): init() may throw DBPSException for initialization errors (e.g., invalid parameters, server connection failures)
+ * - Exceptions on Encrypt() and Decrypt(): Encrypt/Decrypt do not throw exceptions. Errors reported via success() flag and error methods.
  */
 
 class DBPS_EXPORT EncryptionResult {
@@ -100,7 +107,7 @@ public:
 
     virtual ~DataBatchProtectionAgentInterface() = default;
 
-private:
+protected:
     std::string column_name_;
     std::map<std::string, std::string> connection_config_;
     std::string app_context_;  // includes user_id
