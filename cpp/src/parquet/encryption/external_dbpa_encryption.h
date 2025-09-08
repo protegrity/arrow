@@ -45,6 +45,8 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
                               ::arrow::util::span<uint8_t> encrypted_footer) override;
  
  private:
+    //agent_instance is assumed to be initialized at the time of construction. 
+    //no initialization nor checks to verify that it is initialized are performed.
     ExternalDBPAEncryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
 
     int32_t InvokeExternalEncrypt(
@@ -60,7 +62,6 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
     std::map<std::string, std::string> connection_config_;
     
     std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
-    bool agent_initialized_ = false;
 };
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
@@ -108,7 +109,9 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
                   ::arrow::util::span<uint8_t> plaintext) override;
 
   private:
-    ExternalDBPADecryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance_);
+    //agent_instance is assumed to be initialized at the time of construction. 
+    //no initialization nor checks to verify that it is initialized are performed.
+    ExternalDBPADecryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
     
     int32_t InvokeExternalDecrypt(
       ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<uint8_t> plaintext);
@@ -124,7 +127,6 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
     std::map<std::string, std::string> connection_config_;
 
     std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
-    bool agent_initialized_ = false;
 };
 
 /// Factory for ExternalDBPADecryptorAdapter instances. No cache exists for decryptors.

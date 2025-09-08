@@ -55,6 +55,8 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   std::cout << "[DEBUG] Initializing agent instance" << std::endl;
 
   // Step 3: Initialize the agent.
+  //TODO: this may throw an exception.
+  //We'll need to handle it in the executor.
   agent_instance->init(
     /*column_name*/ column_name,
     /*connection_config*/ connection_config,
@@ -69,10 +71,10 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   return agent_instance;
 }
 
-//this is  private constructor, invoked from Make()
+//this is a private constructor, invoked from Make()
+//at this point, the agent_instance is assumed to be initialized.
 ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
   : agent_instance_(std::move(agent_instance)) {
-    agent_initialized_ = true;
 }
   
 std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
@@ -148,10 +150,6 @@ int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
         std::cout << "  [" << cfg_key << "]: [" << cfg_value << "]" << std::endl;
       }
   
-      if (!agent_initialized_) {
-        throw ParquetException("Underlying DBPA Agent was not initialized");
-      }
-
       std::cout << "[DEBUG] Calling agent_instance_->Encrypt..." << std::endl;
       std::unique_ptr<EncryptionResult> result = agent_instance_->Encrypt(plaintext);
   
@@ -225,9 +223,9 @@ ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
 }
 
 //private constructor, invoked from Make()
+//at this point, the agent_instance is assumed to be initialized.
 ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
   : agent_instance_(std::move(agent_instance)) {
-    agent_initialized_ = true;
 }
 
 std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make(
@@ -305,10 +303,6 @@ int32_t ExternalDBPADecryptorAdapter::InvokeExternalDecrypt(
         std::cout << "  [" << key << "]: [" << value << "]" << std::endl;
       }
   
-      if (!agent_initialized_) {
-        throw ParquetException("Underlying DBPA Agent was not initialized");
-      }
-
       std::cout << "[DEBUG] Calling agent_instance_->Decrypt..." << std::endl;
       std::unique_ptr<DecryptionResult> result = agent_instance_->Decrypt(ciphertext);
       
