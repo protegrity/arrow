@@ -5,6 +5,7 @@
 
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/external_dbpa_encryption.h"
+#include "parquet/encryption/external/test_utils.h"
 
 /// TODO(sbrenes): Add proper testing. Right now we are just going to test that the
 /// encryptor and decryptor are created and that the plaintext is returned as the ciphertext.
@@ -14,12 +15,15 @@ namespace parquet::encryption::test {
 class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
  protected:
   void SetUp() override {
+
+    // this library will use heuristics to load "libDBPATestAgent.so", needed for tests here.
+    std::string library_path = parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
+
     app_context_ = 
       "{\"user_id\": \"abc123\", \"location\": {\"lat\": 9.7489, \"lon\": -83.7534}}";
     connection_config_ = {
-      {"lib_name", "dbpa_lib.so"},
       {"config_path", "path/to/file"}, 
-      {"agent_library_path", "libDBPATestAgent.so"}
+      {"agent_library_path", library_path}
     };
   }
 

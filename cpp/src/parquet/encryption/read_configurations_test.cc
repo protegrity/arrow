@@ -30,6 +30,8 @@
 #include "parquet/file_reader.h"
 #include "parquet/test_util.h"
 
+#include "parquet/encryption/external/test_utils.h"
+
 /*
  * This file contains a unit-test for reading encrypted Parquet files with
  * different decryption configurations.
@@ -171,6 +173,9 @@ class TestDecryptionConfiguration
     // columns.
     vector_of_decryption_configurations_.push_back(NULL);
 
+    // this library will use heuristics to load "libDBPATestAgent.so", needed for this test.
+    std::string library_path = parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
+
     // Decryption configuration 5: External decryption configuration for use in per-column
     // encryption.   
     std::shared_ptr<parquet::StringKeyIdRetriever> string_kr5 =
@@ -184,7 +189,7 @@ class TestDecryptionConfiguration
     file_decryption_builder_5.key_retriever(kr5);
     file_decryption_builder_5.connection_config({
       {parquet::ParquetCipher::EXTERNAL_DBPA_V1, {
-          {"agent_library_path", "libDBPATestAgent.so"},
+          {"agent_library_path", library_path},
           {"file_path", "/tmp/test"},
           {"other_config", "value"}
       }}

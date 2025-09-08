@@ -33,6 +33,7 @@ if(ARROW_TESTING)
   # (depends on DBPATestAgent)
   add_parquet_test(loadable-encryptor-utils-test
                    SOURCES external/loadable_encryptor_utils_test.cc
+                           external/test_utils.cc
                    LABELS "parquet-tests" "encryption-tests")
 
   # Add test for DBPALibraryWrapper
