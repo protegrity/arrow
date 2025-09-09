@@ -47,7 +47,14 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
  private:
     //agent_instance is assumed to be initialized at the time of construction. 
     //no initialization nor checks to verify that it is initialized are performed.
-    ExternalDBPAEncryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
+//    ExternalDBPAEncryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
+
+    ExternalDBPAEncryptorAdapter(
+      ParquetCipher::type algorithm, std::string column_name,
+      std::string key_id, Type::type data_type, Compression::type compression_type,
+      Encoding::type encoding_type, std::string app_context,
+      std::map<std::string, std::string> connection_config,
+      std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
 
     int32_t InvokeExternalEncrypt(
       ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<uint8_t> ciphertext);
@@ -80,12 +87,6 @@ class ExternalDBPAEncryptorAdapterFactory {
 /// connection configuration provided.
 class ExternalDBPADecryptorAdapter : public DecryptorInterface {
  public:
-  explicit ExternalDBPADecryptorAdapter(
-      ParquetCipher::type algorithm, std::string column_name,
-      std::string key_id, Type::type data_type, Compression::type compression_type,
-      std::vector<Encoding::type> encoding_types, std::string app_context,
-      std::map<std::string, std::string> connection_config);
-
   static std::unique_ptr<ExternalDBPADecryptorAdapter> Make(
       ParquetCipher::type algorithm, std::string column_name,
       std::string key_id, Type::type data_type, Compression::type compression_type,
@@ -111,7 +112,12 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
   private:
     //agent_instance is assumed to be initialized at the time of construction. 
     //no initialization nor checks to verify that it is initialized are performed.
-    ExternalDBPADecryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
+    ExternalDBPADecryptorAdapter(
+      ParquetCipher::type algorithm, std::string column_name,
+      std::string key_id, Type::type data_type, Compression::type compression_type,
+      std::vector<Encoding::type> encoding_types, std::string app_context,
+      std::map<std::string, std::string> connection_config,
+      std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
     
     int32_t InvokeExternalDecrypt(
       ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<uint8_t> plaintext);

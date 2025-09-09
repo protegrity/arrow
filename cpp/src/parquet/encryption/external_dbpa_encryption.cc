@@ -73,8 +73,19 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
 
 //this is a private constructor, invoked from Make()
 //at this point, the agent_instance is assumed to be initialized.
-ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
-  : agent_instance_(std::move(agent_instance)) {
+//TODO: consider cleaning up the signature of this private constructor. 
+//      Most of the arguments are only needed by agent_instance, which is 
+//      instantiated before this constructor is invoked.
+ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
+  ParquetCipher::type algorithm, std::string column_name, std::string key_id,
+  Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
+  std::string app_context, std::map<std::string, std::string> connection_config,
+  std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
+  : algorithm_(algorithm), column_name_(column_name), key_id_(key_id),
+    data_type_(data_type), compression_type_(compression_type),
+    encoding_type_(encoding_type), app_context_(app_context),
+    connection_config_(connection_config),
+    agent_instance_(std::move(agent_instance)) {
 }
   
 std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
@@ -105,8 +116,18 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
 
         // create the instance of the ExternalDBPAEncryptorAdapter
         auto result = std::unique_ptr<ExternalDBPAEncryptorAdapter>(
-          new ExternalDBPAEncryptorAdapter(std::move(agent_instance))
+          new ExternalDBPAEncryptorAdapter(
+            /*algorithm*/ algorithm,
+            /*column_name*/ column_name,
+            /*key_id*/ key_id,
+            /*data_type*/ data_type,
+            /*compression_type*/ compression_type,
+            /*encoding_type*/ encoding_type,
+            /*app_context*/ app_context,
+            /*connection_config*/ connection_config,
+            /*agent_instance*/ std::move(agent_instance))
         );
+
         std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter created successfully" << std::endl;
 
         return result;
@@ -137,7 +158,7 @@ int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
 int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
     ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<uint8_t> ciphertext) {
 
-      std::cout << "\n*-*-*- START: ExternalDBPAEncryptor::Encrypt Hello World! *-*-*-" << std::endl;
+      std::cout << "\n*-*-*- START: ExternalDBPAEncryptor::Encrypt *-*-*-" << std::endl;
       std::cout << "Encryption Algorithm: [" << algorithm_ << "]" << std::endl;
       std::cout << "Column Name: [" << column_name_ << "]" << std::endl;
       std::cout << "Key ID: [" << key_id_ << "]" << std::endl;
@@ -224,8 +245,20 @@ ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
 
 //private constructor, invoked from Make()
 //at this point, the agent_instance is assumed to be initialized.
-ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
-  : agent_instance_(std::move(agent_instance)) {
+//TODO: consider cleaning up the signature of this private constructor. 
+//      Most of the arguments are only needed by agent_instance, which is 
+//      instantiated before this constructor is invoked.
+ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(
+  ParquetCipher::type algorithm, std::string column_name, std::string key_id,
+  Type::type data_type, Compression::type compression_type,
+  std::vector<Encoding::type> encoding_types, std::string app_context,
+  std::map<std::string, std::string> connection_config,
+  std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
+  : algorithm_(algorithm), column_name_(column_name), key_id_(key_id),
+    data_type_(data_type), compression_type_(compression_type),
+    encoding_types_(encoding_types), app_context_(app_context),
+    connection_config_(connection_config),
+    agent_instance_(std::move(agent_instance)) {
 }
 
 std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make(
@@ -261,7 +294,16 @@ std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make
 
         // create the instance of the ExternalDBPADecryptorAdapter
         auto result = std::unique_ptr<ExternalDBPADecryptorAdapter>(
-          new ExternalDBPADecryptorAdapter(std::move(agent_instance))
+          new ExternalDBPADecryptorAdapter(
+            /*algorithm*/ algorithm,
+            /*column_name*/ column_name,
+            /*key_id*/ key_id,
+            /*data_type*/ data_type,
+            /*compression_type*/ compression_type,
+            /*encoding_types*/ encoding_types,
+            /*app_context*/ app_context,
+            /*connection_config*/ connection_config,
+            /*agent_instance*/ std::move(agent_instance))
         );
         std::cout << "[DEBUG] ExternalDBPADecryptorAdapter created successfully" << std::endl;
 
@@ -286,7 +328,7 @@ int32_t ExternalDBPADecryptorAdapter::Decrypt(
 int32_t ExternalDBPADecryptorAdapter::InvokeExternalDecrypt(
     ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<uint8_t> plaintext) {
 
-      std::cout << "\n*-*-*- START: ExternalDBPADecryptor::Decrypt Hello World! *-*-*-" << std::endl;
+      std::cout << "\n*-*-*- START: ExternalDBPADecryptor::Decrypt *-*-*-" << std::endl;
       std::cout << "Decryption Algorithm: [" << algorithm_ << "]" << std::endl;
       std::cout << "Column Name: [" << column_name_ << "]" << std::endl;
       std::cout << "Key ID: [" << key_id_ << "]" << std::endl;
