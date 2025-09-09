@@ -243,7 +243,7 @@ if(PARQUET_REQUIRE_ENCRYPTION)
                    encryption/encryption_utils.cc
                    encryption/external_dbpa_encryption.cc
                    encryption/external/dbpa_library_wrapper.cc
-                   encryption/external/dbpa_utils.cc
+                   encryption/external/dbpa_enum_utils.cc
                    encryption/external/loadable_encryptor_utils.cc
                    )
   # Encryption key management

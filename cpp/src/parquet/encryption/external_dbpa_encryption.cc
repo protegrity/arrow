@@ -7,12 +7,12 @@
 #include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/encryption/key_metadata.h"
 #include "parquet/encryption/external/loadable_encryptor_utils.h"
-#include "parquet/encryption/external/dbpa_utils.h"
+#include "parquet/encryption/external/dbpa_enum_utils.h"
 #include "parquet/exception.h"
 #include "parquet/types.h"
 
 using parquet::encryption::external::LoadableEncryptorUtils;
-using parquet::encryption::external::dbpa_utils;
+using parquet::encryption::external::DBPAEnumUtils;
 
 using dbps::external::EncryptionResult;
 using dbps::external::DecryptionResult;
@@ -62,8 +62,8 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
     /*connection_config*/ connection_config,
     /*app_context*/ app_context,
     /*column_key_id*/ key_id,
-    /*data_type*/ dbpa_utils::ParquetTypeToExternal(data_type), 
-    /*compression_type*/ dbpa_utils::ArrowCompressionToExternal(compression_type)
+    /*data_type*/ DBPAEnumUtils::ParquetTypeToExternal(data_type), 
+    /*compression_type*/ DBPAEnumUtils::ArrowCompressionToExternal(compression_type)
   ); //LoadAndInitializeAgent()
   
   std::cout << "[DEBUG] Successfully initialized agent instance" << std::endl;

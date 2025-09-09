@@ -41,5 +41,8 @@ if(ARROW_TESTING)
                    SOURCES external/dbpa_library_wrapper_test.cc
                    LABELS "parquet-tests" "encryption-tests")
 
-
+  # Add a test for dbpa_enum_utils
+  add_parquet_test(dbpa-utils-test
+                   SOURCES external/dbpa_enum_utils_test.cc
+                   LABELS "parquet-tests" "encryption-tests")
 endif()
