@@ -1,4 +1,5 @@
 //TODO: figure out the licensing.
+//https://github.com/protegrity/arrow/issues/110
 
 #pragma once
 
@@ -41,17 +42,8 @@ struct CompressionCodec {
 // Format for data values
 struct Format {
     enum type {
-        JSON = 0,
-        CSV = 1,
-        RAW_C_DATA = 2
-    };
-};
-
-// Encoding applied to the data when serialized to send over the wire
-struct Encoding {
-    enum type {
-        UTF8 = 0,
-        BASE64 = 1
+        PLAIN = 0,
+        RAW_BYTES = 1
     };
 };
 
