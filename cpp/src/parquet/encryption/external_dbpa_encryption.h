@@ -10,6 +10,8 @@
 
 #include "parquet/encryption/encryptor_interface.h"
 #include "parquet/encryption/decryptor_interface.h"
+#include "parquet/encryption/column_chunk_properties.h"
+
 #include "parquet/metadata.h"
 #include "parquet/types.h"
 
@@ -25,6 +27,13 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
       std::string key_id, Type::type data_type, Compression::type compression_type,
       Encoding::type encoding_type, std::string app_context,
       std::map<std::string, std::string> connection_config);
+
+  static std::unique_ptr<ExternalDBPAEncryptorAdapter> Make(
+        ParquetCipher::type algorithm,
+        std::unique_ptr<ColumnChunkProperties> column_chunk_metadata_info,
+        std::string key_id,
+        std::string app_context,
+        std::map<std::string, std::string> connection_config);
 
   ~ExternalDBPAEncryptorAdapter() = default;
 
@@ -76,7 +85,7 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 class ExternalDBPAEncryptorAdapterFactory {
   public:
     ExternalDBPAEncryptorAdapter* GetEncryptor(
-      ParquetCipher::type algorithm, const ColumnChunkMetaDataBuilder* column_chunk_metadata,
+      ParquetCipher::type algorithm, const ColumnChunkMetaDataBuilder* column_chunk_properties,
       ExternalFileEncryptionProperties* external_file_encryption_properties);
 
   private:

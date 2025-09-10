@@ -87,7 +87,26 @@ ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
     connection_config_(connection_config),
     agent_instance_(std::move(agent_instance)) {
 }
-  
+
+std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
+  ParquetCipher::type algorithm,
+  std::unique_ptr<ColumnChunkProperties> column_chunk_properties,
+  std::string key_id,
+  std::string app_context,
+  std::map<std::string, std::string> connection_config) {
+
+  return ExternalDBPAEncryptorAdapter::Make(
+    /*algorithm*/ algorithm, 
+    /*column_name*/ column_chunk_metadata_info->GetColumnPath(), 
+    /*key_id*/ key_id,
+    /*data_type*/ column_chunk_metadata_info->GetPhysicalType(),
+    /*compression_type*/ column_chunk_metadata_info->GetCompression(),
+    /*encoding_type*/ column_chunk_metadata_info->GetDataPageEncoding(),
+    /*app_context*/ app_context,
+    /*connection_config*/ connection_config
+  );
+}
+
 std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
     Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
@@ -218,9 +237,9 @@ ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
       throw ParquetException(ss.str());
     }
 
-    auto data_type = column_chunk_metadata->descr()->physical_type();
-    auto compression_type = column_chunk_metadata->properties()->compression(column_path);
-    auto encoding_type = column_chunk_metadata->properties()->encoding(column_path);
+    // auto data_type = column_chunk_metadata->descr()->physical_type();
+    //auto compression_type = column_chunk_metadata->properties()->compression(column_path);
+    //auto encoding_type = column_chunk_metadata->properties()->encoding(column_path);
     auto app_context = external_file_encryption_properties->app_context();
     auto connection_config_for_algorithm = connection_config.at(algorithm);
 
@@ -235,9 +254,28 @@ ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
       key_id = column_encryption_properties->key_metadata();
     }
 
+    auto column_chunk_metadata_info = ColumnChunkProperties::MakeFromMetadata(column_chunk_metadata);
+
+/*
+  static std::unique_ptr<ExternalDBPAEncryptorAdapter> Make(
+        ParquetCipher::type algorithm,
+        std::shared_ptr<ColumnChunkProperties> column_chunk_metadata_info,
+        std::string key_id,
+        std::string app_context,
+        std::map<std::string, std::string> connection_config);
+*/
+
+
     encryptor_cache_[column_path->ToDotString()] = ExternalDBPAEncryptorAdapter::Make(
-        algorithm, column_path->ToDotString(), key_id, data_type, compression_type,
-        encoding_type, app_context, connection_config_for_algorithm);
+        algorithm, 
+        std::move(column_chunk_metadata_info), 
+        key_id, 
+        app_context, 
+        connection_config_for_algorithm);
+
+    // encryptor_cache_[column_path->ToDotString()] = ExternalDBPAEncryptorAdapter::Make(
+    //     algorithm, column_path->ToDotString(), key_id, data_type, compression_type,
+    //     encoding_type, app_context, connection_config_for_algorithm);
   }
 
   return encryptor_cache_[column_path->ToDotString()].get();
@@ -260,6 +298,7 @@ ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(
     connection_config_(connection_config),
     agent_instance_(std::move(agent_instance)) {
 }
+
 
 std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
