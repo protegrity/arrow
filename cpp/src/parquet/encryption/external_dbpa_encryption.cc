@@ -62,8 +62,8 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
     /*connection_config*/ connection_config,
     /*app_context*/ app_context,
     /*column_key_id*/ key_id,
-    /*data_type*/ DBPAEnumUtils::ParquetTypeToExternal(data_type), 
-    /*compression_type*/ DBPAEnumUtils::ArrowCompressionToExternal(compression_type)
+    /*data_type*/ DBPAEnumUtils::ParquetTypeToDBPA(data_type), 
+    /*compression_type*/ DBPAEnumUtils::ArrowCompressionToDBPA(compression_type)
   ); //LoadAndInitializeAgent()
   
   std::cout << "[DEBUG] Successfully initialized agent instance" << std::endl;

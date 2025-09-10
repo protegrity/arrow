@@ -23,9 +23,7 @@ class DBPAEnumUtils {
 public:
     // Static maps for type conversions
     static const std::unordered_map<parquet::Type::type, dbps::external::Type::type> parquet_to_external_type_map;
-    static const std::unordered_map<dbps::external::Type::type, parquet::Type::type> external_to_parquet_type_map;
     static const std::unordered_map<::arrow::Compression::type, dbps::external::CompressionCodec::type> arrow_to_external_compression_map;
-    static const std::unordered_map<dbps::external::CompressionCodec::type, ::arrow::Compression::type> external_to_arrow_compression_map;
 
     /**
      * Convert parquet::Type to dbps::external::Type
@@ -33,16 +31,8 @@ public:
      * @param parquet_type The parquet type to convert
      * @return The corresponding dbps::external::Type
      */
-    static dbps::external::Type::type ParquetTypeToExternal(parquet::Type::type parquet_type);
-    
-    /**
-     * Convert dbps::external::Type to parquet::Type
-     * 
-     * @param external_type The dbps::external type to convert
-     * @return The corresponding parquet::Type
-     */
-    static parquet::Type::type ExternalTypeToParquet(dbps::external::Type::type external_type);
-    
+    static dbps::external::Type::type ParquetTypeToDBPA(parquet::Type::type parquet_type);
+        
     /**
      * Convert arrow::Compression to dbps::external::CompressionCodec
      * 
@@ -50,16 +40,7 @@ public:
      * @return The corresponding dbps::external::CompressionCodec
      * @throws std::invalid_argument if the Arrow compression type cannot be mapped
      */
-    static dbps::external::CompressionCodec::type ArrowCompressionToExternal(::arrow::Compression::type arrow_compression);
-    
-    /**
-     * Convert dbps::external::CompressionCodec to arrow::Compression
-     * 
-     * @param external_compression The dbps::external compression type to convert
-     * @return The corresponding arrow::Compression
-     * @throws std::invalid_argument if the external compression type cannot be mapped
-     */
-    static ::arrow::Compression::type ExternalCompressionToArrow(dbps::external::CompressionCodec::type external_compression);
+    static dbps::external::CompressionCodec::type ArrowCompressionToDBPA(::arrow::Compression::type arrow_compression);    
 };
 
 } // namespace parquet::encryption::external

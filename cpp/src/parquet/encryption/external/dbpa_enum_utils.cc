@@ -27,18 +27,6 @@ const std::unordered_map<parquet::Type::type, dbps::external::Type::type> DBPAEn
 };
 
 // ------------------------------------------------------------
-// dbps::external::Type -> parquet::Type
-// Identical to the map above, but with the keys and values swapped.
-// ------------------------------------------------------------
-const std::unordered_map<dbps::external::Type::type, parquet::Type::type> DBPAEnumUtils::external_to_parquet_type_map = []() {
-    std::unordered_map<dbps::external::Type::type, parquet::Type::type> map;
-    for (const auto& pair : DBPAEnumUtils::parquet_to_external_type_map) {
-        map[pair.second] = pair.first;
-    }
-    return map;
-}();
-
-// ------------------------------------------------------------
 // arrow::Compression -> dbps::external::CompressionCodec
 // values for arrow::Compression are coming from arrow/type_fwd.h
 // Note: Some Arrow compression types don't have direct DBPS equivalents
@@ -56,32 +44,10 @@ const std::unordered_map<::arrow::Compression::type, dbps::external::Compression
 };
 
 // ------------------------------------------------------------
-// dbps::external::CompressionCodec -> arrow::Compression
-// Note: LZ4_RAW from DBPS doesn't have a direct Arrow equivalent
-// ------------------------------------------------------------
-const std::unordered_map<dbps::external::CompressionCodec::type, ::arrow::Compression::type> DBPAEnumUtils::external_to_arrow_compression_map = []() {
-    std::unordered_map<dbps::external::CompressionCodec::type, ::arrow::Compression::type> map;
-    for (const auto& pair : DBPAEnumUtils::arrow_to_external_compression_map) {
-        map[pair.second] = pair.first;
-    }
-    // LZ4_RAW from DBPS doesn't have a direct Arrow equivalent
-    // Could potentially map to LZ4, but that might be semantically incorrect
-    return map;
-}();
-
-
-// ------------------------------------------------------------
 // function which returns parquet::Type::type to dbps::external::Type::type
 // ------------------------------------------------------------
-dbps::external::Type::type DBPAEnumUtils::ParquetTypeToExternal(parquet::Type::type parquet_type) {
+dbps::external::Type::type DBPAEnumUtils::ParquetTypeToDBPA(parquet::Type::type parquet_type) {
 
-    //TODO: how should we handle this? 
-    //UNDEFINED is a valid parquet::Type::type
-    // Handle special case for UNDEFINED type
-    if (parquet_type == parquet::Type::UNDEFINED) {
-        throw std::invalid_argument("Invalid parquet::Type value: UNDEFINED");
-    }
-    
     // Look up the mapping in the static map
     auto it = parquet_to_external_type_map.find(parquet_type);
     if (it != parquet_to_external_type_map.end()) {
@@ -92,22 +58,9 @@ dbps::external::Type::type DBPAEnumUtils::ParquetTypeToExternal(parquet::Type::t
 }
 
 // ------------------------------------------------------------
-// function which returns dbps::external::Type::type to parquet::Type::type
-// ------------------------------------------------------------
-parquet::Type::type DBPAEnumUtils::ExternalTypeToParquet(dbps::external::Type::type external_type) {
-    // Look up the mapping in the static map
-    auto it = external_to_parquet_type_map.find(external_type);
-    if (it != external_to_parquet_type_map.end()) {
-        return it->second;
-    }
-    
-    throw std::invalid_argument("Invalid dbps::external::Type value");
-}
-
-// ------------------------------------------------------------
 // function which returns arrow::Compression::type to dbps::external::CompressionCodec::type
 // ------------------------------------------------------------
-dbps::external::CompressionCodec::type DBPAEnumUtils::ArrowCompressionToExternal(::arrow::Compression::type arrow_compression) {
+dbps::external::CompressionCodec::type DBPAEnumUtils::ArrowCompressionToDBPA(::arrow::Compression::type arrow_compression) {
     // Look up the mapping in the static map
     auto it = arrow_to_external_compression_map.find(arrow_compression);
     if (it != arrow_to_external_compression_map.end()) {
@@ -115,19 +68,6 @@ dbps::external::CompressionCodec::type DBPAEnumUtils::ArrowCompressionToExternal
     }
     
     throw std::invalid_argument("Invalid arrow::Compression value");
-}
-
-// ------------------------------------------------------------
-// function which returns dbps::external::CompressionCodec::type to arrow::Compression::type
-// ------------------------------------------------------------
-::arrow::Compression::type DBPAEnumUtils::ExternalCompressionToArrow(dbps::external::CompressionCodec::type external_compression) {
-    // Look up the mapping in the static map
-    auto it = external_to_arrow_compression_map.find(external_compression);
-    if (it != external_to_arrow_compression_map.end()) {
-        return it->second;
-    }
-    
-    throw std::invalid_argument("Invalid dbps::external::CompressionCodec value");
 }
 
 } // namespace parquet::encryption::external
