@@ -88,6 +88,29 @@ ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
     agent_instance_(std::move(agent_instance)) {
 }
 
+///This is a second private constructor. It demonstrates how a lot of the 
+//arguments required in the original constructor are available
+//in the column_chunk_properties object, and we should plan to
+//use it in the future.
+ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
+  ParquetCipher::type algorithm, 
+  std::unique_ptr<ColumnChunkProperties> column_chunk_properties,
+  std::string key_id,
+  std::string app_context,
+  std::map<std::string, std::string> connection_config,
+  std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance) 
+    : algorithm_(algorithm), 
+    column_name_(column_chunk_properties->GetColumnPath()), 
+    key_id_(key_id),
+    data_type_(column_chunk_properties->GetPhysicalType()), 
+    compression_type_(column_chunk_properties->GetCompression()),
+    encoding_type_(column_chunk_properties->GetDataPageEncoding()), 
+    app_context_(app_context),
+    connection_config_(connection_config),
+    agent_instance_(std::move(agent_instance)),
+    column_chunk_properties_(std::move(column_chunk_properties)) {
+ }
+
 std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
   ParquetCipher::type algorithm,
   std::unique_ptr<ColumnChunkProperties> column_chunk_properties,
@@ -95,17 +118,38 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
   std::string app_context,
   std::map<std::string, std::string> connection_config) {
 
-  return ExternalDBPAEncryptorAdapter::Make(
-    /*algorithm*/ algorithm, 
-    /*column_name*/ column_chunk_metadata_info->GetColumnPath(), 
-    /*key_id*/ key_id,
-    /*data_type*/ column_chunk_metadata_info->GetPhysicalType(),
-    /*compression_type*/ column_chunk_metadata_info->GetCompression(),
-    /*encoding_type*/ column_chunk_metadata_info->GetDataPageEncoding(),
-    /*app_context*/ app_context,
-    /*connection_config*/ connection_config
-  );
-}
+
+    std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::Make() -- Make(#2)" << std::endl;
+
+    std::cout << "[DEBUG]   algorithm = " << algorithm << std::endl;
+    std::cout << "[DEBUG]   column_name = " << column_chunk_properties->GetColumnPath() << std::endl;
+    std::cout << "[DEBUG]   key_id = " << key_id << std::endl;
+    std::cout << "[DEBUG]   app_context = " << app_context << std::endl;
+    std::cout << "[DEBUG]   connection_config:" << std::endl;
+    for (const auto& [key, value] : connection_config) {
+      std::cout << "[DEBUG]    " << key << " = " << value << std::endl;
+    }
+
+    auto agent_instance = LoadAndInitializeAgent(
+      column_chunk_properties->GetColumnPath(), 
+      connection_config, 
+      app_context, 
+      key_id, 
+      column_chunk_properties->GetPhysicalType(), 
+      column_chunk_properties->GetCompression());
+
+    //using the second private constructor.
+    auto result = std::unique_ptr<ExternalDBPAEncryptorAdapter>(
+      new ExternalDBPAEncryptorAdapter(
+        algorithm, 
+        std::move(column_chunk_properties), 
+        key_id, 
+        app_context, 
+        connection_config, 
+        std::move(agent_instance)));
+
+    return result;
+  }
 
 std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
@@ -164,6 +208,9 @@ int32_t ExternalDBPAEncryptorAdapter::Encrypt(
     ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<const uint8_t> key,
     ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<uint8_t> ciphertext) {
 
+
+  //column_chunk_properties_ is available here.
+  //but we likely should use it from InvokeExternalEncrypt().
   return InvokeExternalEncrypt(plaintext, ciphertext);
 }
 

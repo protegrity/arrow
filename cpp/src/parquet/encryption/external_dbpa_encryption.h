@@ -65,6 +65,17 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
       std::map<std::string, std::string> connection_config,
       std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
 
+    ///This is a second private constructor. It demonstrates how a lot of the 
+    //arguments required in the original constructor are available
+    //in the column_chunk_properties object.
+    ExternalDBPAEncryptorAdapter(
+      ParquetCipher::type algorithm, 
+      std::unique_ptr<ColumnChunkProperties> column_chunk_properties,
+      std::string key_id,
+      std::string app_context,
+      std::map<std::string, std::string> connection_config,
+      std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
+
     int32_t InvokeExternalEncrypt(
       ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<uint8_t> ciphertext);
     
@@ -78,6 +89,7 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
     std::map<std::string, std::string> connection_config_;
     
     std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
+    std::unique_ptr<ColumnChunkProperties> column_chunk_properties_;
 };
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
