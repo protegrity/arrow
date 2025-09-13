@@ -8,11 +8,27 @@
 #include "parquet/encryption/external/third_party/dbpa_interface.h"
 #include "parquet/encryption/external/dbpa_enum_utils.h"
 
+#include "parquet/encryption/external/third_party/magic_enum.hpp" //https://github.com/Neargye/magic_enum
+
+using  magic_enum::enum_count;
+
 namespace parquet::encryption::external {
 
 class DBPAUtilsTest : public ::testing::Test {
  protected:
-  void SetUp() override {}
+  void SetUp() override {
+    // Calculate enum sizes once during test initialization
+
+  // We use "Magic Enum" to check the sizes of the enums.
+  // https://github.com/Neargye/magic_enum
+  // (the additional library is needed as reflection for enums is not available in C++)
+    parquet_type_enum_size_ = magic_enum::enum_count<parquet::Type::type>();
+    arrow_compression_enum_size_ = magic_enum::enum_count<::arrow::Compression::type>();
+  }
+  
+  // Enum sizes calculated during test initialization
+  std::size_t parquet_type_enum_size_;
+  std::size_t arrow_compression_enum_size_ ;
 };
 
 TEST_F(DBPAUtilsTest, ParquetTypeToExternal) {
@@ -51,23 +67,12 @@ TEST_F(DBPAUtilsTest, ArrowCompressionToExternal) {
             dbps::external::CompressionCodec::LZ4);
   EXPECT_EQ(DBPAEnumUtils::ArrowCompressionToDBPA(::arrow::Compression::ZSTD), 
             dbps::external::CompressionCodec::ZSTD);
-}
-
-// TODO: this needs to be deleted.
-// TEST_F(DBPAUtilsTest, InvalidParquetType) {
-//   // Test that invalid parquet type throws exception
-//   EXPECT_THROW(DBPAEnumUtils::ParquetTypeToDBPA(parquet::Type::UNDEFINED), 
-//                std::invalid_argument);
-// }
-
-TEST_F(DBPAUtilsTest, UnsupportedArrowCompression) {
-  // Test that unsupported arrow compression types throw exceptions
-  EXPECT_THROW(DBPAEnumUtils::ArrowCompressionToDBPA(::arrow::Compression::LZ4_FRAME), 
-               std::invalid_argument);
-  EXPECT_THROW(DBPAEnumUtils::ArrowCompressionToDBPA(::arrow::Compression::BZ2), 
-               std::invalid_argument);
-  EXPECT_THROW(DBPAEnumUtils::ArrowCompressionToDBPA(::arrow::Compression::LZ4_HADOOP), 
-               std::invalid_argument);
+  EXPECT_EQ(DBPAEnumUtils::ArrowCompressionToDBPA(::arrow::Compression::LZ4_FRAME), 
+            dbps::external::CompressionCodec::LZ4_FRAME);
+  EXPECT_EQ(DBPAEnumUtils::ArrowCompressionToDBPA(::arrow::Compression::BZ2), 
+            dbps::external::CompressionCodec::BZ2);
+  EXPECT_EQ(DBPAEnumUtils::ArrowCompressionToDBPA(::arrow::Compression::LZ4_HADOOP), 
+            dbps::external::CompressionCodec::LZ4_HADOOP);
 }
 
 TEST_F(DBPAUtilsTest, AllValidTypeMappings) {
@@ -81,9 +86,12 @@ TEST_F(DBPAUtilsTest, AllValidTypeMappings) {
     parquet::Type::FLOAT,
     parquet::Type::DOUBLE,
     parquet::Type::BYTE_ARRAY,
-    parquet::Type::FIXED_LEN_BYTE_ARRAY
-    // TODO: add UNDEFINED
+    parquet::Type::FIXED_LEN_BYTE_ARRAY,
+    parquet::Type::UNDEFINED
   };
+
+  //ensure that the map is complete.
+  ASSERT_EQ(valid_parquet_types.size(), parquet_type_enum_size_);
   
   for (auto parquet_type : valid_parquet_types) {
     EXPECT_NO_THROW(DBPAEnumUtils::ParquetTypeToDBPA(parquet_type));
@@ -100,10 +108,13 @@ TEST_F(DBPAUtilsTest, AllValidCompressionMappings) {
     ::arrow::Compression::LZO,
     ::arrow::Compression::BROTLI,
     ::arrow::Compression::LZ4,
-    ::arrow::Compression::ZSTD
-    //TODO: check for completeness
-
+    ::arrow::Compression::ZSTD,
+    ::arrow::Compression::LZ4_FRAME,
+    ::arrow::Compression::BZ2,
+    ::arrow::Compression::LZ4_HADOOP
   };
+
+  ASSERT_EQ(valid_arrow_compressions.size(), arrow_compression_enum_size_);
   
   for (auto arrow_compression : valid_arrow_compressions) {
     EXPECT_NO_THROW(DBPAEnumUtils::ArrowCompressionToDBPA(arrow_compression));
@@ -111,26 +122,27 @@ TEST_F(DBPAUtilsTest, AllValidCompressionMappings) {
 }
 
 TEST_F(DBPAUtilsTest, MapSizeAssertions) {
-  // Test the actual map sizes by accessing the public static maps directly
+  // Test the actual map sizes by accessing the enums and the public static maps directly
   // This provides a direct way to verify map completeness
   
-  // Expected sizes based on our implementation:
-  // - parquet_to_external_type_map: 8 entries (all parquet types except UNDEFINED)
-  // - external_to_parquet_type_map: 8 entries (same as above, just reversed)
-  // - arrow_to_external_compression_map: 7 entries (supported arrow compressions)
-  // - external_to_arrow_compression_map: 7 entries (same as above, just reversed)
+  // Parquet::Type::type assertions
+  EXPECT_EQ(parquet_type_enum_size_, 9)
+    << "Expected 9 parquet type mappings (excluding UNDEFINED)";
 
+  EXPECT_EQ(parquet_type_enum_size_, DBPAEnumUtils::parquet_to_external_type_map.size())
+    << "Expected 9 parquet type mappings (excluding UNDEFINED)";
 
-  // TODO: this does not guarantee that the maps are complete.
-  // It may be a risk we need to live with, given that there is no reflection-type of
-  // mechanism to check all the values from the maps. 
-  // however, "Magic Enum", a third-party library, provides a way to check all the values from the maps.
-  // https://github.com/Neargye/magic_enum
+  EXPECT_EQ(DBPAEnumUtils::parquet_to_external_type_map.size(), 9) 
+    << "Expected 9 parquet type mappings (excluding UNDEFINED)";
   
-  EXPECT_EQ(DBPAEnumUtils::parquet_to_external_type_map.size(), 8) 
-    << "Expected 8 parquet type mappings (excluding UNDEFINED)";
-  
-  EXPECT_EQ(DBPAEnumUtils::arrow_to_external_compression_map.size(), 7) 
-    << "Expected 7 arrow compression mappings";
+  // Arrow::Compression::type assertions
+  EXPECT_EQ(DBPAEnumUtils::arrow_to_external_compression_map.size(), 10) 
+    << "Expected 10 arrow compression mappings";
+
+  EXPECT_EQ(arrow_compression_enum_size_, 10)
+     << "Expected 10 arrow compression mappings";
+
+  EXPECT_EQ(arrow_compression_enum_size_, DBPAEnumUtils::arrow_to_external_compression_map.size())
+    << "Expected 10 arrow compression mappings";
 }
 } // namespace parquet::encryption::external

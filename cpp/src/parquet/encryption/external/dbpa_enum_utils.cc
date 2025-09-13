@@ -22,8 +22,8 @@ const std::unordered_map<parquet::Type::type, dbps::external::Type::type> DBPAEn
     {parquet::Type::FLOAT, dbps::external::Type::FLOAT},
     {parquet::Type::DOUBLE, dbps::external::Type::DOUBLE},
     {parquet::Type::BYTE_ARRAY, dbps::external::Type::BYTE_ARRAY},
-    {parquet::Type::FIXED_LEN_BYTE_ARRAY, dbps::external::Type::FIXED_LEN_BYTE_ARRAY}
-    //TODO: Parquet contains an UNDEFINED value which we'll need to handle.
+    {parquet::Type::FIXED_LEN_BYTE_ARRAY, dbps::external::Type::FIXED_LEN_BYTE_ARRAY},
+    {parquet::Type::UNDEFINED, dbps::external::Type::UNDEFINED}
 };
 
 // ------------------------------------------------------------
@@ -38,9 +38,10 @@ const std::unordered_map<::arrow::Compression::type, dbps::external::Compression
     {::arrow::Compression::LZO, dbps::external::CompressionCodec::LZO},
     {::arrow::Compression::BROTLI, dbps::external::CompressionCodec::BROTLI},
     {::arrow::Compression::LZ4, dbps::external::CompressionCodec::LZ4},
-    {::arrow::Compression::ZSTD, dbps::external::CompressionCodec::ZSTD}
-    // TODO: Arrow-specific compression types that don't have direct DBPS equivalents:
-    // LZ4_FRAME, BZ2, LZ4_HADOOP are not supported by DBPS. We'll need to handle this.
+    {::arrow::Compression::ZSTD, dbps::external::CompressionCodec::ZSTD},
+    {::arrow::Compression::LZ4_FRAME, dbps::external::CompressionCodec::LZ4_FRAME},
+    {::arrow::Compression::BZ2, dbps::external::CompressionCodec::BZ2},
+    {::arrow::Compression::LZ4_HADOOP, dbps::external::CompressionCodec::LZ4_HADOOP}
 };
 
 // ------------------------------------------------------------
