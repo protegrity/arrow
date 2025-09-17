@@ -25,9 +25,12 @@
 #include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryptor_interface.h"
+#include "parquet/encryption/column_chunk_properties.h"
 #include "parquet/metadata.h"
 
 namespace parquet {
+
+using ::parquet::encryption::ColumnChunkProperties;
 
 class FileEncryptionProperties;
 class ColumnEncryptionProperties;
@@ -45,6 +48,8 @@ class PARQUET_EXPORT Encryptor {
 
   int32_t Encrypt(::arrow::util::span<const uint8_t> plaintext,
                   ::arrow::util::span<uint8_t> ciphertext);
+
+  void UpdateEncryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties);
 
   bool EncryptColumnMetaData(
       bool encrypted_footer,

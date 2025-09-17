@@ -306,6 +306,27 @@ class SerializedPageWriter : public PageWriter {
       UpdateEncryption(encryption::kDictionaryPage);
       PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
           data_encryptor_->CiphertextLength(output_data_len), false));
+
+      // Creating a ColumnChunkProperties object from the metadata.
+      // We're retrieving the column descriptor and writer properties 
+      // from the metadata_ object to simplify the code.
+      //
+      // WriterProperties is created using WriterProperties::Builder::build() (in parquet/properties.h ) 
+      // via ParquetFileFormat::MakeWriter (in arrow/dataset/file_parquet.cc), 
+      // and passed down to ColumnChunkMetaDataBuilder::Make().
+
+      // A SchemaDescriptor is created in FileWriter::Open() (parquet/file_writer.cc). 
+      // The SchemaDescriptor is passed down to RowGroupMetadataBuilder NextColumnChunk() (parquet/metadata.cc)
+      // where a ColumnDescriptor is extracted from the SchemaDescriptor, and passed into
+      // ColumnChunkMetaDataBuilder::Make() 
+
+      std::unique_ptr<ColumnChunkProperties> column_chunk_properties = 
+        ColumnChunkProperties::MakeFromMetadata(
+          metadata_->descr(), 
+          metadata_->properties(), 
+          static_cast<const DictionaryPage&>(page));
+      data_encryptor_->UpdateEncryptionParams(std::move(column_chunk_properties));
+
       output_data_len =
           data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),
                                    encryption_buffer_->mutable_span_as<uint8_t>());
@@ -398,6 +419,26 @@ class SerializedPageWriter : public PageWriter {
       PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
           data_encryptor_->CiphertextLength(output_data_len), false));
       UpdateEncryption(encryption::kDataPage);
+
+      // Creating a ColumnChunkProperties object from the metadata.
+      // We're retrieving the column descriptor and writer properties 
+      // from the metadata_ object to simplify the code.
+      //
+      // WriterProperties is created using WriterProperties::Builder::build() (in parquet/properties.h ) 
+      // via ParquetFileFormat::MakeWriter (in arrow/dataset/file_parquet.cc), 
+      // and passed down to ColumnChunkMetaDataBuilder::Make().
+
+      // A SchemaDescriptor is created in FileWriter::Open() (parquet/file_writer.cc). 
+      // The SchemaDescriptor is passed down to RowGroupMetadataBuilder NextColumnChunk() (parquet/metadata.cc)
+      // where a ColumnDescriptor is extracted from the SchemaDescriptor, and passed into
+      // ColumnChunkMetaDataBuilder::Make() 
+      std::unique_ptr<ColumnChunkProperties> column_chunk_properties = 
+        ColumnChunkProperties::MakeFromMetadata(
+          metadata_->descr(), 
+          metadata_->properties(), 
+          static_cast<const DataPage&>(page));
+      data_encryptor_->UpdateEncryptionParams(std::move(column_chunk_properties));
+
       output_data_len =
           data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),
                                    encryption_buffer_->mutable_span_as<uint8_t>());

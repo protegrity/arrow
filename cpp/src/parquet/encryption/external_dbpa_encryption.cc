@@ -159,10 +159,23 @@ int32_t ExternalDBPAEncryptorAdapter::CiphertextLength(int64_t plaintext_len) co
   std::cout << "  return_value = " << return_value << std::endl;
   return plaintext_len;
 }
-  
+
+void ExternalDBPAEncryptorAdapter::UpdateEncryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) {
+  std::cout << "ExternalDBPAEncryptorAdapter::UpdateEncryptionParams" << std::endl;
+  updated_column_chunk_properties_ = std::move(column_chunk_properties);
+  encryption_params_updated_ = true;
+}
+
 int32_t ExternalDBPAEncryptorAdapter::Encrypt(
     ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<const uint8_t> key,
     ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<uint8_t> ciphertext) {
+
+  if (!encryption_params_updated_) {
+    std::cout << "[ERROR] Params not updated" << std::endl;
+    throw ParquetException("Params not updated");
+  }
+
+  encryption_params_updated_ = false;
 
   return InvokeExternalEncrypt(plaintext, ciphertext);
 }

@@ -2,10 +2,13 @@
 
 #include <gtest/gtest.h>
 #include <memory>
+#include <string>
+#include <map>
 
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/encryption/external/test_utils.h"
+#include "parquet/encryption/column_chunk_properties.h"
 
 /// TODO(sbrenes): Add proper testing. Right now we are just going to test that the
 /// encryptor and decryptor are created and that the plaintext is returned as the ciphertext.
@@ -35,6 +38,22 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
       algorithm, column_name, key_id, data_type, 
       compression_type, encoding_type, app_context_, 
       connection_config_);
+
+    // Create a simple ColumnChunkProperties for testing using the builder pattern
+    std::unique_ptr<ColumnChunkProperties> column_chunk_properties = 
+        ColumnChunkProperties::Builder() //values chosen at random
+            .ColumnPath("test_column")
+            .PhysicalType(data_type)
+            .CompressionCodec(compression_type)
+            .PageType(parquet::PageType::DATA_PAGE_V2)
+            .PageV2DefinitionLevelsByteLength(10)
+            .PageV2RepetitionLevelsByteLength(10)
+            .PageV2NumNulls(10)
+            .PageV2IsCompressed(true)
+            .PageEncoding(encoding_type)
+            .DataPageNumValues(100) 
+            .Build();
+    encryptor->UpdateEncryptionParams(std::move(column_chunk_properties));
 
     int32_t expected_ciphertext_length = plaintext.size();
     int32_t actual_ciphertext_length = encryptor->CiphertextLength(plaintext.size());

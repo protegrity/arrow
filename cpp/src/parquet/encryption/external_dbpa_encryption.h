@@ -43,11 +43,13 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
                               ::arrow::util::span<const uint8_t> aad,
                               ::arrow::util::span<const uint8_t> nonce,
                               ::arrow::util::span<uint8_t> encrypted_footer) override;
+
+
+  void UpdateEncryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) override;
  
  private:
     //agent_instance is assumed to be initialized at the time of construction. 
     //no initialization nor checks to verify that it is initialized are performed.
-//    ExternalDBPAEncryptorAdapter(std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
 
     ExternalDBPAEncryptorAdapter(
       ParquetCipher::type algorithm, std::string column_name,
@@ -69,6 +71,9 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
     std::map<std::string, std::string> connection_config_;
     
     std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
+    
+    std::unique_ptr<ColumnChunkProperties> updated_column_chunk_properties_;
+    bool encryption_params_updated_ = false;
 };
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
