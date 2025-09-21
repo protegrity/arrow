@@ -20,15 +20,7 @@ using dbps::external::DecryptionResult;
 using dbps::external::Type;
 using dbps::external::CompressionCodec;
 
-/**
- * Exception thrown when a DBPA operation times out
- */
-class DBPAExecutorTimeoutException : public std::runtime_error {
-public:
-    explicit DBPAExecutorTimeoutException(const std::string& operation, int64_t timeout_milliseconds)
-        : std::runtime_error("DBPAExecutor: " + operation + " operation timed out after " +
-                           std::to_string(timeout_milliseconds) + " milliseconds") {}
-};
+class DBPAExecutorTimeoutException;
 
 /**
  * DBPAExecutor - A decorator for DataBatchProtectionAgentInterface with timeout support
@@ -96,4 +88,14 @@ class DBPAExecutor : public DataBatchProtectionAgentInterface {
     int64_t decrypt_timeout_milliseconds_;    
 }; // class DBPAExecutor
 
+/**
+ * Exception thrown when a DBPA operation times out
+ */
+ class DBPAExecutorTimeoutException : public std::runtime_error {
+  public:
+      explicit DBPAExecutorTimeoutException(const std::string& operation, int64_t timeout_milliseconds)
+          : std::runtime_error("DBPAExecutor: " + operation + " operation timed out after " +
+                             std::to_string(timeout_milliseconds) + " milliseconds") {}
+  };
+  
 }  // namespace parquet::encryption::external
