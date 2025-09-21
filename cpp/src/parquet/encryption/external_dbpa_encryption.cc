@@ -8,11 +8,13 @@
 #include "parquet/encryption/key_metadata.h"
 #include "parquet/encryption/external/loadable_encryptor_utils.h"
 #include "parquet/encryption/external/dbpa_enum_utils.h"
+#include "parquet/encryption/external/dbpa_executor.h"
 #include "parquet/exception.h"
 #include "parquet/types.h"
 
 using parquet::encryption::external::LoadableEncryptorUtils;
 using parquet::encryption::external::DBPAEnumUtils;
+using parquet::encryption::external::DBPAExecutor;
 
 using dbps::external::EncryptionResult;
 using dbps::external::DecryptionResult;
@@ -52,12 +54,31 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
     throw ParquetException("Failed to create instance of DataBatchProtectionAgentInterface");
   }        
   std::cout << "[DEBUG] Successfully loaded agent_instance" << std::endl;
+
+  std::cout << "[DEBUG] Wrapping agent in DBPAExecutor" << std::endl;
+
+  //Step 3: Wrap the agent in a DBPAExecutor.
+  //operations will timeout, exceptions will be re-thrown.
+  //TODO: figure out timeouts and how to configure them(read them from app_config/connection_config?)
+  //https://github.com/protegrity/arrow/issues/151
+
+  std::cout << "[DEBUG] Wrapping Agent in DBPAExecutor" << std::endl;
+
+  const int64_t init_timeout_ms    = 10*1000; //10 seconds
+  const int64_t encrypt_timeout_ms = 30*1000; //30 seconds
+  const int64_t decrypt_timeout_ms = 30*1000; //30 seconds.
+
+  auto executor_wrapped_agent = std::make_unique<DBPAExecutor>(
+    /*agent*/ std::move(agent_instance), 
+    /*init_timeout_ms*/ init_timeout_ms, 
+    /*encrypt_timeout_ms*/  encrypt_timeout_ms, 
+    /*decrypt_timeout_ms*/ decrypt_timeout_ms
+  );
+
+  // Step 4: Initialize the agent.
   std::cout << "[DEBUG] Initializing agent instance" << std::endl;
 
-  // Step 3: Initialize the agent.
-  //TODO: this may throw an exception.
-  //We'll need to handle it in the executor.
-  agent_instance->init(
+  executor_wrapped_agent->init(
     /*column_name*/ column_name,
     /*connection_config*/ connection_config,
     /*app_context*/ app_context,
@@ -68,14 +89,11 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   
   std::cout << "[DEBUG] Successfully initialized agent instance" << std::endl;
 
-  return agent_instance;
+  return executor_wrapped_agent;
 }
 
 //this is a private constructor, invoked from Make()
 //at this point, the agent_instance is assumed to be initialized.
-//TODO: consider cleaning up the signature of this private constructor. 
-//      Most of the arguments are only needed by agent_instance, which is 
-//      instantiated before this constructor is invoked.
 ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
   ParquetCipher::type algorithm, std::string column_name, std::string key_id,
   Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
@@ -110,9 +128,10 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
         std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter() -- loading and initializing agent" << std::endl;
         // Load and initialize the agent using the utility function
         auto agent_instance = LoadAndInitializeAgent(
-            column_name, connection_config, app_context, key_id, data_type, compression_type);
+          column_name, connection_config, app_context, key_id, data_type, compression_type);
 
         //if we got to this point, the agent was initialized successfully
+        std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter() -- creating ExternalDBPAEncryptorAdapter" << std::endl;
 
         // create the instance of the ExternalDBPAEncryptorAdapter
         auto result = std::unique_ptr<ExternalDBPAEncryptorAdapter>(
