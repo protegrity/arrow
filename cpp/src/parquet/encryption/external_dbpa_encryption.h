@@ -117,6 +117,8 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
                   ::arrow::util::span<const uint8_t> aad,
                   ::arrow::util::span<uint8_t> plaintext) override;
 
+  void UpdateDecryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) override;
+
   private:
     //agent_instance is assumed to be initialized at the time of construction. 
     //no initialization nor checks to verify that it is initialized are performed.

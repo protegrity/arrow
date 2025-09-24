@@ -18,6 +18,7 @@
 #pragma once
 
 #include "parquet/platform.h"
+#include "parquet/encryption/column_chunk_properties.h"
 
 namespace parquet::encryption {
 
@@ -38,6 +39,9 @@ class PARQUET_EXPORT DecryptorInterface {
                           ::arrow::util::span<const uint8_t> key,
                           ::arrow::util::span<const uint8_t> aad,
                           ::arrow::util::span<uint8_t> plaintext) = 0;
+
+  /// Update the decryption parameters.
+  virtual void UpdateDecryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) {};
 };
 
 }  // namespace parquet::encryption

@@ -360,6 +360,12 @@ int32_t ExternalDBPADecryptorAdapter::CiphertextLength(int32_t plaintext_len) co
   return plaintext_len;
 }
 
+void ExternalDBPADecryptorAdapter::UpdateDecryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) {
+  std::cout << "ExternalDBPADecryptorAdapter::UpdateDecryptionParams" << std::endl;
+  //updated_column_chunk_properties_ = std::move(column_chunk_properties);
+  //decryption_params_updated_ = true;
+}
+
 int32_t ExternalDBPADecryptorAdapter::Decrypt(
     ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<const uint8_t> key,
     ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<uint8_t> plaintext) {
