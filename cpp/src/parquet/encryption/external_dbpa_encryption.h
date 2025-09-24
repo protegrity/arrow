@@ -143,6 +143,9 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
     std::map<std::string, std::string> connection_config_;
 
     std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
+
+    std::unique_ptr<ColumnChunkProperties> updated_column_chunk_properties_;
+    bool decryption_params_updated_ = false;
 };
 
 /// Factory for ExternalDBPADecryptorAdapter instances. No cache exists for decryptors.

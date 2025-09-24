@@ -6,6 +6,8 @@
 #include <string>
 #include <optional>
 
+#include "generated/parquet_types.h"
+
 #include "parquet/types.h"
 #include "parquet/encoding.h"
 #include "parquet/metadata.h"
@@ -13,6 +15,64 @@
 #include "arrow/util/compression.h"
 
 namespace parquet::encryption {
+
+using ::parquet::format::PageHeader;
+using ::parquet::format::PageType;
+using ::parquet::format::DictionaryPageHeader;
+using ::parquet::format::DataPageHeader;
+using ::parquet::format::DataPageHeaderV2;
+
+// Utility function to translate between parquet::format::Encoding::type and parquet::Encoding::type
+inline parquet::Encoding::type ToParquetEncoding(::parquet::format::Encoding::type format_encoding) {
+    switch (format_encoding) {
+        case ::parquet::format::Encoding::PLAIN:
+            return parquet::Encoding::PLAIN;
+        case ::parquet::format::Encoding::PLAIN_DICTIONARY:
+            return parquet::Encoding::PLAIN_DICTIONARY;
+        case ::parquet::format::Encoding::RLE:
+            return parquet::Encoding::RLE;
+        case ::parquet::format::Encoding::BIT_PACKED:
+            return parquet::Encoding::BIT_PACKED;
+        case ::parquet::format::Encoding::DELTA_BINARY_PACKED:
+            return parquet::Encoding::DELTA_BINARY_PACKED;
+        case ::parquet::format::Encoding::DELTA_LENGTH_BYTE_ARRAY:
+            return parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY;
+        case ::parquet::format::Encoding::DELTA_BYTE_ARRAY:
+            return parquet::Encoding::DELTA_BYTE_ARRAY;
+        case ::parquet::format::Encoding::RLE_DICTIONARY:
+            return parquet::Encoding::RLE_DICTIONARY;
+        case ::parquet::format::Encoding::BYTE_STREAM_SPLIT:
+            return parquet::Encoding::BYTE_STREAM_SPLIT;
+        default:
+            return parquet::Encoding::PLAIN; // Default fallback
+    }
+}
+
+// inline ::parquet::format::Encoding::type ToFormatEncoding(parquet::Encoding::type parquet_encoding) {
+//     switch (parquet_encoding) {
+//         case parquet::Encoding::PLAIN:
+//             return ::parquet::format::Encoding::PLAIN;
+//         case parquet::Encoding::PLAIN_DICTIONARY:
+//             return ::parquet::format::Encoding::PLAIN_DICTIONARY;
+//         case parquet::Encoding::RLE:
+//             return ::parquet::format::Encoding::RLE;
+//         case parquet::Encoding::BIT_PACKED:
+//             return ::parquet::format::Encoding::BIT_PACKED;
+//         case parquet::Encoding::DELTA_BINARY_PACKED:
+//             return ::parquet::format::Encoding::DELTA_BINARY_PACKED;
+//         case parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY:
+//             return ::parquet::format::Encoding::DELTA_LENGTH_BYTE_ARRAY;
+//         case parquet::Encoding::DELTA_BYTE_ARRAY:
+//             return ::parquet::format::Encoding::DELTA_BYTE_ARRAY;
+//         case parquet::Encoding::RLE_DICTIONARY:
+//             return ::parquet::format::Encoding::RLE_DICTIONARY;
+//         case parquet::Encoding::BYTE_STREAM_SPLIT:
+//             return ::parquet::format::Encoding::BYTE_STREAM_SPLIT;
+//         default:
+//             return ::parquet::format::Encoding::PLAIN; // Default fallback
+//     }
+// }
+
 
 class ColumnChunkPropertiesBuilder;
 
@@ -23,17 +83,30 @@ public:
         const WriterProperties* writer_properties,
         const Page& column_page);
 
+
+    static std::unique_ptr<ColumnChunkProperties> MakeFromDecryptionMetadata(
+        PageHeader& page_header
+    );
+
     // Builder pattern
     static ColumnChunkPropertiesBuilder Builder();
+
+    // Setters for column-level properties
+    void set_column_path(const std::string& column_path);
+    void set_physical_type(parquet::Type::type physical_type, 
+                          const std::optional<std::int64_t>& fixed_length_bytes = std::nullopt);
+    void set_compression_codec(::arrow::Compression::type compression_codec);
+
+    void validate();
 
 private:
     // Private constructor for builder
     ColumnChunkProperties(const ColumnChunkPropertiesBuilder& builder);
 
     ColumnChunkProperties(
-        std::string column_path,
-        parquet::Type::type physical_type,
-        ::arrow::Compression::type compression_codec,
+        std::optional<std::string> column_path,
+        std::optional<parquet::Type::type> physical_type,
+        std::optional<::arrow::Compression::type> compression_codec,
         std::int64_t fixed_length_bytes,
         parquet::PageType::type page_type,
         parquet::Encoding::type page_encoding,
@@ -47,16 +120,14 @@ private:
         parquet::Encoding::type dictionary_index_encoding
     );
 
-    void validate();
-
     // Allow the builder to access private constructor
     friend class ColumnChunkPropertiesBuilder;
 
     //--------------------------------
     //from column metadata. does not change across chunks nor data pages.
-    std::string column_path_; 
-    parquet::Type::type physical_type_; // BOOLEAN, INT32, INT64, INT96, FLOAT, DOUBLE, BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY, etc
-    ::arrow::Compression::type compression_codec_;
+    std::optional<std::string> column_path_; 
+    std::optional<parquet::Type::type> physical_type_; // BOOLEAN, INT32, INT64, INT96, FLOAT, DOUBLE, BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY, etc
+    std::optional<::arrow::Compression::type> compression_codec_;
 
     std::optional<std::int64_t> fixed_length_bytes_; // for FIXED_LEN_BYTE_ARRAY
 
@@ -151,7 +222,7 @@ private:
     
     // Dictionary page properties
     std::optional<parquet::Encoding::type> dictionary_index_encoding_;
-};
+}; // class ColumnChunkPropertiesBuilder
 
 } //namespace parquet::encryption
 

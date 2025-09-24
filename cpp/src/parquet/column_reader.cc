@@ -487,6 +487,9 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {
 
     const PageType::type page_type = LoadEnumSafe(&current_page_header_.type);
 
+    std::unique_ptr<ColumnChunkProperties> ccp = 
+      ColumnChunkProperties::MakeFromDecryptionMetadata(current_page_header_);
+
     if (properties_.page_checksum_verification() && current_page_header_.__isset.crc &&
         PageCanUseChecksum(page_type)) {
       // verify crc
@@ -502,6 +505,8 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {
 
     // Decrypt it if we need to
     if (data_decryptor_ != nullptr) {
+      data_decryptor_->UpdateDecryptionParams(std::move(ccp));
+
       PARQUET_THROW_NOT_OK(
           decryption_buffer_->Resize(data_decryptor_->PlaintextLength(compressed_len),
                                      /*shrink_to_fit=*/false));

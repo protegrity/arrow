@@ -1,9 +1,11 @@
 // TODO: add license
 
+#include <stdexcept>
+#include <iostream>
+
 #include "parquet/encryption/column_chunk_properties.h"
 #include "parquet/metadata.h"
 #include "parquet/column_page.h"
-#include <stdexcept>
 
 namespace parquet::encryption {
 
@@ -12,9 +14,9 @@ using parquet::WriterProperties;
     
 // Private constructor for builder
 ColumnChunkProperties::ColumnChunkProperties(const ColumnChunkPropertiesBuilder& builder)
-    : column_path_(builder.column_path_.value()),
-      physical_type_(builder.physical_type_.value()),
-      compression_codec_(builder.compression_codec_.value()),
+    : column_path_(builder.column_path_),
+      physical_type_(builder.physical_type_),
+      compression_codec_(builder.compression_codec_),
       fixed_length_bytes_(builder.fixed_length_bytes_),
       page_type_(builder.page_type_.value()),
       page_encoding_(builder.page_encoding_),
@@ -26,8 +28,6 @@ ColumnChunkProperties::ColumnChunkProperties(const ColumnChunkPropertiesBuilder&
       page_v2_num_nulls_(builder.page_v2_num_nulls_),
       page_v2_is_compressed_(builder.page_v2_is_compressed_),
       dictionary_index_encoding_(builder.dictionary_index_encoding_) {
-
-        validate();
     }
 
 // Builder static method
@@ -38,7 +38,7 @@ ColumnChunkPropertiesBuilder ColumnChunkProperties::Builder() {
 // private method to validate the properties
 void ColumnChunkProperties::validate() {
     // Validate required fields
-    if (column_path_.empty()) {
+    if ( (!column_path_.has_value()) || column_path_.value().empty()) {
         throw std::invalid_argument("ColumnPath is required");
     }
 
@@ -57,6 +57,12 @@ void ColumnChunkProperties::validate() {
         if (page_encoding_ == parquet::Type::type::FIXED_LEN_BYTE_ARRAY) {
             if (!fixed_length_bytes_.has_value()) {
                 throw std::invalid_argument("FixedLengthBytes is required for column page with FIXED_LEN_BYTE_ARRAY encoding");
+            }
+        }
+
+        if (fixed_length_bytes_.has_value())  {
+            if (physical_type_ != parquet::Type::type::FIXED_LEN_BYTE_ARRAY) {
+                throw std::invalid_argument("FixedLengthBytes is only allowed for FIXED_LEN_BYTE_ARRAY physical type");
             }
         }
     }
@@ -138,6 +144,54 @@ std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromMetadata(
     return builder.Build();
 }
 
+std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromDecryptionMetadata(
+    PageHeader& page_header) {
+
+    ColumnChunkPropertiesBuilder builder;
+
+    format::PageType::type page_type_from_header = page_header.type;
+
+    if (page_type_from_header == format::PageType::DICTIONARY_PAGE) {
+        std::cout << "column_reader:: PageType::DICTIONARY_PAGE" << std::endl;
+  
+        format::DictionaryPageHeader dictionary_page_header = page_header.dictionary_page_header;
+  
+        builder.PageType(parquet::PageType::type::DICTIONARY_PAGE);
+        std::cout << "column_reader:: dictionary_page_header.encoding: " << dictionary_page_header.encoding << std::endl;
+        std::cout << "column_reader:: dictionary_page_header.is_sorted: " << dictionary_page_header.is_sorted << std::endl;
+  
+        builder.PageEncoding(ToParquetEncoding(dictionary_page_header.encoding));
+  
+      }
+      else if (page_type_from_header == format::PageType::DATA_PAGE) {
+        std::cout << "column_reader:: PageType::DATA_PAGE" << std::endl;
+  
+        format::DataPageHeader data_page_header = page_header.data_page_header;
+  
+        builder.PageType(parquet::PageType::type::DATA_PAGE);
+        builder.PageEncoding(ToParquetEncoding(data_page_header.encoding));
+        builder.DataPageNumValues(data_page_header.num_values);
+        builder.PageV1DefinitionLevelEncoding(ToParquetEncoding(data_page_header.definition_level_encoding));
+        builder.PageV1RepetitionLevelEncoding(ToParquetEncoding(data_page_header.repetition_level_encoding));
+      }
+      else if (page_type_from_header == format::PageType::DATA_PAGE_V2) {
+        std::cout << "column_reader:: PageType::DATA_PAGE_V2" << std::endl;
+  
+        format::DataPageHeaderV2 data_page_header_v2 = page_header.data_page_header_v2;
+  
+        builder.PageType(parquet::PageType::type::DATA_PAGE_V2);
+        builder.PageEncoding(ToParquetEncoding(data_page_header_v2.encoding));
+        builder.DataPageNumValues(data_page_header_v2.num_values);
+        builder.PageV2NumNulls(data_page_header_v2.num_nulls);
+        builder.PageV2DefinitionLevelsByteLength(data_page_header_v2.definition_levels_byte_length);
+        builder.PageV2RepetitionLevelsByteLength(data_page_header_v2.repetition_levels_byte_length);
+        builder.PageV2IsCompressed(data_page_header_v2.is_compressed);
+      }
+  
+    return builder.Build();
+}
+
+
 //--------------------------------
 // Builder method implementations
 
@@ -146,15 +200,17 @@ std::unique_ptr<ColumnChunkProperties> ColumnChunkPropertiesBuilder::Build() {
     // we know that these properties are required. 
     // validating here simplifies our code.
 
-    if (!column_path_) {
-        throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - ColumnPath is required");
-    }
-    if (!physical_type_) {
-        throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - PhysicalType is required");
-    }
-    if (!compression_codec_) {
-        throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - CompressionCodec is required");
-    }
+    //TODO: clean this up.
+    // if (!column_path_) {
+    //     throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - ColumnPath is required");
+    // }
+    // if (!physical_type_) {
+    //     throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - PhysicalType is required");
+    // }
+    // if (!compression_codec_) {
+    //     throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - CompressionCodec is required");
+    // }
+
     if (!page_type_) {
         throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - PageType is required");
     }
@@ -230,6 +286,27 @@ ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PageV2IsCompressed(b
 ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::DictionaryIndexEncoding(parquet::Encoding::type encoding) {
     dictionary_index_encoding_ = encoding;
     return *this;
+}
+
+//--------------------------------
+// Setters for column-level properties
+// used to fill-in values provided in the encryptor/decryptor constructor.
+void ColumnChunkProperties::set_column_path(const std::string& column_path) {
+    column_path_ = column_path;
+}
+
+void ColumnChunkProperties::set_compression_codec(::arrow::Compression::type compression_codec) {
+    compression_codec_ = compression_codec;
+}
+
+void ColumnChunkProperties::set_physical_type(parquet::Type::type physical_type, 
+                                                const std::optional<std::int64_t>& fixed_length_bytes) {
+    //TODO: validate.
+
+    physical_type_ = physical_type;                                                        
+    if (fixed_length_bytes.has_value()) {
+        fixed_length_bytes_ = fixed_length_bytes;
+    }
 }
 
 } // namespace parquet::encryption
