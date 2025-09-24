@@ -45,6 +45,10 @@ int32_t Decryptor::CiphertextLength(int32_t plaintext_len) const {
   return decryptor_instance_->CiphertextLength(plaintext_len);
 }
 
+void Decryptor::UpdateDecryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) {
+  decryptor_instance_->UpdateDecryptionParams(std::move(column_chunk_properties));
+}
+
 int32_t Decryptor::Decrypt(::arrow::util::span<const uint8_t> ciphertext,
                            ::arrow::util::span<uint8_t> plaintext) {
   return decryptor_instance_->Decrypt(ciphertext, str2span(key_), str2span(aad_), plaintext);

@@ -117,6 +117,8 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
                   ::arrow::util::span<const uint8_t> aad,
                   ::arrow::util::span<uint8_t> plaintext) override;
 
+  void UpdateDecryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) override;
+
   private:
     //agent_instance is assumed to be initialized at the time of construction. 
     //no initialization nor checks to verify that it is initialized are performed.
@@ -141,6 +143,9 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
     std::map<std::string, std::string> connection_config_;
 
     std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
+
+    std::unique_ptr<ColumnChunkProperties> updated_column_chunk_properties_;
+    bool decryption_params_updated_ = false;
 };
 
 /// Factory for ExternalDBPADecryptorAdapter instances. No cache exists for decryptors.

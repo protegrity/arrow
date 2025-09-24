@@ -41,9 +41,8 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
       connection_config_, std::nullopt);
 
     // Create a simple ColumnChunkProperties for testing using the builder pattern
-    std::unique_ptr<ColumnChunkProperties> column_chunk_properties = 
-        ColumnChunkProperties::Builder() //values chosen at random
-            .ColumnPath("test_column")
+    ColumnChunkPropertiesBuilder builder;
+    builder.ColumnPath("test_column")
             .PhysicalType(data_type)
             .CompressionCodec(compression_type)
             .PageType(parquet::PageType::DATA_PAGE_V2)
@@ -54,7 +53,8 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
             .PageEncoding(encoding_type)
             .DataPageNumValues(100) 
             .Build();
-    encryptor->UpdateEncryptionParams(std::move(column_chunk_properties));
+
+    encryptor->UpdateEncryptionParams(builder.Build());
 
     int32_t expected_ciphertext_length = plaintext.size();
     int32_t actual_ciphertext_length = encryptor->CiphertextLength(plaintext.size());
@@ -84,6 +84,8 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
       algorithm, column_name, key_id, data_type,
       compression_type, {encoding_type}, app_context_,
       connection_config_, std::nullopt);
+
+    decryptor->UpdateDecryptionParams(builder.Build());
 
     int32_t expected_plaintext_length = ciphertext_str.size();
     int32_t actual_plaintext_length = decryptor->PlaintextLength(ciphertext_str.size());

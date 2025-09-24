@@ -56,6 +56,11 @@
 #include "parquet/thrift_internal.h"  // IWYU pragma: keep
 #include "parquet/windows_fixup.h"    // for OPTIONAL
 
+#include "parquet/encryption/column_chunk_properties.h"
+
+using parquet::encryption::ColumnChunkProperties;
+using parquet::encryption::ColumnChunkPropertiesBuilder;
+
 using arrow::MemoryPool;
 using arrow::internal::AddWithOverflow;
 using arrow::internal::checked_cast;
@@ -66,6 +71,30 @@ namespace bit_util = arrow::bit_util;
 namespace parquet {
 
 namespace {
+static parquet::Encoding::type ToParquetEncoding(::parquet::format::Encoding::type format_encoding) {
+  switch (format_encoding) {
+    case ::parquet::format::Encoding::PLAIN:
+      return parquet::Encoding::PLAIN;
+    case ::parquet::format::Encoding::PLAIN_DICTIONARY:
+      return parquet::Encoding::PLAIN_DICTIONARY;
+    case ::parquet::format::Encoding::RLE:
+      return parquet::Encoding::RLE;
+    case ::parquet::format::Encoding::BIT_PACKED:
+      return parquet::Encoding::BIT_PACKED;
+    case ::parquet::format::Encoding::DELTA_BINARY_PACKED:
+      return parquet::Encoding::DELTA_BINARY_PACKED;
+    case ::parquet::format::Encoding::DELTA_LENGTH_BYTE_ARRAY:
+      return parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY;
+    case ::parquet::format::Encoding::DELTA_BYTE_ARRAY:
+      return parquet::Encoding::DELTA_BYTE_ARRAY;
+    case ::parquet::format::Encoding::RLE_DICTIONARY:
+      return parquet::Encoding::RLE_DICTIONARY;
+    case ::parquet::format::Encoding::BYTE_STREAM_SPLIT:
+      return parquet::Encoding::BYTE_STREAM_SPLIT;
+    default:
+      throw ParquetException("ToParquetEncoding: Invalid encoding: " + std::to_string(format_encoding));
+  }
+}
 
 // The minimum number of repetition/definition levels to decode at a time, for
 // better vectorized performance when doing many smaller record reads
@@ -272,6 +301,8 @@ class SerializedPageReader : public PageReader {
 
   void set_max_page_header_size(uint32_t size) override { max_page_header_size_ = size; }
 
+  std::unique_ptr<ColumnChunkProperties> GetColumnChunkProperties(format::PageHeader& page_header);
+
  private:
   void UpdateDecryption(Decryptor* decryptor, int8_t module_type, std::string* page_aad);
 
@@ -416,6 +447,45 @@ bool SerializedPageReader::ShouldSkipPage(EncodedStatistics* data_page_statistic
   return false;
 }
 
+// While ideally we would have written the builder code for PageHeader-based properties,
+// Arrow frowns upon including thrift headers in the public API, and the types used in this function 
+// are not defined in the public API. This is verified via unit tests.
+// Therefore, we have to define this function here (as opposed to **any** .h file).
+std::unique_ptr<ColumnChunkProperties> SerializedPageReader::GetColumnChunkProperties(format::PageHeader& page_header) {
+    ColumnChunkPropertiesBuilder builder;
+
+    format::PageType::type page_type_from_header = page_header.type;
+
+    if (page_type_from_header == format::PageType::DICTIONARY_PAGE) {
+        format::DictionaryPageHeader dictionary_page_header = page_header.dictionary_page_header;
+  
+        builder.PageType(parquet::PageType::type::DICTIONARY_PAGE);  
+        builder.PageEncoding(ToParquetEncoding(dictionary_page_header.encoding));
+      }
+      else if (page_type_from_header == format::PageType::DATA_PAGE) {
+        format::DataPageHeader data_page_header = page_header.data_page_header;
+  
+        builder.PageType(parquet::PageType::type::DATA_PAGE);
+        builder.PageEncoding(ToParquetEncoding(data_page_header.encoding));
+        builder.DataPageNumValues(data_page_header.num_values);
+        builder.PageV1DefinitionLevelEncoding(ToParquetEncoding(data_page_header.definition_level_encoding));
+        builder.PageV1RepetitionLevelEncoding(ToParquetEncoding(data_page_header.repetition_level_encoding));
+      }
+      else if (page_type_from_header == format::PageType::DATA_PAGE_V2) {
+        format::DataPageHeaderV2 data_page_header_v2 = page_header.data_page_header_v2;
+  
+        builder.PageType(parquet::PageType::type::DATA_PAGE_V2);
+        builder.PageEncoding(ToParquetEncoding(data_page_header_v2.encoding));
+        builder.DataPageNumValues(data_page_header_v2.num_values);
+        builder.PageV2NumNulls(data_page_header_v2.num_nulls);
+        builder.PageV2DefinitionLevelsByteLength(data_page_header_v2.definition_levels_byte_length);
+        builder.PageV2RepetitionLevelsByteLength(data_page_header_v2.repetition_levels_byte_length);
+        builder.PageV2IsCompressed(data_page_header_v2.is_compressed);
+      }
+  
+    return builder.Build();
+}
+
 std::shared_ptr<Page> SerializedPageReader::NextPage() {
   ThriftDeserializer deserializer(properties_);
 
@@ -502,6 +572,10 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {
 
     // Decrypt it if we need to
     if (data_decryptor_ != nullptr) {
+      std::unique_ptr<ColumnChunkProperties> encoding_properties = GetColumnChunkProperties(current_page_header_);
+
+      data_decryptor_->UpdateDecryptionParams(std::move(encoding_properties));
+
       PARQUET_THROW_NOT_OK(
           decryption_buffer_->Resize(data_decryptor_->PlaintextLength(compressed_len),
                                      /*shrink_to_fit=*/false));

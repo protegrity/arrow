@@ -23,17 +23,26 @@ public:
         const WriterProperties* writer_properties,
         const Page& column_page);
 
+
     // Builder pattern
     static ColumnChunkPropertiesBuilder Builder();
+
+    // Setters for column-level properties
+    void set_column_path(const std::string& column_path);
+    void set_physical_type(parquet::Type::type physical_type, 
+                          const std::optional<std::int64_t>& fixed_length_bytes = std::nullopt);
+    void set_compression_codec(::arrow::Compression::type compression_codec);
+
+    void validate();
 
 private:
     // Private constructor for builder
     ColumnChunkProperties(const ColumnChunkPropertiesBuilder& builder);
 
     ColumnChunkProperties(
-        std::string column_path,
-        parquet::Type::type physical_type,
-        ::arrow::Compression::type compression_codec,
+        std::optional<std::string> column_path,
+        std::optional<parquet::Type::type> physical_type,
+        std::optional<::arrow::Compression::type> compression_codec,
         std::int64_t fixed_length_bytes,
         parquet::PageType::type page_type,
         parquet::Encoding::type page_encoding,
@@ -43,20 +52,17 @@ private:
         int32_t page_v2_definition_levels_byte_length,
         int32_t page_v2_repetition_levels_byte_length,
         int32_t page_v2_num_nulls,
-        bool page_v2_is_compressed,
-        parquet::Encoding::type dictionary_index_encoding
+        bool page_v2_is_compressed
     );
-
-    void validate();
 
     // Allow the builder to access private constructor
     friend class ColumnChunkPropertiesBuilder;
 
     //--------------------------------
     //from column metadata. does not change across chunks nor data pages.
-    std::string column_path_; 
-    parquet::Type::type physical_type_; // BOOLEAN, INT32, INT64, INT96, FLOAT, DOUBLE, BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY, etc
-    ::arrow::Compression::type compression_codec_;
+    std::optional<std::string> column_path_; 
+    std::optional<parquet::Type::type> physical_type_; // BOOLEAN, INT32, INT64, INT96, FLOAT, DOUBLE, BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY, etc
+    std::optional<::arrow::Compression::type> compression_codec_;
 
     std::optional<std::int64_t> fixed_length_bytes_; // for FIXED_LEN_BYTE_ARRAY
 
@@ -84,10 +90,13 @@ private:
     std::optional<int32_t> page_v2_num_nulls_;
     std::optional<bool> page_v2_is_compressed_; //this does not exist in V1 nor dictionary pages.
 
-
     //--------------------------------
     // Dictionary page properties.
-    std::optional<parquet::Encoding::type> dictionary_index_encoding_;
+
+    // there are not specific properties for dictionary pages,
+    // other than the page encoding (captured above).
+
+    //--------------------------------
 }; //class ColumnChunkProperties
 
 class ColumnChunkPropertiesBuilder {
@@ -116,10 +125,7 @@ public:
     ColumnChunkPropertiesBuilder& PageV2RepetitionLevelsByteLength(int32_t byte_length);
     ColumnChunkPropertiesBuilder& PageV2NumNulls(int32_t num_nulls);
     ColumnChunkPropertiesBuilder& PageV2IsCompressed(bool is_compressed);
-    
-    // Dictionary page properties
-    ColumnChunkPropertiesBuilder& DictionaryIndexEncoding(parquet::Encoding::type encoding);
-    
+        
     // Build the final object
     std::unique_ptr<ColumnChunkProperties> Build();
 
@@ -147,11 +153,8 @@ private:
     std::optional<int32_t> page_v2_definition_levels_byte_length_;
     std::optional<int32_t> page_v2_repetition_levels_byte_length_;
     std::optional<int32_t> page_v2_num_nulls_;
-    std::optional<bool> page_v2_is_compressed_;
-    
-    // Dictionary page properties
-    std::optional<parquet::Encoding::type> dictionary_index_encoding_;
-};
+    std::optional<bool> page_v2_is_compressed_;    
+}; // class ColumnChunkPropertiesBuilder
 
 } //namespace parquet::encryption
 
