@@ -152,19 +152,36 @@ std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromDecryption
     format::PageType::type page_type_from_header = page_header.type;
 
     if (page_type_from_header == format::PageType::DICTIONARY_PAGE) {
-        std::cout << "column_reader:: PageType::DICTIONARY_PAGE" << std::endl;
+        std::cout << "ColumnChunkProperties::MakeFromDecryptionMetadata - PageType::DICTIONARY_PAGE" << std::endl;
   
         format::DictionaryPageHeader dictionary_page_header = page_header.dictionary_page_header;
   
-        builder.PageType(parquet::PageType::type::DICTIONARY_PAGE);
-        std::cout << "column_reader:: dictionary_page_header.encoding: " << dictionary_page_header.encoding << std::endl;
-        std::cout << "column_reader:: dictionary_page_header.is_sorted: " << dictionary_page_header.is_sorted << std::endl;
-  
+        builder.PageType(parquet::PageType::type::DICTIONARY_PAGE);  
         builder.PageEncoding(ToParquetEncoding(dictionary_page_header.encoding));
+
+        // TODO:>>>> triple check this.
+        // TODO:>>>> triple check this!!!
+        // This 'normalization' seems valid.
+        // A per the official Parquet spec on Encodings (https://parquet.apache.org/docs/file-format/data-pages/encodings/)
+        // PLAIN_DICTIONARY is deprecated, and RLE_DICTIONARY is the new standard.
+        //
+        // This is confirmed in the Parquet Format repository, https://github.com/apache/parquet-format/blob/master/src/main/thrift/parquet.thrif 
+        // where PLAIN_DICTIONARY ... complete
+        // also, check this out inside column_reader.cc, InitializeDataDecoder()
+
+        /**    Encoding::type encoding = page.encoding();
+                if (IsDictionaryIndexEncoding(encoding)) {
+                    // Normalizing the PLAIN_DICTIONARY to RLE_DICTIONARY encoding
+                    // in decoder.
+                    encoding = Encoding::RLE_DICTIONARY;
+                }
+
+         */
+        builder.DictionaryIndexEncoding(parquet::Encoding::type::RLE_DICTIONARY);
   
       }
       else if (page_type_from_header == format::PageType::DATA_PAGE) {
-        std::cout << "column_reader:: PageType::DATA_PAGE" << std::endl;
+        std::cout << "ColumnChunkProperties::MakeFromDecryptionMetadata - PageType::DATA_PAGE" << std::endl;
   
         format::DataPageHeader data_page_header = page_header.data_page_header;
   
@@ -175,8 +192,7 @@ std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromDecryption
         builder.PageV1RepetitionLevelEncoding(ToParquetEncoding(data_page_header.repetition_level_encoding));
       }
       else if (page_type_from_header == format::PageType::DATA_PAGE_V2) {
-        std::cout << "column_reader:: PageType::DATA_PAGE_V2" << std::endl;
-  
+        
         format::DataPageHeaderV2 data_page_header_v2 = page_header.data_page_header_v2;
   
         builder.PageType(parquet::PageType::type::DATA_PAGE_V2);
