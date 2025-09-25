@@ -26,8 +26,7 @@ ColumnChunkProperties::ColumnChunkProperties(const ColumnChunkPropertiesBuilder&
       page_v2_definition_levels_byte_length_(builder.page_v2_definition_levels_byte_length_),
       page_v2_repetition_levels_byte_length_(builder.page_v2_repetition_levels_byte_length_),
       page_v2_num_nulls_(builder.page_v2_num_nulls_),
-      page_v2_is_compressed_(builder.page_v2_is_compressed_),
-      dictionary_index_encoding_(builder.dictionary_index_encoding_) {
+      page_v2_is_compressed_(builder.page_v2_is_compressed_) {
     }
 
 // Builder static method
@@ -42,6 +41,7 @@ void ColumnChunkProperties::validate() {
         throw std::invalid_argument("ColumnPath is required");
     }
 
+    // page encoding is required for all page types (data and dictionary)
     if (!page_encoding_.has_value()) {
         throw std::invalid_argument("PageEncoding is required");
     }
@@ -92,9 +92,7 @@ void ColumnChunkProperties::validate() {
         }
     }
     else if (page_type_ == parquet::PageType::DICTIONARY_PAGE) {
-        if (!dictionary_index_encoding_.has_value()) {
-            throw std::invalid_argument("DictionaryIndexEncoding is required");
-        }
+        // no additional validations required for DICTIONARY_PAGE
     }
  } //validate()
 
@@ -135,7 +133,6 @@ std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromMetadata(
     else if (column_page.type() == parquet::PageType::DICTIONARY_PAGE) {
         DictionaryPage dict_page = static_cast<const DictionaryPage&>(column_page);
         builder.PageEncoding(dict_page.encoding());
-        builder.DictionaryIndexEncoding(writer_properties->dictionary_index_encoding());
     }
     else {
         throw std::invalid_argument("Unknown Page Type:: " + std::to_string(column_page.type()));
@@ -144,6 +141,7 @@ std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromMetadata(
     return builder.Build();
 }
 
+//TODO: we want a better name here.
 std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromDecryptionMetadata(
     PageHeader& page_header) {
 
@@ -158,27 +156,6 @@ std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromDecryption
   
         builder.PageType(parquet::PageType::type::DICTIONARY_PAGE);  
         builder.PageEncoding(ToParquetEncoding(dictionary_page_header.encoding));
-
-        // TODO:>>>> triple check this.
-        // TODO:>>>> triple check this!!!
-        // This 'normalization' seems valid.
-        // A per the official Parquet spec on Encodings (https://parquet.apache.org/docs/file-format/data-pages/encodings/)
-        // PLAIN_DICTIONARY is deprecated, and RLE_DICTIONARY is the new standard.
-        //
-        // This is confirmed in the Parquet Format repository, https://github.com/apache/parquet-format/blob/master/src/main/thrift/parquet.thrif 
-        // where PLAIN_DICTIONARY ... complete
-        // also, check this out inside column_reader.cc, InitializeDataDecoder()
-
-        /**    Encoding::type encoding = page.encoding();
-                if (IsDictionaryIndexEncoding(encoding)) {
-                    // Normalizing the PLAIN_DICTIONARY to RLE_DICTIONARY encoding
-                    // in decoder.
-                    encoding = Encoding::RLE_DICTIONARY;
-                }
-
-         */
-        builder.DictionaryIndexEncoding(parquet::Encoding::type::RLE_DICTIONARY);
-  
       }
       else if (page_type_from_header == format::PageType::DATA_PAGE) {
         std::cout << "ColumnChunkProperties::MakeFromDecryptionMetadata - PageType::DATA_PAGE" << std::endl;
@@ -299,11 +276,6 @@ ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PageV2IsCompressed(b
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::DictionaryIndexEncoding(parquet::Encoding::type encoding) {
-    dictionary_index_encoding_ = encoding;
-    return *this;
-}
-
 //--------------------------------
 // Setters for column-level properties
 // used to fill-in values provided in the encryptor/decryptor constructor.
@@ -318,7 +290,6 @@ void ColumnChunkProperties::set_compression_codec(::arrow::Compression::type com
 void ColumnChunkProperties::set_physical_type(parquet::Type::type physical_type, 
                                                 const std::optional<std::int64_t>& fixed_length_bytes) {
     //TODO: validate.
-
     physical_type_ = physical_type;                                                        
     if (fixed_length_bytes.has_value()) {
         fixed_length_bytes_ = fixed_length_bytes;

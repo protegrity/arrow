@@ -48,32 +48,6 @@ inline parquet::Encoding::type ToParquetEncoding(::parquet::format::Encoding::ty
     }
 }
 
-// inline ::parquet::format::Encoding::type ToFormatEncoding(parquet::Encoding::type parquet_encoding) {
-//     switch (parquet_encoding) {
-//         case parquet::Encoding::PLAIN:
-//             return ::parquet::format::Encoding::PLAIN;
-//         case parquet::Encoding::PLAIN_DICTIONARY:
-//             return ::parquet::format::Encoding::PLAIN_DICTIONARY;
-//         case parquet::Encoding::RLE:
-//             return ::parquet::format::Encoding::RLE;
-//         case parquet::Encoding::BIT_PACKED:
-//             return ::parquet::format::Encoding::BIT_PACKED;
-//         case parquet::Encoding::DELTA_BINARY_PACKED:
-//             return ::parquet::format::Encoding::DELTA_BINARY_PACKED;
-//         case parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY:
-//             return ::parquet::format::Encoding::DELTA_LENGTH_BYTE_ARRAY;
-//         case parquet::Encoding::DELTA_BYTE_ARRAY:
-//             return ::parquet::format::Encoding::DELTA_BYTE_ARRAY;
-//         case parquet::Encoding::RLE_DICTIONARY:
-//             return ::parquet::format::Encoding::RLE_DICTIONARY;
-//         case parquet::Encoding::BYTE_STREAM_SPLIT:
-//             return ::parquet::format::Encoding::BYTE_STREAM_SPLIT;
-//         default:
-//             return ::parquet::format::Encoding::PLAIN; // Default fallback
-//     }
-// }
-
-
 class ColumnChunkPropertiesBuilder;
 
 class ColumnChunkProperties {
@@ -116,8 +90,7 @@ private:
         int32_t page_v2_definition_levels_byte_length,
         int32_t page_v2_repetition_levels_byte_length,
         int32_t page_v2_num_nulls,
-        bool page_v2_is_compressed,
-        parquet::Encoding::type dictionary_index_encoding
+        bool page_v2_is_compressed
     );
 
     // Allow the builder to access private constructor
@@ -155,10 +128,11 @@ private:
     std::optional<int32_t> page_v2_num_nulls_;
     std::optional<bool> page_v2_is_compressed_; //this does not exist in V1 nor dictionary pages.
 
-
     //--------------------------------
     // Dictionary page properties.
-    std::optional<parquet::Encoding::type> dictionary_index_encoding_;
+
+    // there are not specific properties for dictionary pages,
+    // other than the page encoding (captured above).
 }; //class ColumnChunkProperties
 
 class ColumnChunkPropertiesBuilder {
@@ -187,10 +161,7 @@ public:
     ColumnChunkPropertiesBuilder& PageV2RepetitionLevelsByteLength(int32_t byte_length);
     ColumnChunkPropertiesBuilder& PageV2NumNulls(int32_t num_nulls);
     ColumnChunkPropertiesBuilder& PageV2IsCompressed(bool is_compressed);
-    
-    // Dictionary page properties
-    ColumnChunkPropertiesBuilder& DictionaryIndexEncoding(parquet::Encoding::type encoding);
-    
+        
     // Build the final object
     std::unique_ptr<ColumnChunkProperties> Build();
 
@@ -218,10 +189,7 @@ private:
     std::optional<int32_t> page_v2_definition_levels_byte_length_;
     std::optional<int32_t> page_v2_repetition_levels_byte_length_;
     std::optional<int32_t> page_v2_num_nulls_;
-    std::optional<bool> page_v2_is_compressed_;
-    
-    // Dictionary page properties
-    std::optional<parquet::Encoding::type> dictionary_index_encoding_;
+    std::optional<bool> page_v2_is_compressed_;    
 }; // class ColumnChunkPropertiesBuilder
 
 } //namespace parquet::encryption
