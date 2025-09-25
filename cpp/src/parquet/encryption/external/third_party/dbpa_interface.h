@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <stdexcept>
@@ -88,22 +89,36 @@ public:
         std::map<std::string, std::string> connection_config,
         std::string app_context,
         std::string column_key_id,
-        Type::type data_type,
+        Type::type datatype,
+        std::optional<int> datatype_length,
         CompressionCodec::type compression_type)
     {
         column_name_ = std::move(column_name);
         connection_config_ = std::move(connection_config);
         app_context_ = std::move(app_context);
         column_key_id_ = std::move(column_key_id);
-        data_type_ = data_type;
+        datatype_ = datatype;
+        datatype_length_ = datatype_length;
         compression_type_ = compression_type;
     }
 
+    /*
+    * Encrypts the provided plaintext data using the configured encryption parameters.
+    *
+    * @param plaintext Binary data to be encrypted, provided as a span of bytes
+    * @param encoding_attributes A map of string key-values. The plaintext is encoded with a type defined in enums.h Format::type.
+    *   Each encoding type requires additional attributes to be properly decoded. These attributes are specified in the map so an
+    *   implementation can properly interpret and process the input text.
+    *
+    * @return A unique pointer to an EncryptionResult containing the encrypted data and operation status
+    */
     virtual std::unique_ptr<EncryptionResult> Encrypt(
-        span<const uint8_t> plaintext) = 0;
+        span<const uint8_t> plaintext,
+        std::map<std::string, std::string> encoding_attributes) = 0;
 
     virtual std::unique_ptr<DecryptionResult> Decrypt(
-        span<const uint8_t> ciphertext) = 0;
+        span<const uint8_t> ciphertext,
+        std::map<std::string, std::string> encoding_attributes) = 0;
 
     virtual ~DataBatchProtectionAgentInterface() = default;
 
@@ -113,7 +128,8 @@ protected:
     std::string app_context_;  // includes user_id
 
     std::string column_key_id_;
-    Type::type data_type_;
+    Type::type datatype_;
+    std::optional<int> datatype_length_;
     CompressionCodec::type compression_type_;
 };
 }

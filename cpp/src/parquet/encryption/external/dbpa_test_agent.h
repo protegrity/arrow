@@ -32,15 +32,18 @@ class DBPATestAgent : public DataBatchProtectionAgentInterface {
       std::string app_context,
       std::string column_key_id,
       Type::type data_type,
+      std::optional<int> datatype_length,
       CompressionCodec::type compression_type) override {
     // init() intentionally left blank
   }
 
   std::unique_ptr<EncryptionResult> Encrypt(
-      span<const uint8_t> plaintext) override;
+      span<const uint8_t> plaintext,
+      std::map<std::string, std::string> encoding_attributes) override;
 
   std::unique_ptr<DecryptionResult> Decrypt(
-      span<const uint8_t> ciphertext) override;
+      span<const uint8_t> ciphertext,
+      std::map<std::string, std::string> encoding_attributes) override;
 
   ~DBPATestAgent();
 };

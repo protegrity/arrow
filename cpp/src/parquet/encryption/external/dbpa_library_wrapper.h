@@ -4,6 +4,8 @@
 
 #include <memory>
 #include <functional>
+#include <optional>
+#include <map>
 
 #include "parquet/encryption/external/third_party/dbpa_interface.h"
 #include "parquet/encryption/external/third_party/span.hpp"
@@ -60,22 +62,25 @@ class DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
       std::string app_context,
       std::string column_key_id,
       Type::type data_type,
+      std::optional<int> datatype_length,
       CompressionCodec::type compression_type) override {
     wrapped_agent_->init(std::move(column_name), std::move(connection_config),
                         std::move(app_context), std::move(column_key_id),
-                        data_type, compression_type);
+                        data_type, datatype_length, compression_type);
   }
 
   // Decorator implementation of Encrypt method - inlined for performance
   inline std::unique_ptr<EncryptionResult> Encrypt(
-      span<const uint8_t> plaintext) override {
-    return wrapped_agent_->Encrypt(plaintext);
+      span<const uint8_t> plaintext,
+      std::map<std::string, std::string> encoding_attributes) override {
+    return wrapped_agent_->Encrypt(plaintext, std::move(encoding_attributes));
   }
 
   // Decorator implementation of Decrypt method - inlined for performance
   inline std::unique_ptr<DecryptionResult> Decrypt(
-      span<const uint8_t> ciphertext) override {
-    return wrapped_agent_->Decrypt(ciphertext);
+      span<const uint8_t> ciphertext,
+      std::map<std::string, std::string> encoding_attributes) override {
+    return wrapped_agent_->Decrypt(ciphertext, std::move(encoding_attributes));
   }
 };
 

@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <map>
+#include <optional>
 #include <exception>
 #include <stdexcept>
 
@@ -57,6 +58,7 @@ class DBPAExecutor : public DataBatchProtectionAgentInterface {
       std::string app_context,
       std::string column_key_id,
       Type::type data_type,
+      std::optional<int> datatype_length,
       CompressionCodec::type compression_type) override;
 
   /**
@@ -68,7 +70,8 @@ class DBPAExecutor : public DataBatchProtectionAgentInterface {
    * @throws Original exceptions from wrapped agent (unchanged!)
    */
   std::unique_ptr<EncryptionResult> Encrypt(
-      span<const uint8_t> plaintext) override;
+      span<const uint8_t> plaintext,
+      std::map<std::string, std::string> encoding_attributes) override;
 
   /**
    * Decrypt the provided ciphertext
@@ -79,7 +82,8 @@ class DBPAExecutor : public DataBatchProtectionAgentInterface {
    * @throws Original exceptions from wrapped agent (unchanged!)
    */
   std::unique_ptr<DecryptionResult> Decrypt(
-      span<const uint8_t> ciphertext) override;
+      span<const uint8_t> ciphertext,
+      std::map<std::string, std::string> encoding_attributes) override;
 
   private:
     std::unique_ptr<DataBatchProtectionAgentInterface> wrapped_agent_;

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <memory>
 #include <vector>
 
@@ -24,7 +25,8 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
       ParquetCipher::type algorithm, std::string column_name,
       std::string key_id, Type::type data_type, Compression::type compression_type,
       Encoding::type encoding_type, std::string app_context,
-      std::map<std::string, std::string> connection_config);
+      std::map<std::string, std::string> connection_config,
+      std::optional<int> datatype_length);
 
   ~ExternalDBPAEncryptorAdapter() = default;
 
@@ -96,7 +98,8 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
       ParquetCipher::type algorithm, std::string column_name,
       std::string key_id, Type::type data_type, Compression::type compression_type,
       std::vector<Encoding::type> encoding_types, std::string app_context,
-      std::map<std::string, std::string> connection_config);
+      std::map<std::string, std::string> connection_config,
+      std::optional<int> datatype_length);
   
   ~ExternalDBPADecryptorAdapter() = default;
 

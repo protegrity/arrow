@@ -74,7 +74,8 @@ DBPATestAgent::DBPATestAgent() {
 }
 
 std::unique_ptr<EncryptionResult> DBPATestAgent::Encrypt(
-    span<const uint8_t> plaintext) {
+    span<const uint8_t> plaintext,
+    std::map<std::string, std::string>) {
   
   // Simple XOR encryption for testing purposes
   // In a real implementation, this would use proper encryption
@@ -88,7 +89,8 @@ std::unique_ptr<EncryptionResult> DBPATestAgent::Encrypt(
 }
 
 std::unique_ptr<DecryptionResult> DBPATestAgent::Decrypt(
-    span<const uint8_t> ciphertext) {
+    span<const uint8_t> ciphertext,
+    std::map<std::string, std::string>) {
   
   // Simple XOR decryption for testing purposes
   // In a real implementation, this would perform actual decryption

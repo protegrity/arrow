@@ -21,6 +21,7 @@
 #include <vector>
 #include <functional>
 #include <map>
+#include <optional>
 
 #include "gtest/gtest.h"
 #include "parquet/encryption/external/third_party/dbpa_interface.h"
@@ -175,6 +176,7 @@ class MockCompanionDBPA {
   const std::string& GetInitColumnKeyId() const { return init_column_key_id_; }
   Type::type GetInitDataType() const { return init_data_type_; }
   CompressionCodec::type GetInitCompressionType() const { return init_compression_type_; }
+  std::optional<int> GetInitDatatypeLength() const { return init_datatype_length_; }
 
   // State update methods (called by the mock instance)
   void SetEncryptCalled(bool called) { encrypt_called_ = called; }
@@ -200,13 +202,15 @@ class MockCompanionDBPA {
       std::string app_context,
       std::string column_key_id,
       Type::type data_type,
-      CompressionCodec::type compression_type) {
+      CompressionCodec::type compression_type,
+      std::optional<int> datatype_length = std::nullopt) {
     init_column_name_ = std::move(column_name);
     init_connection_config_ = std::move(connection_config);
     init_app_context_ = std::move(app_context);
     init_column_key_id_ = std::move(column_key_id);
     init_data_type_ = data_type;
     init_compression_type_ = compression_type;
+    init_datatype_length_ = datatype_length;
   }
 
  private:
@@ -229,6 +233,9 @@ class MockCompanionDBPA {
   std::string init_column_key_id_;
   Type::type init_data_type_;
   CompressionCodec::type init_compression_type_;
+  std::optional<int> init_datatype_length_;
+  std::map<std::string, std::string> last_encrypt_encoding_attrs_;
+  std::map<std::string, std::string> last_decrypt_encoding_attrs_;
 }; //MockCompanionDBPA
 
 // Companion object to track shared library handle management operations
@@ -285,6 +292,7 @@ class MockDataBatchProtectionAgent : public DataBatchProtectionAgentInterface {
       std::string app_context,
       std::string column_key_id,
       Type::type data_type,
+      std::optional<int> datatype_length,
       CompressionCodec::type compression_type) override {
     companion_->SetInitCalled(true);
     companion_->IncrementInitCount();
@@ -294,11 +302,13 @@ class MockDataBatchProtectionAgent : public DataBatchProtectionAgentInterface {
         std::move(app_context),
         std::move(column_key_id),
         data_type,
-        compression_type);
+        compression_type,
+        datatype_length);
   }
 
   std::unique_ptr<EncryptionResult> Encrypt(
-      span<const uint8_t> plaintext) override {
+      span<const uint8_t> plaintext,
+      std::map<std::string, std::string>) override {
     companion_->SetEncryptCalled(true);
     companion_->IncrementEncryptCount();
     companion_->SetEncryptPlaintext(std::vector<uint8_t>(plaintext.begin(), plaintext.end()));
@@ -310,7 +320,8 @@ class MockDataBatchProtectionAgent : public DataBatchProtectionAgentInterface {
   }
 
   std::unique_ptr<DecryptionResult> Decrypt(
-      span<const uint8_t> ciphertext) override {
+      span<const uint8_t> ciphertext,
+      std::map<std::string, std::string>) override {
     companion_->SetDecryptCalled(true);
     companion_->IncrementDecryptCount();
     companion_->SetDecryptCiphertext(std::vector<uint8_t>(ciphertext.begin(), ciphertext.end()));
@@ -494,7 +505,7 @@ TEST_F(DBPALibraryWrapperTest, InitDelegation) {
   CompressionCodec::type compression_type = CompressionCodec::SNAPPY;
   
   // Call init through wrapper
-  wrapper->init(column_name, connection_config, app_context, column_key_id, data_type, compression_type);
+  wrapper->init(column_name, connection_config, app_context, column_key_id, data_type, std::nullopt, compression_type);
   
   // Verify the mock agent was called
   EXPECT_TRUE(mock_companion_->WasInitCalled());
@@ -509,6 +520,23 @@ TEST_F(DBPALibraryWrapperTest, InitDelegation) {
   EXPECT_EQ(mock_companion_->GetInitCompressionType(), compression_type);
 }
 
+TEST_F(DBPALibraryWrapperTest, InitDelegationWithDatatypeLength) {
+  auto wrapper = CreateWrapper();
+
+  std::string column_name = "fixed_len_col";
+  std::map<std::string, std::string> connection_config = {};
+  std::string app_context = "ctx";
+  std::string column_key_id = "kid";
+  Type::type data_type = Type::FIXED_LEN_BYTE_ARRAY;
+  CompressionCodec::type compression_type = CompressionCodec::UNCOMPRESSED;
+
+  wrapper->init(column_name, connection_config, app_context, column_key_id, data_type, 16, compression_type);
+
+  EXPECT_TRUE(mock_companion_->WasInitCalled());
+  ASSERT_TRUE(mock_companion_->GetInitDatatypeLength().has_value());
+  EXPECT_EQ(mock_companion_->GetInitDatatypeLength().value(), 16);
+}
+
 TEST_F(DBPALibraryWrapperTest, InitDelegationWithEmptyParameters) {
   auto wrapper = CreateWrapper();
   
@@ -521,7 +549,7 @@ TEST_F(DBPALibraryWrapperTest, InitDelegationWithEmptyParameters) {
   CompressionCodec::type compression_type = CompressionCodec::UNCOMPRESSED;
   
   // Call init through wrapper
-  wrapper->init(empty_column_name, empty_connection_config, empty_app_context, empty_column_key_id, data_type, compression_type);
+  wrapper->init(empty_column_name, empty_connection_config, empty_app_context, empty_column_key_id, data_type, std::nullopt, compression_type);
   
   // Verify the mock agent was called
   EXPECT_TRUE(mock_companion_->WasInitCalled());
@@ -546,7 +574,7 @@ TEST_F(DBPALibraryWrapperTest, EncryptDelegation) {
   span<uint8_t> ciphertext_span(test_ciphertext_.data(), test_ciphertext_.size());
   
   // Call encrypt through wrapper
-  auto result = wrapper->Encrypt(plaintext_span);
+  auto result = wrapper->Encrypt(plaintext_span, {});
   
   // Verify the mock agent was called
   EXPECT_TRUE(mock_companion_->WasEncryptCalled());
@@ -564,6 +592,25 @@ TEST_F(DBPALibraryWrapperTest, EncryptDelegation) {
   EXPECT_NE(result, nullptr);
 }
 
+TEST_F(DBPALibraryWrapperTest, EncryptDecryptEncodingAttributesDelegation) {
+  auto wrapper = CreateWrapper();
+
+  // Encrypt
+  std::map<std::string, std::string> enc_attrs = {{"format", "plain"}, {"scale", "0"}};
+  span<const uint8_t> plaintext_span(
+      reinterpret_cast<const uint8_t*>(test_plaintext_.data()),
+      test_plaintext_.size());
+
+  auto enc_result = wrapper->Encrypt(plaintext_span, enc_attrs);
+  EXPECT_NE(enc_result, nullptr);
+
+  // Decrypt
+  auto ct_span = enc_result->ciphertext();
+  std::map<std::string, std::string> dec_attrs = {{"format", "plain"}};
+  auto dec_result = wrapper->Decrypt(ct_span, dec_attrs);
+  EXPECT_NE(dec_result, nullptr);
+}
+
 TEST_F(DBPALibraryWrapperTest, DecryptDelegation) {
   auto wrapper = CreateWrapper();
   
@@ -573,7 +620,7 @@ TEST_F(DBPALibraryWrapperTest, DecryptDelegation) {
       test_plaintext_.size());
   
   // Call decrypt through wrapper
-  auto result = wrapper->Decrypt(ciphertext_span);
+  auto result = wrapper->Decrypt(ciphertext_span, {});
   
   // Verify the mock agent was called
   EXPECT_TRUE(mock_companion_->WasDecryptCalled());
@@ -600,7 +647,7 @@ TEST_F(DBPALibraryWrapperTest, MultipleEncryptDelegations) {
         reinterpret_cast<const uint8_t*>(plaintext.data()),
         plaintext.size());
     
-    auto result = wrapper->Encrypt(plaintext_span);
+    auto result = wrapper->Encrypt(plaintext_span, {});
     EXPECT_NE(result, nullptr);
   }
   
@@ -620,7 +667,7 @@ TEST_F(DBPALibraryWrapperTest, MultipleDecryptDelegations) {
         reinterpret_cast<const uint8_t*>(ciphertext.data()),
         ciphertext.size());
     
-    auto result = wrapper->Decrypt(ciphertext_span);
+    auto result = wrapper->Decrypt(ciphertext_span, {});
     EXPECT_NE(result, nullptr);
   }
   
@@ -642,12 +689,12 @@ TEST_F(DBPALibraryWrapperTest, MixedOperationsDelegation) {
         reinterpret_cast<const uint8_t*>(data.data()),
         data.size());
     
-    auto encrypt_result = wrapper->Encrypt(plaintext_span);
+    auto encrypt_result = wrapper->Encrypt(plaintext_span, {});
     EXPECT_NE(encrypt_result, nullptr);
     
     // Decrypt using the ciphertext from the encryption result
     auto ciphertext_span = encrypt_result->ciphertext();
-    auto decrypt_result = wrapper->Decrypt(ciphertext_span);
+    auto decrypt_result = wrapper->Decrypt(ciphertext_span, {});
     EXPECT_NE(decrypt_result, nullptr);
   }
   
@@ -672,7 +719,7 @@ TEST_F(DBPALibraryWrapperTest, InitWithEncryptDecryptOperations) {
   Type::type data_type = Type::INT32;
   CompressionCodec::type compression_type = CompressionCodec::SNAPPY;
   
-  wrapper->init(column_name, connection_config, app_context, column_key_id, data_type, compression_type);
+  wrapper->init(column_name, connection_config, app_context, column_key_id, data_type, std::nullopt, compression_type);
   
   // Verify init was called
   EXPECT_TRUE(mock_companion_->WasInitCalled());
@@ -684,11 +731,11 @@ TEST_F(DBPALibraryWrapperTest, InitWithEncryptDecryptOperations) {
       reinterpret_cast<const uint8_t*>(test_data.data()),
       test_data.size());
   
-  auto encrypt_result = wrapper->Encrypt(plaintext_span);
+  auto encrypt_result = wrapper->Encrypt(plaintext_span, {});
   EXPECT_NE(encrypt_result, nullptr);
   
   auto ciphertext_span = encrypt_result->ciphertext();
-  auto decrypt_result = wrapper->Decrypt(ciphertext_span);
+  auto decrypt_result = wrapper->Decrypt(ciphertext_span, {});
   EXPECT_NE(decrypt_result, nullptr);
   
   // Verify all operations were called
@@ -714,13 +761,13 @@ TEST_F(DBPALibraryWrapperTest, DelegationWithEmptyData) {
   
   span<const uint8_t> plaintext_span(empty_plaintext);
   
-  auto encrypt_result = wrapper->Encrypt(plaintext_span);
+  auto encrypt_result = wrapper->Encrypt(plaintext_span, {});
   EXPECT_NE(encrypt_result, nullptr);
   EXPECT_TRUE(mock_companion_->WasEncryptCalled());
   
   // Test decryption with empty data
   auto ciphertext_span = encrypt_result->ciphertext();
-  auto decrypt_result = wrapper->Decrypt(ciphertext_span);
+  auto decrypt_result = wrapper->Decrypt(ciphertext_span, {});
   EXPECT_NE(decrypt_result, nullptr);
   EXPECT_TRUE(mock_companion_->WasDecryptCalled());
 }
@@ -732,13 +779,13 @@ TEST_F(DBPALibraryWrapperTest, DelegationWithNullData) {
   // This tests that the wrapper properly delegates even with null data
   span<const uint8_t> null_plaintext_span(nullptr, size_t{0});
   
-  auto encrypt_result = wrapper->Encrypt(null_plaintext_span);
+  auto encrypt_result = wrapper->Encrypt(null_plaintext_span, {});
   EXPECT_NE(encrypt_result, nullptr);
   EXPECT_TRUE(mock_companion_->WasEncryptCalled());
   
   // Test decryption with null data pointer but valid span
   span<const uint8_t> null_decrypt_span(nullptr, size_t{0});
-  auto decrypt_result = wrapper->Decrypt(null_decrypt_span);
+  auto decrypt_result = wrapper->Decrypt(null_decrypt_span, {});
   EXPECT_NE(decrypt_result, nullptr);
   EXPECT_TRUE(mock_companion_->WasDecryptCalled());
   
@@ -765,7 +812,7 @@ TEST_F(DBPALibraryWrapperTest, DestructorBasicBehavior) {
     
     span<const uint8_t> plaintext_span(plaintext.data(), plaintext.size());
     
-    auto result = wrapper->Encrypt(plaintext_span);
+    auto result = wrapper->Encrypt(plaintext_span, {});
     EXPECT_NE(result, nullptr);
     
     // Verify handle closing hasn't been called yet
@@ -795,11 +842,11 @@ TEST_F(DBPALibraryWrapperTest, DestructorWithMultipleOperations) {
           reinterpret_cast<const uint8_t*>(plaintext.data()),
           plaintext.size());
       
-      auto encrypt_result = wrapper->Encrypt(plaintext_span);
+      auto encrypt_result = wrapper->Encrypt(plaintext_span, {});
       EXPECT_NE(encrypt_result, nullptr);
       
       auto ciphertext_span = encrypt_result->ciphertext();
-      auto decrypt_result = wrapper->Decrypt(ciphertext_span);
+      auto decrypt_result = wrapper->Decrypt(ciphertext_span, {});
       EXPECT_NE(decrypt_result, nullptr);
     }
     
@@ -832,7 +879,7 @@ TEST_F(DBPALibraryWrapperTest, DestructorOrderVerification) {
     
     span<const uint8_t> plaintext_span(plaintext.data(), plaintext.size());
     
-    auto result = wrapper->Encrypt(plaintext_span);
+    auto result = wrapper->Encrypt(plaintext_span, {});
     EXPECT_NE(result, nullptr);
     
     // Verify neither destructor nor handle closing has been called yet
@@ -904,7 +951,7 @@ TEST_F(DBPALibraryWrapperTest, InterfaceCompliancePolymorphic) {
   Type::type data_type = Type::INT64;
   CompressionCodec::type compression_type = CompressionCodec::GZIP;
   
-  interface_ptr->init(column_name, connection_config, app_context, column_key_id, data_type, compression_type);
+  interface_ptr->init(column_name, connection_config, app_context, column_key_id, data_type, std::nullopt, compression_type);
   
   // Verify init was called through the interface
   EXPECT_TRUE(mock_companion_->WasInitCalled());
@@ -918,11 +965,11 @@ TEST_F(DBPALibraryWrapperTest, InterfaceCompliancePolymorphic) {
   
   span<const uint8_t> plaintext_span(plaintext.data(), plaintext.size());
   
-  auto encrypt_result = interface_ptr->Encrypt(plaintext_span);
+  auto encrypt_result = interface_ptr->Encrypt(plaintext_span, {});
   EXPECT_NE(encrypt_result, nullptr);
   
   auto ciphertext_span = encrypt_result->ciphertext();
-  auto decrypt_result = interface_ptr->Decrypt(ciphertext_span);
+  auto decrypt_result = interface_ptr->Decrypt(ciphertext_span, {});
   EXPECT_NE(decrypt_result, nullptr);
   
   // Verify the mock agent was called through the interface
@@ -942,11 +989,11 @@ TEST_F(DBPALibraryWrapperTest, EdgeCaseZeroSizeSpans) {
   
   span<const uint8_t> empty_plaintext_span(empty_data);
   
-  auto encrypt_result = wrapper->Encrypt(empty_plaintext_span);
+  auto encrypt_result = wrapper->Encrypt(empty_plaintext_span, {});
   EXPECT_NE(encrypt_result, nullptr);
   
   auto ciphertext_span = encrypt_result->ciphertext();
-  auto decrypt_result = wrapper->Decrypt(ciphertext_span);
+  auto decrypt_result = wrapper->Decrypt(ciphertext_span, {});
   EXPECT_NE(decrypt_result, nullptr);
   
   EXPECT_TRUE(mock_companion_->WasEncryptCalled());
@@ -961,11 +1008,11 @@ TEST_F(DBPALibraryWrapperTest, EdgeCaseSingleByteData) {
   
   span<const uint8_t> plaintext_span(single_byte.data(), single_byte.size());
   
-  auto encrypt_result = wrapper->Encrypt(plaintext_span);
+  auto encrypt_result = wrapper->Encrypt(plaintext_span, {});
   EXPECT_NE(encrypt_result, nullptr);
   
   auto ciphertext_span = encrypt_result->ciphertext();
-  auto decrypt_result = wrapper->Decrypt(ciphertext_span);
+  auto decrypt_result = wrapper->Decrypt(ciphertext_span, {});
   EXPECT_NE(decrypt_result, nullptr);
   
   EXPECT_TRUE(mock_companion_->WasEncryptCalled());

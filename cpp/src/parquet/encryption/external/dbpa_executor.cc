@@ -133,6 +133,7 @@ void DBPAExecutor::init(
     std::string app_context,
     std::string column_key_id,
     Type::type data_type,
+    std::optional<int> datatype_length,
     CompressionCodec::type compression_type) {
 
   std::cout << "[DBPAExecutor] init() called for column: " << column_name 
@@ -144,38 +145,41 @@ void DBPAExecutor::init(
                        std::string app_ctx,
                        std::string col_key_id,
                        Type::type dt,
+                       std::optional<int> dt_len,
                        CompressionCodec::type comp_type) {
                   wrapped_agent_->init(std::move(col_name), std::move(conn_config),
                                       std::move(app_ctx), std::move(col_key_id),
-                                      dt, comp_type);
+                                      dt, dt_len, comp_type);
                 },
                 std::move(column_name), std::move(connection_config),
                 std::move(app_context), std::move(column_key_id),
-                data_type, compression_type);
+                data_type, datatype_length, compression_type);
 }
 
 std::unique_ptr<EncryptionResult> DBPAExecutor::Encrypt(
-    span<const uint8_t> plaintext) {
+    span<const uint8_t> plaintext,
+    std::map<std::string, std::string> encoding_attributes) {
   
   std::cout << "[DBPAExecutor] Encrypt() called with " << plaintext.size() << " bytes" << std::endl;
   
   return ExecuteWithTimeout("encrypt", encrypt_timeout_milliseconds_,
-                           [this](span<const uint8_t> pt) {
-                             return wrapped_agent_->Encrypt(pt);
+                           [this](span<const uint8_t> pt, std::map<std::string, std::string> attrs) {
+                             return wrapped_agent_->Encrypt(pt, std::move(attrs));
                            },
-                           plaintext);
+                           plaintext, std::move(encoding_attributes));
 }
 
 std::unique_ptr<DecryptionResult> DBPAExecutor::Decrypt(
-    span<const uint8_t> ciphertext) {
+    span<const uint8_t> ciphertext,
+    std::map<std::string, std::string> encoding_attributes) {
   
   std::cout << "[DBPAExecutor] Decrypt() called with " << ciphertext.size() << " bytes" << std::endl;
   
   return ExecuteWithTimeout("decrypt", decrypt_timeout_milliseconds_,
-                           [this](span<const uint8_t> ct) {
-                             return wrapped_agent_->Decrypt(ct);
+                           [this](span<const uint8_t> ct, std::map<std::string, std::string> attrs) {
+                             return wrapped_agent_->Decrypt(ct, std::move(attrs));
                            },
-                           ciphertext);
+                           ciphertext, std::move(encoding_attributes));
 }
 
 }  // namespace parquet::encryption::external

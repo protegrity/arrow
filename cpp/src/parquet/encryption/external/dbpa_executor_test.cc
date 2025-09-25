@@ -6,6 +6,7 @@
 #include <chrono>
 #include <vector>
 #include <map>
+#include <optional>
 #include <string>
 
 namespace parquet::encryption::external {
@@ -74,6 +75,9 @@ public:
     std::string last_init_column_key_id_;
     Type::type last_init_data_type_;
     CompressionCodec::type last_init_compression_type_;
+    std::optional<int> last_init_datatype_length_;
+    std::map<std::string, std::string> last_encrypt_encoding_attrs_;
+    std::map<std::string, std::string> last_decrypt_encoding_attrs_;
     
     std::vector<uint8_t> last_encrypt_plaintext_;
     std::vector<uint8_t> last_decrypt_ciphertext_;
@@ -93,6 +97,7 @@ public:
               std::string app_context,
               std::string column_key_id,
               Type::type data_type,
+              std::optional<int> datatype_length,
               CompressionCodec::type compression_type) override {
         init_call_count_++;
         last_init_column_name_ = column_name;
@@ -101,15 +106,18 @@ public:
         last_init_column_key_id_ = column_key_id;
         last_init_data_type_ = data_type;
         last_init_compression_type_ = compression_type;
+        last_init_datatype_length_ = datatype_length;
         
         if (should_throw_on_init_) {
             throw std::runtime_error(throw_message_);
         }
     }
     
-    std::unique_ptr<EncryptionResult> Encrypt(span<const uint8_t> plaintext) override {
+    std::unique_ptr<EncryptionResult> Encrypt(span<const uint8_t> plaintext,
+                                              std::map<std::string, std::string> encoding_attributes) override {
         encrypt_call_count_++;
         last_encrypt_plaintext_.assign(plaintext.begin(), plaintext.end());
+        last_encrypt_encoding_attrs_ = std::move(encoding_attributes);
         
         if (should_throw_on_encrypt_) {
             throw std::runtime_error(throw_message_);
@@ -123,9 +131,11 @@ public:
         return nullptr;
     }
     
-    std::unique_ptr<DecryptionResult> Decrypt(span<const uint8_t> ciphertext) override {
+    std::unique_ptr<DecryptionResult> Decrypt(span<const uint8_t> ciphertext,
+                                              std::map<std::string, std::string> encoding_attributes) override {
         decrypt_call_count_++;
         last_decrypt_ciphertext_.assign(ciphertext.begin(), ciphertext.end());
+        last_decrypt_encoding_attrs_ = std::move(encoding_attributes);
         
         if (should_throw_on_decrypt_) {
             throw std::runtime_error(throw_message_);
@@ -202,7 +212,7 @@ TEST_F(DBPAExecutorTest, InitForwardsToWrappedAgent) {
   
   // Call init through executor
   EXPECT_NO_THROW(executor_->init(column_name, connection_config, app_context,
-                                 column_key_id, data_type, compression_type));
+                                 column_key_id, data_type, std::nullopt, compression_type));
   
   // Verify the mock agent was called exactly once
   EXPECT_EQ(mock_agent_ptr_->init_call_count_, 1);
@@ -219,7 +229,7 @@ TEST_F(DBPAExecutorTest, InitForwardsToWrappedAgent) {
 TEST_F(DBPAExecutorTest, EncryptForwardsToWrappedAgent) {
   // Initialize the executor first
   executor_->init("test_column", {}, "test_context", "test_key_id",
-                 Type::type::INT32, CompressionCodec::type::UNCOMPRESSED);
+                 Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED);
 
   // Create test data
   std::vector<uint8_t> plaintext = {1, 2, 3, 4, 5};
@@ -229,13 +239,15 @@ TEST_F(DBPAExecutorTest, EncryptForwardsToWrappedAgent) {
   mock_agent_ptr_->ResetCallCounts();
   
   // Encrypt should not throw and should return a result
-  auto result = executor_->Encrypt(plaintext_span);
+  std::map<std::string, std::string> attrs = {{"format", "plain"}};
+  auto result = executor_->Encrypt(plaintext_span, attrs);
   
   // Verify the mock agent was called exactly once
   EXPECT_EQ(mock_agent_ptr_->encrypt_call_count_, 1);
   
   // Verify the plaintext was forwarded correctly
   EXPECT_EQ(mock_agent_ptr_->last_encrypt_plaintext_, plaintext);
+  EXPECT_EQ(mock_agent_ptr_->last_encrypt_encoding_attrs_, attrs);
   
   // Note: result might be nullptr since we didn't set up a mock result
   // The important thing is that the call was forwarded
@@ -244,7 +256,7 @@ TEST_F(DBPAExecutorTest, EncryptForwardsToWrappedAgent) {
 TEST_F(DBPAExecutorTest, DecryptForwardsToWrappedAgent) {
   // Initialize the executor first
   executor_->init("test_column", {}, "test_context", "test_key_id",
-                 Type::type::INT32, CompressionCodec::type::UNCOMPRESSED);
+                 Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED);
 
   // Create test data
   std::vector<uint8_t> ciphertext = {5, 4, 3, 2, 1};
@@ -254,16 +266,27 @@ TEST_F(DBPAExecutorTest, DecryptForwardsToWrappedAgent) {
   mock_agent_ptr_->ResetCallCounts();
   
   // Decrypt should not throw and should return a result
-  auto result = executor_->Decrypt(ciphertext_span);
+  std::map<std::string, std::string> attrs = {{"format", "plain"}};
+  auto result = executor_->Decrypt(ciphertext_span, attrs);
   
   // Verify the mock agent was called exactly once
   EXPECT_EQ(mock_agent_ptr_->decrypt_call_count_, 1);
   
   // Verify the ciphertext was forwarded correctly
   EXPECT_EQ(mock_agent_ptr_->last_decrypt_ciphertext_, ciphertext);
+  EXPECT_EQ(mock_agent_ptr_->last_decrypt_encoding_attrs_, attrs);
   
   // Note: result might be nullptr since we didn't set up a mock result
   // The important thing is that the call was forwarded
+}
+
+TEST_F(DBPAExecutorTest, InitForwardsDatatypeLength) {
+  mock_agent_ptr_->ResetCallCounts();
+  EXPECT_NO_THROW(executor_->init("col", {}, "ctx", "kid",
+                                  Type::type::INT32, 16, CompressionCodec::type::UNCOMPRESSED));
+  EXPECT_EQ(mock_agent_ptr_->init_call_count_, 1);
+  ASSERT_TRUE(mock_agent_ptr_->last_init_datatype_length_.has_value());
+  EXPECT_EQ(mock_agent_ptr_->last_init_datatype_length_.value(), 16);
 }
 
 // Test that multiple calls are properly forwarded
@@ -273,7 +296,7 @@ TEST_F(DBPAExecutorTest, MultipleCallsAreProperlyForwarded) {
   
   // Make multiple init calls with different parameters
   executor_->init("column1", {{"key1", "value1"}}, "context1", "key1", 
-                 Type::type::INT32, CompressionCodec::type::UNCOMPRESSED);
+                 Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED);
   
   // Verify both calls were made
   EXPECT_EQ(mock_agent_ptr_->init_call_count_, 1);
@@ -292,8 +315,8 @@ TEST_F(DBPAExecutorTest, MultipleCallsAreProperlyForwarded) {
   span<const uint8_t> span1(data1);
   span<const uint8_t> span2(data2);
   
-  executor_->Encrypt(span1);
-  executor_->Encrypt(span2);
+  executor_->Encrypt(span1, {});
+  executor_->Encrypt(span2, {});
   
   // Verify both encrypt calls were made
   EXPECT_EQ(mock_agent_ptr_->encrypt_call_count_, 2);
@@ -307,8 +330,8 @@ TEST_F(DBPAExecutorTest, MultipleCallsAreProperlyForwarded) {
   span<const uint8_t> cipher_span1(cipher1);
   span<const uint8_t> cipher_span2(cipher2);
   
-  executor_->Decrypt(cipher_span1);
-  executor_->Decrypt(cipher_span2);
+  executor_->Decrypt(cipher_span1, {});
+  executor_->Decrypt(cipher_span2, {});
   
   // Verify both decrypt calls were made
   EXPECT_EQ(mock_agent_ptr_->decrypt_call_count_, 2);
@@ -323,18 +346,18 @@ TEST_F(DBPAExecutorTest, TimeoutExceptionThrownOnSlowOperation) {
   class SlowMockAgent : public DataBatchProtectionAgentInterface {
   public:
       void init(std::string, std::map<std::string, std::string>, std::string, 
-                std::string, Type::type, CompressionCodec::type) override {
+                std::string, Type::type, std::optional<int>, CompressionCodec::type) override {
           // Simulate slow operation that takes 200ms
           std::this_thread::sleep_for(std::chrono::milliseconds(100));
       }
       
-      std::unique_ptr<EncryptionResult> Encrypt(span<const uint8_t>) override {
+      std::unique_ptr<EncryptionResult> Encrypt(span<const uint8_t>, std::map<std::string, std::string>) override {
           // Simulate slow operation that takes 150ms
           std::this_thread::sleep_for(std::chrono::milliseconds(100));
           return nullptr;
       }
       
-      std::unique_ptr<DecryptionResult> Decrypt(span<const uint8_t>) override {
+      std::unique_ptr<DecryptionResult> Decrypt(span<const uint8_t>, std::map<std::string, std::string>) override {
           // Simulate slow operation that takes 120ms
           std::this_thread::sleep_for(std::chrono::milliseconds(100));
           return nullptr;
@@ -351,7 +374,7 @@ TEST_F(DBPAExecutorTest, TimeoutExceptionThrownOnSlowOperation) {
   // Test init timeout - should throw DBPAExecutorTimeoutException
   try {
     timeout_executor->init("test_column", {}, "test_context", "test_key_id",
-                          Type::type::INT32, CompressionCodec::type::UNCOMPRESSED);
+                          Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED);
     FAIL() << "Expected DBPAExecutorTimeoutException to be thrown";
   } catch (const DBPAExecutorTimeoutException& e) {
     // Verify the timeout exception contains expected information
@@ -368,7 +391,7 @@ TEST_F(DBPAExecutorTest, TimeoutExceptionThrownOnSlowOperation) {
   span<const uint8_t> data_span(data);
   
   try {
-    timeout_executor->Encrypt(data_span);
+    timeout_executor->Encrypt(data_span, {});
     FAIL() << "Expected DBPAExecutorTimeoutException to be thrown";
   } catch (const DBPAExecutorTimeoutException& e) {
     // Verify the timeout exception contains expected information
@@ -382,7 +405,7 @@ TEST_F(DBPAExecutorTest, TimeoutExceptionThrownOnSlowOperation) {
   
   // Test decrypt timeout - should throw DBPAExecutorTimeoutException
   try {
-    timeout_executor->Decrypt(data_span);
+    timeout_executor->Decrypt(data_span, {});
     FAIL() << "Expected DBPAExecutorTimeoutException to be thrown";
   } catch (const DBPAExecutorTimeoutException& e) {
     // Verify the timeout exception contains expected information
@@ -404,7 +427,7 @@ TEST_F(DBPAExecutorTest, OriginalExceptionsArePreserved) {
   // Test that init exception is preserved
   try {
     executor_->init("test_column", {}, "test_context", "test_key_id",
-                   Type::type::INT32, CompressionCodec::type::UNCOMPRESSED);
+                   Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED);
     FAIL() << "Expected std::runtime_error to be thrown";
   } catch (const std::runtime_error& e) {
     EXPECT_STREQ(e.what(), "Mock init error");
@@ -421,7 +444,7 @@ TEST_F(DBPAExecutorTest, OriginalExceptionsArePreserved) {
   span<const uint8_t> data_span(data);
   
   try {
-    executor_->Encrypt(data_span);
+    executor_->Encrypt(data_span, {});
     FAIL() << "Expected std::runtime_error to be thrown";
   } catch (const std::runtime_error& e) {
     EXPECT_STREQ(e.what(), "Mock encrypt error");
@@ -435,7 +458,7 @@ TEST_F(DBPAExecutorTest, OriginalExceptionsArePreserved) {
   mock_agent_ptr_->throw_message_ = "Mock decrypt error";
   
   try {
-    executor_->Decrypt(data_span);
+    executor_->Decrypt(data_span, {});
     FAIL() << "Expected std::runtime_error to be thrown";
   } catch (const std::runtime_error& e) {
     EXPECT_STREQ(e.what(), "Mock decrypt error");

@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <map>
+#include <optional>
 
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/external_dbpa_encryption.h"
@@ -37,7 +38,7 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     std::unique_ptr<ExternalDBPAEncryptorAdapter> encryptor = ExternalDBPAEncryptorAdapter::Make(
       algorithm, column_name, key_id, data_type, 
       compression_type, encoding_type, app_context_, 
-      connection_config_);
+      connection_config_, std::nullopt);
 
     // Create a simple ColumnChunkProperties for testing using the builder pattern
     std::unique_ptr<ColumnChunkProperties> column_chunk_properties = 
@@ -82,7 +83,7 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     std::unique_ptr<ExternalDBPADecryptorAdapter> decryptor = ExternalDBPADecryptorAdapter::Make(
       algorithm, column_name, key_id, data_type,
       compression_type, {encoding_type}, app_context_,
-      connection_config_);
+      connection_config_, std::nullopt);
 
     int32_t expected_plaintext_length = ciphertext_str.size();
     int32_t actual_plaintext_length = decryptor->PlaintextLength(ciphertext_str.size());
