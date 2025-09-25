@@ -6,8 +6,6 @@
 #include <string>
 #include <optional>
 
-#include "generated/parquet_types.h"
-
 #include "parquet/types.h"
 #include "parquet/encoding.h"
 #include "parquet/metadata.h"
@@ -15,38 +13,6 @@
 #include "arrow/util/compression.h"
 
 namespace parquet::encryption {
-
-using ::parquet::format::PageHeader;
-using ::parquet::format::PageType;
-using ::parquet::format::DictionaryPageHeader;
-using ::parquet::format::DataPageHeader;
-using ::parquet::format::DataPageHeaderV2;
-
-// Utility function to translate between parquet::format::Encoding::type and parquet::Encoding::type
-inline parquet::Encoding::type ToParquetEncoding(::parquet::format::Encoding::type format_encoding) {
-    switch (format_encoding) {
-        case ::parquet::format::Encoding::PLAIN:
-            return parquet::Encoding::PLAIN;
-        case ::parquet::format::Encoding::PLAIN_DICTIONARY:
-            return parquet::Encoding::PLAIN_DICTIONARY;
-        case ::parquet::format::Encoding::RLE:
-            return parquet::Encoding::RLE;
-        case ::parquet::format::Encoding::BIT_PACKED:
-            return parquet::Encoding::BIT_PACKED;
-        case ::parquet::format::Encoding::DELTA_BINARY_PACKED:
-            return parquet::Encoding::DELTA_BINARY_PACKED;
-        case ::parquet::format::Encoding::DELTA_LENGTH_BYTE_ARRAY:
-            return parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY;
-        case ::parquet::format::Encoding::DELTA_BYTE_ARRAY:
-            return parquet::Encoding::DELTA_BYTE_ARRAY;
-        case ::parquet::format::Encoding::RLE_DICTIONARY:
-            return parquet::Encoding::RLE_DICTIONARY;
-        case ::parquet::format::Encoding::BYTE_STREAM_SPLIT:
-            return parquet::Encoding::BYTE_STREAM_SPLIT;
-        default:
-            return parquet::Encoding::PLAIN; // Default fallback
-    }
-}
 
 class ColumnChunkPropertiesBuilder;
 
@@ -57,10 +23,6 @@ public:
         const WriterProperties* writer_properties,
         const Page& column_page);
 
-
-    static std::unique_ptr<ColumnChunkProperties> MakeFromDecryptionMetadata(
-        PageHeader& page_header
-    );
 
     // Builder pattern
     static ColumnChunkPropertiesBuilder Builder();
@@ -133,6 +95,8 @@ private:
 
     // there are not specific properties for dictionary pages,
     // other than the page encoding (captured above).
+
+    //--------------------------------
 }; //class ColumnChunkProperties
 
 class ColumnChunkPropertiesBuilder {

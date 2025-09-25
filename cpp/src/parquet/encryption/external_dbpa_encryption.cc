@@ -167,6 +167,11 @@ int32_t ExternalDBPAEncryptorAdapter::CiphertextLength(int64_t plaintext_len) co
 void ExternalDBPAEncryptorAdapter::UpdateEncryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) {
   std::cout << "ExternalDBPAEncryptorAdapter::UpdateEncryptionParams" << std::endl;
 
+  //fill-in values from the decryptor constructor.
+  column_chunk_properties->set_column_path(column_name_);
+  column_chunk_properties->set_physical_type(data_type_);
+  column_chunk_properties->set_compression_codec(compression_type_);
+
   column_chunk_properties->validate();
   updated_column_chunk_properties_ = std::move(column_chunk_properties);
   encryption_params_updated_ = true;
@@ -177,8 +182,8 @@ int32_t ExternalDBPAEncryptorAdapter::Encrypt(
     ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<uint8_t> ciphertext) {
 
   if (!encryption_params_updated_) {
-    std::cout << "[ERROR] Params not updated" << std::endl;
-    throw ParquetException("Params not updated");
+    std::cout << "[ERROR] ExternalDBPAEncryptorAdapter:: EncryptionParams not updated" << std::endl;
+    throw ParquetException("ExternalDBPAEncryptorAdapter:: EncryptionParams not updated");
   }
 
   encryption_params_updated_ = false;
@@ -365,8 +370,7 @@ int32_t ExternalDBPADecryptorAdapter::CiphertextLength(int32_t plaintext_len) co
 void ExternalDBPADecryptorAdapter::UpdateDecryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) {
   std::cout << "ExternalDBPADecryptorAdapter::UpdateDecryptionParams" << std::endl;
 
-  //TODO: fill-in values from the decryptor constructor.
-
+  //fill-in values from the decryptor constructor.
   column_chunk_properties->set_column_path(column_name_);
   column_chunk_properties->set_physical_type(data_type_);
   column_chunk_properties->set_compression_codec(compression_type_);
@@ -381,8 +385,8 @@ int32_t ExternalDBPADecryptorAdapter::Decrypt(
     ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<uint8_t> plaintext) {
 
       if (!decryption_params_updated_) {
-        std::cout << "[ERROR] Params not updated" << std::endl;
-        throw ParquetException("Params not updated");
+        std::cout << "[ERROR] ExternalDBPADecryptorAdapter:: DecryptionParams not updated" << std::endl;
+        throw ParquetException("ExternalDBPADecryptorAdapter:: DecryptionParams not updated");
       }
 
       decryption_params_updated_ = false;

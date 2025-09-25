@@ -92,7 +92,8 @@ void ColumnChunkProperties::validate() {
         }
     }
     else if (page_type_ == parquet::PageType::DICTIONARY_PAGE) {
-        // no additional validations required for DICTIONARY_PAGE
+        // no validations required for DICTIONARY_PAGE
+        // (the requirement for 'encoding' is satisfied by the page_encoding check above)
     }
  } //validate()
 
@@ -141,50 +142,6 @@ std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromMetadata(
     return builder.Build();
 }
 
-//TODO: we want a better name here.
-std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromDecryptionMetadata(
-    PageHeader& page_header) {
-
-    ColumnChunkPropertiesBuilder builder;
-
-    format::PageType::type page_type_from_header = page_header.type;
-
-    if (page_type_from_header == format::PageType::DICTIONARY_PAGE) {
-        std::cout << "ColumnChunkProperties::MakeFromDecryptionMetadata - PageType::DICTIONARY_PAGE" << std::endl;
-  
-        format::DictionaryPageHeader dictionary_page_header = page_header.dictionary_page_header;
-  
-        builder.PageType(parquet::PageType::type::DICTIONARY_PAGE);  
-        builder.PageEncoding(ToParquetEncoding(dictionary_page_header.encoding));
-      }
-      else if (page_type_from_header == format::PageType::DATA_PAGE) {
-        std::cout << "ColumnChunkProperties::MakeFromDecryptionMetadata - PageType::DATA_PAGE" << std::endl;
-  
-        format::DataPageHeader data_page_header = page_header.data_page_header;
-  
-        builder.PageType(parquet::PageType::type::DATA_PAGE);
-        builder.PageEncoding(ToParquetEncoding(data_page_header.encoding));
-        builder.DataPageNumValues(data_page_header.num_values);
-        builder.PageV1DefinitionLevelEncoding(ToParquetEncoding(data_page_header.definition_level_encoding));
-        builder.PageV1RepetitionLevelEncoding(ToParquetEncoding(data_page_header.repetition_level_encoding));
-      }
-      else if (page_type_from_header == format::PageType::DATA_PAGE_V2) {
-        
-        format::DataPageHeaderV2 data_page_header_v2 = page_header.data_page_header_v2;
-  
-        builder.PageType(parquet::PageType::type::DATA_PAGE_V2);
-        builder.PageEncoding(ToParquetEncoding(data_page_header_v2.encoding));
-        builder.DataPageNumValues(data_page_header_v2.num_values);
-        builder.PageV2NumNulls(data_page_header_v2.num_nulls);
-        builder.PageV2DefinitionLevelsByteLength(data_page_header_v2.definition_levels_byte_length);
-        builder.PageV2RepetitionLevelsByteLength(data_page_header_v2.repetition_levels_byte_length);
-        builder.PageV2IsCompressed(data_page_header_v2.is_compressed);
-      }
-  
-    return builder.Build();
-}
-
-
 //--------------------------------
 // Builder method implementations
 
@@ -192,17 +149,6 @@ std::unique_ptr<ColumnChunkProperties> ColumnChunkPropertiesBuilder::Build() {
     // while we will perform validation upon construction, 
     // we know that these properties are required. 
     // validating here simplifies our code.
-
-    //TODO: clean this up.
-    // if (!column_path_) {
-    //     throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - ColumnPath is required");
-    // }
-    // if (!physical_type_) {
-    //     throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - PhysicalType is required");
-    // }
-    // if (!compression_codec_) {
-    //     throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - CompressionCodec is required");
-    // }
 
     if (!page_type_) {
         throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - PageType is required");

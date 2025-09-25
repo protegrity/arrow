@@ -30,10 +30,6 @@
 #include "parquet/schema.h"
 #include "parquet/types.h"
 
-#include "parquet/encryption/column_chunk_properties.h"
-
-using parquet::encryption::ColumnChunkProperties;
-
 namespace arrow {
 
 class Array;
