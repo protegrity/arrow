@@ -42,8 +42,8 @@ int32_t Encryptor::Encrypt(::arrow::util::span<const uint8_t> plaintext,
   return encryptor_instance_->Encrypt(plaintext, str2span(key_), str2span(aad_), ciphertext);
 }
 
-void Encryptor::UpdateEncryptionParams(std::unique_ptr<EncodingProperties> encoding_properties) {
-  encryptor_instance_->UpdateEncryptionParams(std::move(encoding_properties));
+void Encryptor::UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {
+  encryptor_instance_->UpdateEncodingProperties(std::move(encoding_properties));
 }
 
 // InternalFileEncryptor

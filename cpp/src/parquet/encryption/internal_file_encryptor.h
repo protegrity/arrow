@@ -49,7 +49,7 @@ class PARQUET_EXPORT Encryptor {
   int32_t Encrypt(::arrow::util::span<const uint8_t> plaintext,
                   ::arrow::util::span<uint8_t> ciphertext);
 
-  void UpdateEncryptionParams(std::unique_ptr<EncodingProperties> encoding_properties);
+  void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties);
 
   bool EncryptColumnMetaData(
       bool encrypted_footer,

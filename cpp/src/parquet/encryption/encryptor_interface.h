@@ -37,8 +37,9 @@ class PARQUET_EXPORT EncryptorInterface {
                           ::arrow::util::span<const uint8_t> aad,
                           ::arrow::util::span<uint8_t> ciphertext) = 0;
 
-  // TODO: add a description here.                        
-  virtual void UpdateEncryptionParams(std::unique_ptr<EncodingProperties> encoding_properties) {};
+  // Some Encryptors may need to understand the page encoding before the encryption process.
+  // This method will be called from ColumnWriter before invoking the Encrypt method.
+  virtual void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {};
 
   /// Encrypt footer metadata for signature verification purposes only.
   /// This method is used specifically for footer signature verification in encrypted

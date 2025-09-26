@@ -164,8 +164,8 @@ int32_t ExternalDBPAEncryptorAdapter::CiphertextLength(int64_t plaintext_len) co
   return plaintext_len;
 }
 
-void ExternalDBPAEncryptorAdapter::UpdateEncryptionParams(std::unique_ptr<EncodingProperties> encoding_properties) {
-  std::cout << "ExternalDBPAEncryptorAdapter::UpdateEncryptionParams" << std::endl;
+void ExternalDBPAEncryptorAdapter::UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {
+  std::cout << "ExternalDBPAEncryptorAdapter::UpdateEncodingProperties" << std::endl;
 
   //fill-in values from the decryptor constructor.
   encoding_properties->set_column_path(column_name_);
@@ -370,8 +370,8 @@ int32_t ExternalDBPADecryptorAdapter::CiphertextLength(int32_t plaintext_len) co
   return plaintext_len;
 }
 
-void ExternalDBPADecryptorAdapter::UpdateDecryptionParams(std::unique_ptr<EncodingProperties> encoding_properties) {
-  std::cout << "ExternalDBPADecryptorAdapter::UpdateDecryptionParams" << std::endl;
+void ExternalDBPADecryptorAdapter::UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {
+  std::cout << "ExternalDBPADecryptorAdapter::UpdateEncodingProperties" << std::endl;
 
   //fill-in values from the decryptor constructor.
   encoding_properties->set_column_path(column_name_);

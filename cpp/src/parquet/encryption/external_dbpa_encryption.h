@@ -47,7 +47,7 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
                               ::arrow::util::span<const uint8_t> nonce,
                               ::arrow::util::span<uint8_t> encrypted_footer) override;
 
-  void UpdateEncryptionParams(std::unique_ptr<EncodingProperties> encoding_properties) override;
+  void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) override;
  
  private:
     //agent_instance is assumed to be initialized at the time of construction. 
@@ -119,7 +119,7 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
                   ::arrow::util::span<const uint8_t> aad,
                   ::arrow::util::span<uint8_t> plaintext) override;
 
-  void UpdateDecryptionParams(std::unique_ptr<EncodingProperties> encoding_properties) override;
+  void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) override;
 
   private:
     //agent_instance is assumed to be initialized at the time of construction. 

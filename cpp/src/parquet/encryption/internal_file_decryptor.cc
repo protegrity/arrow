@@ -45,8 +45,8 @@ int32_t Decryptor::CiphertextLength(int32_t plaintext_len) const {
   return decryptor_instance_->CiphertextLength(plaintext_len);
 }
 
-void Decryptor::UpdateDecryptionParams(std::unique_ptr<EncodingProperties> encoding_properties) {
-  decryptor_instance_->UpdateDecryptionParams(std::move(encoding_properties));
+void Decryptor::UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {
+  decryptor_instance_->UpdateEncodingProperties(std::move(encoding_properties));
 }
 
 int32_t Decryptor::Decrypt(::arrow::util::span<const uint8_t> ciphertext,

@@ -54,7 +54,7 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
             .DataPageNumValues(100) 
             .Build();
 
-    encryptor->UpdateEncryptionParams(builder.Build());
+    encryptor->UpdateEncodingProperties(builder.Build());
 
     int32_t expected_ciphertext_length = plaintext.size();
     int32_t actual_ciphertext_length = encryptor->CiphertextLength(plaintext.size());
@@ -85,7 +85,7 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
       compression_type, {encoding_type}, app_context_,
       connection_config_, std::nullopt);
 
-    decryptor->UpdateDecryptionParams(builder.Build());
+    decryptor->UpdateEncodingProperties(builder.Build());
 
     int32_t expected_plaintext_length = ciphertext_str.size();
     int32_t actual_plaintext_length = decryptor->PlaintextLength(ciphertext_str.size());

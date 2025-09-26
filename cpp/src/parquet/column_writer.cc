@@ -325,7 +325,7 @@ class SerializedPageWriter : public PageWriter {
           metadata_->descr(), 
           metadata_->properties(), 
           static_cast<const DictionaryPage&>(page));
-      data_encryptor_->UpdateEncryptionParams(std::move(encoding_properties));
+      data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
       output_data_len =
           data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),
@@ -437,7 +437,7 @@ class SerializedPageWriter : public PageWriter {
           metadata_->descr(), 
           metadata_->properties(), 
           static_cast<const DataPage&>(page));
-      data_encryptor_->UpdateEncryptionParams(std::move(encoding_properties));
+      data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
       output_data_len =
           data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),

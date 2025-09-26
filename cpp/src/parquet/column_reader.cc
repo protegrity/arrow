@@ -574,7 +574,7 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {
     if (data_decryptor_ != nullptr) {
       std::unique_ptr<EncodingProperties> encoding_properties = GetEncodingProperties(current_page_header_);
 
-      data_decryptor_->UpdateDecryptionParams(std::move(encoding_properties));
+      data_decryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
       PARQUET_THROW_NOT_OK(
           decryption_buffer_->Resize(data_decryptor_->PlaintextLength(compressed_len),
