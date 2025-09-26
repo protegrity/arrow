@@ -142,6 +142,38 @@ std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromMetadata(
     return builder.Build();
 }
 
+std::map<std::string, std::string> ColumnChunkProperties::ToPropertiesMap() const {
+    std::map<std::string, std::string> result;
+
+    result["column_path"] = std::string(column_path_.value());
+    result["physical_type"] = std::to_string(physical_type_.value());
+    result["compression_codec"] = std::to_string(compression_codec_.value());
+    result["page_type"] = std::to_string(page_type_);
+    result["page_encoding"] = std::to_string(page_encoding_.value());
+
+    if (fixed_length_bytes_.has_value()) {
+        result["fixed_length_bytes"] = std::to_string(fixed_length_bytes_.value());
+    }
+
+    if (page_type_ == parquet::PageType::DATA_PAGE) {
+        result["data_page_num_values"] = std::to_string(data_page_num_values_.value());
+        result["page_v1_definition_level_encoding"] = std::to_string(page_v1_definition_level_encoding_.value());
+        result["page_v1_repetition_level_encoding"] = std::to_string(page_v1_repetition_level_encoding_.value());
+    }
+    else if (page_type_ == parquet::PageType::DATA_PAGE_V2) {
+        result["data_page_num_values"] = std::to_string(data_page_num_values_.value());
+        result["page_v2_definition_levels_byte_length"] = std::to_string(page_v2_definition_levels_byte_length_.value());
+        result["page_v2_repetition_levels_byte_length"] = std::to_string(page_v2_repetition_levels_byte_length_.value());
+        result["page_v2_num_nulls"] = std::to_string(page_v2_num_nulls_.value());
+        result["page_v2_is_compressed"] = std::to_string(page_v2_is_compressed_.value());
+    }
+    else if (page_type_ == parquet::PageType::DICTIONARY_PAGE) {
+        // no other properties are set for DICTIONARY_PAGE
+    }
+
+    return result;
+}
+
 //--------------------------------
 // Builder method implementations
 
