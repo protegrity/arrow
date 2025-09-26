@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 #include <optional>
@@ -34,6 +35,8 @@ public:
     void set_compression_codec(::arrow::Compression::type compression_codec);
 
     void validate();
+
+    std::map<std::string, std::string> ToPropertiesMap() const;
 
 private:
     // Private constructor for builder

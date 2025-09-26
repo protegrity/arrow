@@ -188,18 +188,22 @@ int32_t ExternalDBPAEncryptorAdapter::Encrypt(
 
   encryption_params_updated_ = false;
 
-  return InvokeExternalEncrypt(plaintext, ciphertext);
+  return InvokeExternalEncrypt(plaintext, ciphertext, updated_column_chunk_properties_->ToPropertiesMap());
 }
 
+// TODO: this method will soon be un-implemented. For now, passing an empty map. 
+// https://github.com/protegrity/arrow/issues/69
 int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
     ::arrow::util::span<const uint8_t> footer, ::arrow::util::span<const uint8_t> key,
     ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<const uint8_t> nonce,
     ::arrow::util::span<uint8_t> encrypted_footer) {
-  return InvokeExternalEncrypt(footer, encrypted_footer);
+  return InvokeExternalEncrypt(footer, encrypted_footer, std::map<std::string, std::string>());
 }
 
 int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
-    ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<uint8_t> ciphertext) {
+    ::arrow::util::span<const uint8_t> plaintext, 
+    ::arrow::util::span<uint8_t> ciphertext,
+    std::map<std::string, std::string> encoding_attrs) {
 
       std::cout << "\n*-*-*- START: ExternalDBPAEncryptor::Encrypt *-*-*-" << std::endl;
       std::cout << "Encryption Algorithm: [" << algorithm_ << "]" << std::endl;
@@ -215,7 +219,6 @@ int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
       }
   
       std::cout << "[DEBUG] Calling agent_instance_->Encrypt..." << std::endl;
-      std::map<std::string, std::string> encoding_attrs; // placeholder until wired
       std::unique_ptr<EncryptionResult> result = agent_instance_->Encrypt(plaintext, std::move(encoding_attrs));
   
       if (!result->success()) {
@@ -391,11 +394,13 @@ int32_t ExternalDBPADecryptorAdapter::Decrypt(
 
       decryption_params_updated_ = false;
 
-      return InvokeExternalDecrypt(ciphertext, plaintext);
+      return InvokeExternalDecrypt(ciphertext, plaintext, updated_column_chunk_properties_->ToPropertiesMap());
 }
 
 int32_t ExternalDBPADecryptorAdapter::InvokeExternalDecrypt(
-    ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<uint8_t> plaintext) {
+    ::arrow::util::span<const uint8_t> ciphertext, 
+    ::arrow::util::span<uint8_t> plaintext,
+    std::map<std::string, std::string> encoding_attrs) {
 
       std::cout << "\n*-*-*- START: ExternalDBPADecryptor::Decrypt *-*-*-" << std::endl;
       std::cout << "Decryption Algorithm: [" << algorithm_ << "]" << std::endl;
@@ -415,7 +420,6 @@ int32_t ExternalDBPADecryptorAdapter::InvokeExternalDecrypt(
       }
   
       std::cout << "[DEBUG] Calling agent_instance_->Decrypt..." << std::endl;
-      std::map<std::string, std::string> encoding_attrs; // placeholder until wired
       std::unique_ptr<DecryptionResult> result = agent_instance_->Decrypt(ciphertext, std::move(encoding_attrs));
       
       if (!result->success()) {
