@@ -56,10 +56,10 @@
 #include "parquet/thrift_internal.h"  // IWYU pragma: keep
 #include "parquet/windows_fixup.h"    // for OPTIONAL
 
-#include "parquet/encryption/column_chunk_properties.h"
+#include "parquet/encryption/encoding_properties.h"
 
-using parquet::encryption::ColumnChunkProperties;
-using parquet::encryption::ColumnChunkPropertiesBuilder;
+using parquet::encryption::EncodingProperties;
+using parquet::encryption::EncodingPropertiesBuilder;
 
 using arrow::MemoryPool;
 using arrow::internal::AddWithOverflow;
@@ -301,7 +301,7 @@ class SerializedPageReader : public PageReader {
 
   void set_max_page_header_size(uint32_t size) override { max_page_header_size_ = size; }
 
-  std::unique_ptr<ColumnChunkProperties> GetColumnChunkProperties(format::PageHeader& page_header);
+  std::unique_ptr<EncodingProperties> GetEncodingProperties(format::PageHeader& page_header);
 
  private:
   void UpdateDecryption(Decryptor* decryptor, int8_t module_type, std::string* page_aad);
@@ -451,8 +451,8 @@ bool SerializedPageReader::ShouldSkipPage(EncodedStatistics* data_page_statistic
 // Arrow frowns upon including thrift headers in the public API, and the types used in this function 
 // are not defined in the public API. This is verified via unit tests.
 // Therefore, we have to define this function here (as opposed to **any** .h file).
-std::unique_ptr<ColumnChunkProperties> SerializedPageReader::GetColumnChunkProperties(format::PageHeader& page_header) {
-    ColumnChunkPropertiesBuilder builder;
+std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(format::PageHeader& page_header) {
+    EncodingPropertiesBuilder builder;
 
     format::PageType::type page_type_from_header = page_header.type;
 
@@ -572,7 +572,7 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {
 
     // Decrypt it if we need to
     if (data_decryptor_ != nullptr) {
-      std::unique_ptr<ColumnChunkProperties> encoding_properties = GetColumnChunkProperties(current_page_header_);
+      std::unique_ptr<EncodingProperties> encoding_properties = GetEncodingProperties(current_page_header_);
 
       data_decryptor_->UpdateDecryptionParams(std::move(encoding_properties));
 

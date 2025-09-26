@@ -9,7 +9,7 @@
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/encryption/external/test_utils.h"
-#include "parquet/encryption/column_chunk_properties.h"
+#include "parquet/encryption/encoding_properties.h"
 
 /// TODO(sbrenes): Add proper testing. Right now we are just going to test that the
 /// encryptor and decryptor are created and that the plaintext is returned as the ciphertext.
@@ -40,8 +40,8 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
       compression_type, encoding_type, app_context_, 
       connection_config_, std::nullopt);
 
-    // Create a simple ColumnChunkProperties for testing using the builder pattern
-    ColumnChunkPropertiesBuilder builder;
+    // Create a simple EncodingProperties for testing using the builder pattern
+    EncodingPropertiesBuilder builder;
     builder.ColumnPath("test_column")
             .PhysicalType(data_type)
             .CompressionCodec(compression_type)

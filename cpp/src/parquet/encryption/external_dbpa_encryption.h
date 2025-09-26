@@ -11,6 +11,7 @@
 
 #include "parquet/encryption/encryptor_interface.h"
 #include "parquet/encryption/decryptor_interface.h"
+#include "parquet/encryption/encoding_properties.h"
 #include "parquet/metadata.h"
 #include "parquet/types.h"
 
@@ -46,8 +47,7 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
                               ::arrow::util::span<const uint8_t> nonce,
                               ::arrow::util::span<uint8_t> encrypted_footer) override;
 
-
-  void UpdateEncryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) override;
+  void UpdateEncryptionParams(std::unique_ptr<EncodingProperties> encoding_properties) override;
  
  private:
     //agent_instance is assumed to be initialized at the time of construction. 
@@ -76,8 +76,8 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
     
     std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
     
-    std::unique_ptr<ColumnChunkProperties> updated_column_chunk_properties_;
-    bool encryption_params_updated_ = false;
+    std::unique_ptr<EncodingProperties> encoding_properties_;
+    bool encoding_properties_updated_ = false;
 };
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
@@ -119,7 +119,7 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
                   ::arrow::util::span<const uint8_t> aad,
                   ::arrow::util::span<uint8_t> plaintext) override;
 
-  void UpdateDecryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) override;
+  void UpdateDecryptionParams(std::unique_ptr<EncodingProperties> encoding_properties) override;
 
   private:
     //agent_instance is assumed to be initialized at the time of construction. 
@@ -148,8 +148,8 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
 
     std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
 
-    std::unique_ptr<ColumnChunkProperties> updated_column_chunk_properties_;
-    bool decryption_params_updated_ = false;
+    std::unique_ptr<EncodingProperties> encoding_properties_;
+    bool encoding_properties_updated_ = false;
 };
 
 /// Factory for ExternalDBPADecryptorAdapter instances. No cache exists for decryptors.

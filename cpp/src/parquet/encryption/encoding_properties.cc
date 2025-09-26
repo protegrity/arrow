@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <iostream>
 
-#include "parquet/encryption/column_chunk_properties.h"
+#include "parquet/encryption/encoding_properties.h"
 #include "parquet/metadata.h"
 #include "parquet/column_page.h"
 
@@ -13,7 +13,7 @@ using parquet::ColumnDescriptor;
 using parquet::WriterProperties;
     
 // Private constructor for builder
-ColumnChunkProperties::ColumnChunkProperties(const ColumnChunkPropertiesBuilder& builder)
+EncodingProperties::EncodingProperties(const EncodingPropertiesBuilder& builder)
     : column_path_(builder.column_path_),
       physical_type_(builder.physical_type_),
       compression_codec_(builder.compression_codec_),
@@ -30,12 +30,12 @@ ColumnChunkProperties::ColumnChunkProperties(const ColumnChunkPropertiesBuilder&
     }
 
 // Builder static method
-ColumnChunkPropertiesBuilder ColumnChunkProperties::Builder() {
-    return ColumnChunkPropertiesBuilder();
+EncodingPropertiesBuilder EncodingProperties::Builder() {
+    return EncodingPropertiesBuilder();
 }
 
 // private method to validate the properties
-void ColumnChunkProperties::validate() {
+void EncodingProperties::validate() {
     // Validate required fields
     if ( (!column_path_.has_value()) || column_path_.value().empty()) {
         throw std::invalid_argument("ColumnPath is required");
@@ -97,13 +97,13 @@ void ColumnChunkProperties::validate() {
     }
  } //validate()
 
-std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromMetadata(
+std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
     //const ColumnChunkMetaDataBuilder* column_chunk_metadata,
     const ColumnDescriptor* column_descriptor,
     const WriterProperties* writer_properties,
     const Page& column_page) {
 
-    ColumnChunkPropertiesBuilder builder;
+    EncodingPropertiesBuilder builder;
 
     builder.ColumnPath(column_descriptor->path()->ToDotString());
     builder.PhysicalType(column_descriptor->physical_type());
@@ -142,7 +142,7 @@ std::unique_ptr<ColumnChunkProperties> ColumnChunkProperties::MakeFromMetadata(
     return builder.Build();
 }
 
-std::map<std::string, std::string> ColumnChunkProperties::ToPropertiesMap() const {
+std::map<std::string, std::string> EncodingProperties::ToPropertiesMap() const {
     std::map<std::string, std::string> result;
 
     result["column_path"] = std::string(column_path_.value());
@@ -177,79 +177,79 @@ std::map<std::string, std::string> ColumnChunkProperties::ToPropertiesMap() cons
 //--------------------------------
 // Builder method implementations
 
-std::unique_ptr<ColumnChunkProperties> ColumnChunkPropertiesBuilder::Build() {
+std::unique_ptr<EncodingProperties> EncodingPropertiesBuilder::Build() {
     // while we will perform validation upon construction, 
     // we know that these properties are required. 
     // validating here simplifies our code.
 
     if (!page_type_) {
-        throw std::invalid_argument("ColumnChunkPropertiesBuilder::Build - PageType is required");
+        throw std::invalid_argument("EncodingPropertiesBuilder::Build - PageType is required");
     }
 
-    return std::unique_ptr<ColumnChunkProperties>(new ColumnChunkProperties(*this));
+    return std::unique_ptr<EncodingProperties>(new EncodingProperties(*this));
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::ColumnPath(const std::string& column_path) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::ColumnPath(const std::string& column_path) {
     column_path_ = column_path;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PhysicalType(parquet::Type::type physical_type) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::PhysicalType(parquet::Type::type physical_type) {
     physical_type_ = physical_type;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::CompressionCodec(::arrow::Compression::type compression_codec) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::CompressionCodec(::arrow::Compression::type compression_codec) {
     compression_codec_ = compression_codec;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::FixedLengthBytes(std::int64_t fixed_length_bytes) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::FixedLengthBytes(std::int64_t fixed_length_bytes) {
     fixed_length_bytes_ = fixed_length_bytes;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PageType(parquet::PageType::type page_type) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageType(parquet::PageType::type page_type) {
     page_type_ = page_type;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PageEncoding(parquet::Encoding::type page_encoding) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageEncoding(parquet::Encoding::type page_encoding) {
     page_encoding_ = page_encoding;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::DataPageNumValues(int64_t data_page_num_values) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::DataPageNumValues(int64_t data_page_num_values) {
     data_page_num_values_ = data_page_num_values;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PageV1DefinitionLevelEncoding(parquet::Encoding::type encoding) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV1DefinitionLevelEncoding(parquet::Encoding::type encoding) {
     page_v1_definition_level_encoding_ = encoding;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PageV1RepetitionLevelEncoding(parquet::Encoding::type encoding) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV1RepetitionLevelEncoding(parquet::Encoding::type encoding) {
     page_v1_repetition_level_encoding_ = encoding;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PageV2DefinitionLevelsByteLength(int32_t byte_length) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2DefinitionLevelsByteLength(int32_t byte_length) {
     page_v2_definition_levels_byte_length_ = byte_length;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PageV2RepetitionLevelsByteLength(int32_t byte_length) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2RepetitionLevelsByteLength(int32_t byte_length) {
     page_v2_repetition_levels_byte_length_ = byte_length;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PageV2NumNulls(int32_t num_nulls) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2NumNulls(int32_t num_nulls) {
     page_v2_num_nulls_ = num_nulls;
     return *this;
 }
 
-ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PageV2IsCompressed(bool is_compressed) {
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2IsCompressed(bool is_compressed) {
     page_v2_is_compressed_ = is_compressed;
     return *this;
 }
@@ -257,15 +257,15 @@ ColumnChunkPropertiesBuilder& ColumnChunkPropertiesBuilder::PageV2IsCompressed(b
 //--------------------------------
 // Setters for column-level properties
 // used to fill-in values provided in the encryptor/decryptor constructor.
-void ColumnChunkProperties::set_column_path(const std::string& column_path) {
+void EncodingProperties::set_column_path(const std::string& column_path) {
     column_path_ = column_path;
 }
 
-void ColumnChunkProperties::set_compression_codec(::arrow::Compression::type compression_codec) {
+void EncodingProperties::set_compression_codec(::arrow::Compression::type compression_codec) {
     compression_codec_ = compression_codec;
 }
 
-void ColumnChunkProperties::set_physical_type(parquet::Type::type physical_type, 
+void EncodingProperties::set_physical_type(parquet::Type::type physical_type, 
                                                 const std::optional<std::int64_t>& fixed_length_bytes) {
     //TODO: validate.
     physical_type_ = physical_type;                                                        
@@ -275,3 +275,5 @@ void ColumnChunkProperties::set_physical_type(parquet::Type::type physical_type,
 }
 
 } // namespace parquet::encryption
+
+

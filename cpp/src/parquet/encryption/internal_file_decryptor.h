@@ -30,7 +30,7 @@ namespace parquet {
 class ColumnCryptoMetaData;
 class FileDecryptionProperties;
 
-using parquet::encryption::ColumnChunkProperties;
+using parquet::encryption::EncodingProperties;
 
 // An object handling decryption using well-known encryption parameters
 //
@@ -51,7 +51,7 @@ class PARQUET_EXPORT Decryptor {
   int32_t Decrypt(::arrow::util::span<const uint8_t> ciphertext,
                   ::arrow::util::span<uint8_t> plaintext);
 
-  void UpdateDecryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties);
+  void UpdateDecryptionParams(std::unique_ptr<EncodingProperties> encoding_properties);
 
  private:
   std::unique_ptr<encryption::DecryptorInterface> decryptor_instance_;

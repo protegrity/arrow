@@ -15,18 +15,18 @@
 
 namespace parquet::encryption {
 
-class ColumnChunkPropertiesBuilder;
+class EncodingPropertiesBuilder;
 
-class ColumnChunkProperties {
+class EncodingProperties {
 public:
-    static std::unique_ptr<ColumnChunkProperties> MakeFromMetadata(
+    static std::unique_ptr<EncodingProperties> MakeFromMetadata(
         const ColumnDescriptor* column_descriptor,
         const WriterProperties* writer_properties,
         const Page& column_page);
 
 
     // Builder pattern
-    static ColumnChunkPropertiesBuilder Builder();
+    static EncodingPropertiesBuilder Builder();
 
     // Setters for column-level properties
     void set_column_path(const std::string& column_path);
@@ -40,9 +40,9 @@ public:
 
 private:
     // Private constructor for builder
-    ColumnChunkProperties(const ColumnChunkPropertiesBuilder& builder);
+    EncodingProperties(const EncodingPropertiesBuilder& builder);
 
-    ColumnChunkProperties(
+    EncodingProperties(
         std::optional<std::string> column_path,
         std::optional<parquet::Type::type> physical_type,
         std::optional<::arrow::Compression::type> compression_codec,
@@ -59,7 +59,7 @@ private:
     );
 
     // Allow the builder to access private constructor
-    friend class ColumnChunkPropertiesBuilder;
+    friend class EncodingPropertiesBuilder;
 
     //--------------------------------
     //from column metadata. does not change across chunks nor data pages.
@@ -100,40 +100,40 @@ private:
     // other than the page encoding (captured above).
 
     //--------------------------------
-}; //class ColumnChunkProperties
+}; //class EncodingProperties
 
-class ColumnChunkPropertiesBuilder {
+class EncodingPropertiesBuilder {
 public:
-    ColumnChunkPropertiesBuilder() = default;
+    EncodingPropertiesBuilder() = default;
     
     // Column-level properties (required)
-    ColumnChunkPropertiesBuilder& ColumnPath(const std::string& column_path);
-    ColumnChunkPropertiesBuilder& PhysicalType(parquet::Type::type physical_type);
-    ColumnChunkPropertiesBuilder& CompressionCodec(::arrow::Compression::type compression_codec);
-    ColumnChunkPropertiesBuilder& PageType(parquet::PageType::type page_type);
+    EncodingPropertiesBuilder& ColumnPath(const std::string& column_path);
+    EncodingPropertiesBuilder& PhysicalType(parquet::Type::type physical_type);
+    EncodingPropertiesBuilder& CompressionCodec(::arrow::Compression::type compression_codec);
+    EncodingPropertiesBuilder& PageType(parquet::PageType::type page_type);
     
     // Column-level optional fields
-    ColumnChunkPropertiesBuilder& FixedLengthBytes(std::int64_t fixed_length_bytes);
+    EncodingPropertiesBuilder& FixedLengthBytes(std::int64_t fixed_length_bytes);
     
     // Data page properties
-    ColumnChunkPropertiesBuilder& PageEncoding(parquet::Encoding::type page_encoding);
-    ColumnChunkPropertiesBuilder& DataPageNumValues(int64_t data_page_num_values);
+    EncodingPropertiesBuilder& PageEncoding(parquet::Encoding::type page_encoding);
+    EncodingPropertiesBuilder& DataPageNumValues(int64_t data_page_num_values);
     
     // V1 data page properties
-    ColumnChunkPropertiesBuilder& PageV1DefinitionLevelEncoding(parquet::Encoding::type encoding);
-    ColumnChunkPropertiesBuilder& PageV1RepetitionLevelEncoding(parquet::Encoding::type encoding);
+    EncodingPropertiesBuilder& PageV1DefinitionLevelEncoding(parquet::Encoding::type encoding);
+    EncodingPropertiesBuilder& PageV1RepetitionLevelEncoding(parquet::Encoding::type encoding);
     
     // V2 data page properties
-    ColumnChunkPropertiesBuilder& PageV2DefinitionLevelsByteLength(int32_t byte_length);
-    ColumnChunkPropertiesBuilder& PageV2RepetitionLevelsByteLength(int32_t byte_length);
-    ColumnChunkPropertiesBuilder& PageV2NumNulls(int32_t num_nulls);
-    ColumnChunkPropertiesBuilder& PageV2IsCompressed(bool is_compressed);
+    EncodingPropertiesBuilder& PageV2DefinitionLevelsByteLength(int32_t byte_length);
+    EncodingPropertiesBuilder& PageV2RepetitionLevelsByteLength(int32_t byte_length);
+    EncodingPropertiesBuilder& PageV2NumNulls(int32_t num_nulls);
+    EncodingPropertiesBuilder& PageV2IsCompressed(bool is_compressed);
         
     // Build the final object
-    std::unique_ptr<ColumnChunkProperties> Build();
+    std::unique_ptr<EncodingProperties> Build();
 
 private:
-    friend class ColumnChunkProperties;
+    friend class EncodingProperties;
 
     // Required fields
     std::optional<std::string> column_path_;
@@ -157,8 +157,10 @@ private:
     std::optional<int32_t> page_v2_repetition_levels_byte_length_;
     std::optional<int32_t> page_v2_num_nulls_;
     std::optional<bool> page_v2_is_compressed_;    
-}; // class ColumnChunkPropertiesBuilder
+}; // class EncodingPropertiesBuilder
 
 } //namespace parquet::encryption
+
+
 
 

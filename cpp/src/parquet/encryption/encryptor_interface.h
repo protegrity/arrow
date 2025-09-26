@@ -18,7 +18,7 @@
 #pragma once
 
 #include "parquet/platform.h"
-#include "parquet/encryption/column_chunk_properties.h"
+#include "parquet/encryption/encoding_properties.h"
 
 namespace parquet::encryption {
 
@@ -38,7 +38,7 @@ class PARQUET_EXPORT EncryptorInterface {
                           ::arrow::util::span<uint8_t> ciphertext) = 0;
 
   // TODO: add a description here.                        
-  virtual void UpdateEncryptionParams(std::unique_ptr<ColumnChunkProperties> column_chunk_properties) {};
+  virtual void UpdateEncryptionParams(std::unique_ptr<EncodingProperties> encoding_properties) {};
 
   /// Encrypt footer metadata for signature verification purposes only.
   /// This method is used specifically for footer signature verification in encrypted
