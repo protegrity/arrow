@@ -31,6 +31,15 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     };
   }
 
+  std::unique_ptr<ExternalDBPAEncryptorAdapter> CreateEncryptor(
+    ParquetCipher::type algorithm, std::string column_name, std::string key_id, 
+    Type::type data_type, Compression::type compression_type, Encoding::type encoding_type) {
+    return ExternalDBPAEncryptorAdapter::Make(
+      algorithm, column_name, key_id, data_type, 
+      compression_type, encoding_type, app_context_, 
+      connection_config_, std::nullopt);
+  }
+
   void RoundtripEncryption(
       ParquetCipher::type algorithm, std::string column_name, std::string key_id, 
       Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
@@ -119,6 +128,21 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, RoundtripEncryptionSucceeds) {
 
   RoundtripEncryption(
     algorithm, column_name, key_id, data_type, compression_type, encoding_type, plaintext);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, SignedFooterEncryptionThrowsException) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+  std::unique_ptr<ExternalDBPAEncryptorAdapter> encryptor = CreateEncryptor(
+    algorithm, column_name, key_id, data_type, compression_type, encoding_type);
+  std::vector<uint8_t> encrypted_footer(10, '\0');
+  EXPECT_THROW(encryptor->SignedFooterEncrypt(
+    str2span(/*footer*/""), str2span(/*key*/""), str2span(/*aad*/""), str2span(/*nonce*/""),
+    encrypted_footer), ParquetException);
 }
 
 }  // namespace parquet::encryption::test
