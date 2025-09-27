@@ -355,7 +355,6 @@ INSTANTIATE_TEST_SUITE_P(
         std::make_tuple(
             5, "encrypt_columns_and_footer_disable_aad_storage.parquet.encrypted"),
         std::make_tuple(6, "encrypt_columns_and_footer_ctr.parquet.encrypted"),
-        std::make_tuple(7, "encrypt_with_per_column_encryption.parquet.encrypted")
-      ));
+        std::make_tuple(7, "encrypt_with_per_column_encryption.parquet.encrypted")));
 
 }  // namespace parquet::encryption::test
