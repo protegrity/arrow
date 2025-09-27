@@ -232,6 +232,11 @@ static inline AadMetadata FromThrift(format::AesGcmCtrV1 aesGcmCtrV1) {
                      aesGcmCtrV1.supply_aad_prefix};
 }
 
+static inline AadMetadata FromThrift(format::ExternalDBPAV1 externalDBPAV1) {
+  // Set default values for AAD, which is not supported by ExternalDBPAV1
+  return AadMetadata{/*aad_prefix*/"", /*aad_file_unique*/"", /*supply_aad_prefix*/false};
+}
+
 static inline EncryptionAlgorithm FromThrift(format::EncryptionAlgorithm encryption) {
   EncryptionAlgorithm encryption_algorithm;
 
@@ -243,6 +248,7 @@ static inline EncryptionAlgorithm FromThrift(format::EncryptionAlgorithm encrypt
     encryption_algorithm.aad = FromThrift(encryption.AES_GCM_CTR_V1);
   } else if (encryption.__isset.EXTERNAL_DBPA_V1) {
     encryption_algorithm.algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+    encryption_algorithm.aad = FromThrift(encryption.EXTERNAL_DBPA_V1);
   } else {
     throw ParquetException("Unsupported algorithm");
   }

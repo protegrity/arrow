@@ -63,6 +63,7 @@
  *                                  (pairs with encryption configuration 3)
  *  - Decryption configuration 5:   External decryption configuration for use in per-column
  *                                  test (pairs with encryption configuration 7).
+ *  - Decryption configuration 6:   External decryption configuration with aad_prefix.
  *
  * The encrypted parquet files that are read were encrypted using one of the
  * configurations below:
@@ -195,6 +196,18 @@ class TestDecryptionConfiguration
       }}
     });
     vector_of_decryption_configurations_.push_back(file_decryption_builder_5.build_external());
+
+    // Decryption configuration 6: External decryption configuration with aad_prefix.
+    parquet::ExternalFileDecryptionProperties::Builder file_decryption_builder_6;
+    file_decryption_builder_6.aad_prefix("aad_prefix");
+    file_decryption_builder_6.connection_config({
+      {parquet::ParquetCipher::EXTERNAL_DBPA_V1, {
+          {"agent_library_path", library_path},
+          {"file_path", "/tmp/test"},
+          {"other_config", "value"}
+      }}
+    });
+    vector_of_decryption_configurations_.push_back(file_decryption_builder_6.build_external());
   }
 
   void DecryptFileInternal(
@@ -255,9 +268,25 @@ class TestDecryptionConfiguration
       return;
     }
 
-    // decryption config 5 can only work when the encryption configuration is 7 and vice versa
-    if ((decryption_config_num == 5 && encryption_config_num != 7) || 
-        (decryption_config_num != 5 && encryption_config_num == 7)) {
+    // Encryption config 7 can only work with decryption configs 5 or 6
+    if (encryption_config_num == 7) {
+      if (decryption_config_num != 5 && decryption_config_num != 6) {
+        return;
+      }
+    }
+
+    // decryption config 5 can only work when the encryption configuration is 7
+    if (decryption_config_num == 5 && encryption_config_num != 7) {
+      return;
+    }
+    
+    // Decryption config 6 can only work with encryption config 7, and it must throw an exception.
+    if (decryption_config_num == 6) {
+      if (encryption_config_num != 7) {
+        return;
+      }
+      EXPECT_THROW(DecryptFile(file_name, decryption_config_num - 1), ParquetException);
+      EXPECT_THROW(DecryptPageIndex(file_name, decryption_config_num - 1), ParquetException);
       return;
     }
 
