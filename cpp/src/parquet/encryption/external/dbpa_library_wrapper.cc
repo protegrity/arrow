@@ -37,10 +37,6 @@ DBPALibraryWrapper::DBPALibraryWrapper(
   if (!handle_closing_fn_) {
     throw std::invalid_argument("DBPAWrapper: Cannot create wrapper with null handle closing function");
   }
-
-  std::cout << "DBPALibraryWrapper::DBPALibraryWrapper" << std::endl;
-  std::cout << "  wrapped_agent_ = " << (wrapped_agent_ ? "valid" : "null") << " (address: " << static_cast<void*>(wrapped_agent_.get()) << ")" << std::endl;
-  std::cout << "  library_handle_ = " << library_handle_ << std::endl;
 }
 
 // DBPALibraryWrapper destructor
@@ -52,11 +48,6 @@ DBPALibraryWrapper::DBPALibraryWrapper(
 // definition to be unloaded before the destructor completes, and that is likely to cause issues 
 // (such as a segfault).
 DBPALibraryWrapper::~DBPALibraryWrapper() {
-
-  std::cout << "DBPALibraryWrapper::~DBPALibraryWrapper" << std::endl;
-  std::cout << "  wrapped_agent_ = " << (wrapped_agent_ ? "valid" : "null") << " (address: " << static_cast<void*>(wrapped_agent_.get()) << ")" << std::endl;
-  std::cout << "  library_handle_ = " << library_handle_ << std::endl;
-
   // Explicitly destroy the wrapped agent first
   if (wrapped_agent_) {
     DataBatchProtectionAgentInterface* wrapped_agent = wrapped_agent_.release();
