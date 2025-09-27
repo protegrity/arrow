@@ -136,7 +136,7 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
         builder.PageEncoding(dict_page.encoding());
     }
     else {
-        throw std::invalid_argument("Unknown Page Type:: " + std::to_string(column_page.type()));
+        throw std::invalid_argument(std::string("Unknown Page Type:: ") + EnumToString(column_page.type()));
     }
 
     return builder.Build();
@@ -146,10 +146,10 @@ std::map<std::string, std::string> EncodingProperties::ToPropertiesMap() const {
     std::map<std::string, std::string> result;
 
     result["column_path"] = std::string(column_path_.value());
-    result["physical_type"] = std::to_string(physical_type_.value());
-    result["compression_codec"] = std::to_string(compression_codec_.value());
-    result["page_type"] = std::to_string(page_type_);
-    result["page_encoding"] = std::to_string(page_encoding_.value());
+    result["physical_type"] = EnumToString(physical_type_.value());
+    result["compression_codec"] = EnumToString(compression_codec_.value());
+    result["page_type"] = EnumToString(page_type_);
+    result["page_encoding"] = EnumToString(page_encoding_.value());
 
     if (fixed_length_bytes_.has_value()) {
         result["fixed_length_bytes"] = std::to_string(fixed_length_bytes_.value());
@@ -157,8 +157,8 @@ std::map<std::string, std::string> EncodingProperties::ToPropertiesMap() const {
 
     if (page_type_ == parquet::PageType::DATA_PAGE) {
         result["data_page_num_values"] = std::to_string(data_page_num_values_.value());
-        result["page_v1_definition_level_encoding"] = std::to_string(page_v1_definition_level_encoding_.value());
-        result["page_v1_repetition_level_encoding"] = std::to_string(page_v1_repetition_level_encoding_.value());
+        result["page_v1_definition_level_encoding"] = EnumToString(page_v1_definition_level_encoding_.value());
+        result["page_v1_repetition_level_encoding"] = EnumToString(page_v1_repetition_level_encoding_.value());
     }
     else if (page_type_ == parquet::PageType::DATA_PAGE_V2) {
         result["data_page_num_values"] = std::to_string(data_page_num_values_.value());
