@@ -191,13 +191,11 @@ int32_t ExternalDBPAEncryptorAdapter::Encrypt(
   return InvokeExternalEncrypt(plaintext, ciphertext, encoding_properties_->ToPropertiesMap());
 }
 
-// TODO: this method will soon be un-implemented. For now, passing an empty map. 
-// https://github.com/protegrity/arrow/issues/69
 int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
     ::arrow::util::span<const uint8_t> footer, ::arrow::util::span<const uint8_t> key,
     ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<const uint8_t> nonce,
     ::arrow::util::span<uint8_t> encrypted_footer) {
-  return InvokeExternalEncrypt(footer, encrypted_footer, std::map<std::string, std::string>());
+      throw ParquetException("ExternalDBPAEncryptorAdapter::SignedFooterEncrypt is not supported");
 }
 
 int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
