@@ -55,9 +55,9 @@ void EncodingProperties::validate() {
             throw std::invalid_argument("DataPageNumValues is required");
         }
 
-        if (page_encoding_ == parquet::Type::type::FIXED_LEN_BYTE_ARRAY) {
+        if (physical_type_ == parquet::Type::type::FIXED_LEN_BYTE_ARRAY) {
             if (!fixed_length_bytes_.has_value()) {
-                throw std::invalid_argument("FixedLengthBytes is required for column page with FIXED_LEN_BYTE_ARRAY encoding");
+                throw std::invalid_argument("FixedLengthBytes is required for column page with FIXED_LEN_BYTE_ARRAY data type");
             }
         }
 
@@ -182,7 +182,7 @@ std::map<std::string, std::string> EncodingProperties::ToPropertiesMap() const {
         result["page_v2_definition_levels_byte_length"] = std::to_string(page_v2_definition_levels_byte_length_.value());
         result["page_v2_repetition_levels_byte_length"] = std::to_string(page_v2_repetition_levels_byte_length_.value());
         result["page_v2_num_nulls"] = std::to_string(page_v2_num_nulls_.value());
-        result["page_v2_is_compressed"] = std::to_string(page_v2_is_compressed_.value());
+        result["page_v2_is_compressed"] = (page_v2_is_compressed_.value() ? "true" : "false");
     }
     else if (page_type_ == parquet::PageType::DICTIONARY_PAGE) {
         // no other properties are set for DICTIONARY_PAGE

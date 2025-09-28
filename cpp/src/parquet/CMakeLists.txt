@@ -418,6 +418,7 @@ if(PARQUET_REQUIRE_ENCRYPTION)
   add_parquet_test(encryption-test
                    SOURCES
                    encryption/aes_encryption_test.cc
+                   encryption/encoding_properties_test.cc
                    encryption/external_dbpa_encryption_test.cc
                    encryption/write_configurations_test.cc
                    encryption/read_configurations_test.cc

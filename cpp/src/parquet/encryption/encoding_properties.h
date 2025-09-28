@@ -221,10 +221,10 @@ inline std::string EnumToString(parquet::Encoding::type t) {
 
 inline std::string EnumToString(parquet::PageType::type t) {
     switch (t) {
-        case parquet::PageType::DATA_PAGE: return "DATA_PAGE";
-        case parquet::PageType::INDEX_PAGE: return "INDEX_PAGE";
-        case parquet::PageType::DICTIONARY_PAGE: return "DICTIONARY_PAGE";
+        case parquet::PageType::DATA_PAGE: return "DATA_PAGE_V1";
         case parquet::PageType::DATA_PAGE_V2: return "DATA_PAGE_V2";
+        case parquet::PageType::DICTIONARY_PAGE: return "DICTIONARY_PAGE";
+        case parquet::PageType::INDEX_PAGE: return "INDEX_PAGE";
         case parquet::PageType::UNDEFINED: return "UNDEFINED";
         default: throw std::invalid_argument(std::string("Unknown parquet PageType::type:: ") + std::to_string(t));
     }
