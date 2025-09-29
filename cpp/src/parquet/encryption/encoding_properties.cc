@@ -1,7 +1,6 @@
 // TODO: add license
 
 #include <stdexcept>
-#include <iostream>
 
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/metadata.h"
@@ -21,6 +20,8 @@ EncodingProperties::EncodingProperties(const EncodingPropertiesBuilder& builder)
       page_type_(builder.page_type_.value()),
       page_encoding_(builder.page_encoding_),
       data_page_num_values_(builder.data_page_num_values_),
+      data_page_max_definition_level_(builder.data_page_max_definition_level_),
+      data_page_max_repetition_level_(builder.data_page_max_repetition_level_),
       page_v1_definition_level_encoding_(builder.page_v1_definition_level_encoding_),
       page_v1_repetition_level_encoding_(builder.page_v1_repetition_level_encoding_),
       page_v2_definition_levels_byte_length_(builder.page_v2_definition_levels_byte_length_),
@@ -64,6 +65,14 @@ void EncodingProperties::validate() {
             if (physical_type_ != parquet::Type::type::FIXED_LEN_BYTE_ARRAY) {
                 throw std::invalid_argument("FixedLengthBytes is only allowed for FIXED_LEN_BYTE_ARRAY physical type");
             }
+        }
+
+        // max levels may be required  for decoding both data page types
+        if (!data_page_max_definition_level_.has_value()) {
+            throw std::invalid_argument("DataPageMaxDefinitionLevel is required");
+        }
+        if (!data_page_max_repetition_level_.has_value()) {
+            throw std::invalid_argument("DataPageMaxRepetitionLevel is required");
         }
     }
 
@@ -117,6 +126,8 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
         DataPage data_page = static_cast<const DataPage&>(column_page);
         builder.PageEncoding(data_page.encoding());
         builder.DataPageNumValues(data_page.num_values());
+        builder.DataPageMaxDefinitionLevel(column_descriptor->max_definition_level());
+        builder.DataPageMaxRepetitionLevel(column_descriptor->max_repetition_level());
     }
 
     //properties specific to each type of page
@@ -129,6 +140,7 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
         DataPageV2 data_page_v2 = static_cast<const DataPageV2&>(column_page);
         builder.PageV2DefinitionLevelsByteLength(data_page_v2.definition_levels_byte_length());
         builder.PageV2RepetitionLevelsByteLength(data_page_v2.repetition_levels_byte_length());
+        builder.PageV2NumNulls(data_page_v2.num_nulls());
         builder.PageV2IsCompressed(data_page_v2.is_compressed());
     }
     else if (column_page.type() == parquet::PageType::DICTIONARY_PAGE) {
@@ -155,7 +167,12 @@ std::map<std::string, std::string> EncodingProperties::ToPropertiesMap() const {
         result["fixed_length_bytes"] = std::to_string(fixed_length_bytes_.value());
     }
 
-    if (page_type_ == parquet::PageType::DATA_PAGE) {
+    if (page_type_ == parquet::PageType::DATA_PAGE || page_type_ == parquet::PageType::DATA_PAGE_V2) {
+        result["data_page_max_definition_level"] = std::to_string(data_page_max_definition_level_.value());
+        result["data_page_max_repetition_level"] = std::to_string(data_page_max_repetition_level_.value());
+    }
+
+    if (page_type_ == parquet::PageType::DATA_PAGE) { //DATA_PAGE_V1
         result["data_page_num_values"] = std::to_string(data_page_num_values_.value());
         result["page_v1_definition_level_encoding"] = EnumToString(page_v1_definition_level_encoding_.value());
         result["page_v1_repetition_level_encoding"] = EnumToString(page_v1_repetition_level_encoding_.value());
@@ -234,6 +251,16 @@ EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV1RepetitionLevelEncod
     return *this;
 }
 
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::DataPageMaxDefinitionLevel(int16_t level) {
+    data_page_max_definition_level_ = level;
+    return *this;
+}
+
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::DataPageMaxRepetitionLevel(int16_t level) {
+    data_page_max_repetition_level_ = level;
+    return *this;
+}
+
 EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2DefinitionLevelsByteLength(int32_t byte_length) {
     page_v2_definition_levels_byte_length_ = byte_length;
     return *this;
@@ -267,7 +294,6 @@ void EncodingProperties::set_compression_codec(::arrow::Compression::type compre
 
 void EncodingProperties::set_physical_type(parquet::Type::type physical_type, 
                                                 const std::optional<std::int64_t>& fixed_length_bytes) {
-    //TODO: validate.
     physical_type_ = physical_type;                                                        
     if (fixed_length_bytes.has_value()) {
         fixed_length_bytes_ = fixed_length_bytes;

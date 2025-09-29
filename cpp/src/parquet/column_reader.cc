@@ -462,7 +462,7 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
         builder.PageType(parquet::PageType::type::DICTIONARY_PAGE);  
         builder.PageEncoding(ToParquetEncoding(dictionary_page_header.encoding));
       }
-      else if (page_type_from_header == format::PageType::DATA_PAGE) {
+      else if (page_type_from_header == format::PageType::DATA_PAGE) { // this is DataPageV1
         format::DataPageHeader data_page_header = page_header.data_page_header;
   
         builder.PageType(parquet::PageType::type::DATA_PAGE);
@@ -470,6 +470,14 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
         builder.DataPageNumValues(data_page_header.num_values);
         builder.PageV1DefinitionLevelEncoding(ToParquetEncoding(data_page_header.definition_level_encoding));
         builder.PageV1RepetitionLevelEncoding(ToParquetEncoding(data_page_header.repetition_level_encoding));
+
+        if (crypto_ctx_.column_descriptor) {
+          builder.DataPageMaxDefinitionLevel(crypto_ctx_.column_descriptor->max_definition_level());
+          builder.DataPageMaxRepetitionLevel(crypto_ctx_.column_descriptor->max_repetition_level());
+        }
+        else {
+          //TODO (argmarco): handle this case.
+        }
       }
       else if (page_type_from_header == format::PageType::DATA_PAGE_V2) {
         format::DataPageHeaderV2 data_page_header_v2 = page_header.data_page_header_v2;
@@ -481,10 +489,18 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
         builder.PageV2DefinitionLevelsByteLength(data_page_header_v2.definition_levels_byte_length);
         builder.PageV2RepetitionLevelsByteLength(data_page_header_v2.repetition_levels_byte_length);
         builder.PageV2IsCompressed(data_page_header_v2.is_compressed);
+
+        if (crypto_ctx_.column_descriptor) {
+          builder.DataPageMaxDefinitionLevel(crypto_ctx_.column_descriptor->max_definition_level());
+          builder.DataPageMaxRepetitionLevel(crypto_ctx_.column_descriptor->max_repetition_level());
+        }
+        else {
+          //TODO (argmarco): handle this case.
+        }
       }
   
     return builder.Build();
-}
+} //SerializedPageReader::GetEncodingProperties
 
 std::shared_ptr<Page> SerializedPageReader::NextPage() {
   ThriftDeserializer deserializer(properties_);

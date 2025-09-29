@@ -59,6 +59,8 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
             .PageV2RepetitionLevelsByteLength(10)
             .PageV2NumNulls(10)
             .PageV2IsCompressed(true)
+            .DataPageMaxDefinitionLevel(10)
+            .DataPageMaxRepetitionLevel(1)
             .PageEncoding(encoding_type)
             .DataPageNumValues(100) 
             .Build();

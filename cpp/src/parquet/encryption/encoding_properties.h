@@ -80,6 +80,8 @@ private:
 
     //common between V1 and V2 data pages.
     std::optional<int64_t> data_page_num_values_;
+    std::optional<int16_t> data_page_max_definition_level_;
+    std::optional<int16_t> data_page_max_repetition_level_;
 
     //--------------------------------
     // V1 data page properties.
@@ -122,6 +124,10 @@ public:
     // V1 data page properties
     EncodingPropertiesBuilder& PageV1DefinitionLevelEncoding(parquet::Encoding::type encoding);
     EncodingPropertiesBuilder& PageV1RepetitionLevelEncoding(parquet::Encoding::type encoding);
+
+    // Data page common properties (apply to V1 and V2)
+    EncodingPropertiesBuilder& DataPageMaxDefinitionLevel(int16_t level);
+    EncodingPropertiesBuilder& DataPageMaxRepetitionLevel(int16_t level);
     
     // V2 data page properties
     EncodingPropertiesBuilder& PageV2DefinitionLevelsByteLength(int32_t byte_length);
@@ -147,6 +153,8 @@ private:
     // data page properties
     std::optional<parquet::Encoding::type> page_encoding_;
     std::optional<int64_t> data_page_num_values_;
+    std::optional<int16_t> data_page_max_definition_level_;
+    std::optional<int16_t> data_page_max_repetition_level_;
     
     // V1 data page properties
     std::optional<parquet::Encoding::type> page_v1_definition_level_encoding_;
