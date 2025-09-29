@@ -447,7 +447,7 @@ bool SerializedPageReader::ShouldSkipPage(EncodedStatistics* data_page_statistic
   return false;
 }
 
-// While ideally we would have written the builder code for PageHeader-based properties,
+// While ideally we would have written the builder code for PageHeader-based properties within encoding_properties.cc, 
 // Arrow frowns upon including thrift headers in the public API, and the types used in this function 
 // are not defined in the public API. This is verified via unit tests.
 // Therefore, we have to define this function here (as opposed to **any** .h file).

@@ -22,6 +22,10 @@
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <vector>
+#include <string>
+#include <map>
+#include <algorithm>
 
 #include "parquet/column_page.h"
 #include "parquet/column_reader.h"
@@ -32,6 +36,11 @@
 #include "parquet/test_util.h"
 #include "parquet/thrift_internal.h"
 #include "parquet/types.h"
+// Added for encoding properties tests
+#include "parquet/encryption/decryptor_interface.h"
+#include "parquet/encryption/encoding_properties.h"
+#include "parquet/encryption/internal_file_decryptor.h"
+#include "parquet/schema.h"
 
 #include "arrow/io/memory.h"
 #include "arrow/status.h"
@@ -978,3 +987,271 @@ TEST_F(TestParquetFileReader, IncompleteMetadata) {
 }
 
 }  // namespace parquet
+
+// ----------------------------------------------------------------------
+// EncodingProperties tests using SerializedPageReader and a capturing decryptor
+
+namespace parquet {
+
+namespace {
+
+struct CapturedEncodingProps {
+  std::vector<std::map<std::string, std::string>> entries;
+};
+
+class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
+ public:
+  CapturingTestDecryptor(std::shared_ptr<CapturedEncodingProps> sink,
+                         std::string column_path,
+                         parquet::Type::type physical_type,
+                         ::arrow::Compression::type compression_codec)
+      : sink_(std::move(sink)),
+        column_path_(std::move(column_path)),
+        physical_type_(physical_type),
+        compression_codec_(compression_codec) {}
+
+  [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override {
+    return ciphertext_len;
+  }
+
+  [[nodiscard]] int32_t CiphertextLength(int32_t plaintext_len) const override {
+    return plaintext_len;
+  }
+
+  int32_t Decrypt(::arrow::util::span<const uint8_t> ciphertext,
+                  ::arrow::util::span<const uint8_t> /*key*/,
+                  ::arrow::util::span<const uint8_t> /*aad*/,
+                  ::arrow::util::span<uint8_t> plaintext) override {
+    std::copy(ciphertext.begin(), ciphertext.end(), plaintext.begin());
+    return static_cast<int32_t>(ciphertext.size());
+  }
+
+  void UpdateEncodingProperties(
+      std::unique_ptr<parquet::encryption::EncodingProperties> encoding_properties) override {
+    // Fill column-level properties so validate() succeeds
+    encoding_properties->set_column_path(column_path_);
+    encoding_properties->set_physical_type(physical_type_);
+    encoding_properties->set_compression_codec(compression_codec_);
+
+    encoding_properties->validate();
+    sink_->entries.emplace_back(encoding_properties->ToPropertiesMap());
+  }
+
+ private:
+  std::shared_ptr<CapturedEncodingProps> sink_;
+  std::string column_path_;
+  parquet::Type::type physical_type_;
+  ::arrow::Compression::type compression_codec_;
+};
+
+static std::shared_ptr<::parquet::SchemaDescriptor> MakeSingleInt32Schema(
+    const std::string& col_name = "col") {
+  using ::parquet::schema::GroupNode;
+  using ::parquet::schema::NodePtr;
+  using ::parquet::schema::NodeVector;
+  using ::parquet::schema::PrimitiveNode;
+
+  NodeVector fields;
+  fields.push_back(
+      PrimitiveNode::Make(col_name, ::parquet::Repetition::REQUIRED, ::parquet::Type::INT32));
+  NodePtr schema = GroupNode::Make("schema", ::parquet::Repetition::REQUIRED, fields);
+
+  auto descr = std::make_shared<::parquet::SchemaDescriptor>();
+  descr->Init(schema);
+  return descr;
+}
+
+static std::shared_ptr<::parquet::SchemaDescriptor> MakeNestedOptionalRepeatedIntSchema() {
+  using ::parquet::schema::GroupNode;
+  using ::parquet::schema::NodePtr;
+  using ::parquet::schema::NodeVector;
+  using ::parquet::schema::PrimitiveNode;
+
+  // Schema:
+  // required group schema {
+  //   optional group optgrp {
+  //     repeated group list {
+  //       optional int32 element;
+  //     }
+  //   }
+  // }
+  // Expected: max_definition_level = 2 (optgrp optional + element optional)
+  //           max_repetition_level = 1 (list repeated)
+  NodePtr element = PrimitiveNode::Make("element", ::parquet::Repetition::OPTIONAL,
+                                        ::parquet::Type::INT32);
+  NodeVector list_children;
+  list_children.push_back(element);
+  NodePtr list = GroupNode::Make("list", ::parquet::Repetition::REPEATED, list_children);
+  NodeVector optgrp_children;
+  optgrp_children.push_back(list);
+  NodePtr optgrp = GroupNode::Make("optgrp", ::parquet::Repetition::OPTIONAL, optgrp_children);
+  NodeVector root_fields;
+  root_fields.push_back(optgrp);
+  NodePtr schema = GroupNode::Make("schema", ::parquet::Repetition::REQUIRED, root_fields);
+
+  auto descr = std::make_shared<::parquet::SchemaDescriptor>();
+  descr->Init(schema);
+  return descr;
+}
+
+}  // namespace
+
+class EncodingPropertiesSerdeTest : public TestPageSerde {
+ protected:
+  void OpenWithCryptoContext(int64_t num_rows, Compression::type codec,
+                             const ReaderProperties& properties,
+                             const CryptoContext& crypto_ctx) {
+    EndStream();
+    auto stream = std::make_shared<::arrow::io::BufferReader>(out_buffer_);
+    page_reader_ = PageReader::Open(stream, num_rows, codec, properties,
+                                    /*always_compressed=*/false, &crypto_ctx);
+  }
+};
+
+TEST_F(EncodingPropertiesSerdeTest, CapturesDictionaryPageEncodingProperties) {
+  // Prepare a small dictionary page
+  const int32_t num_rows = 5;
+  dictionary_page_header_.encoding = format::Encoding::PLAIN;
+  dictionary_page_header_.num_values = num_rows;
+
+  int data_size = 16;
+  ASSERT_NO_FATAL_FAILURE(WriteDictionaryPageHeader(data_size, data_size));
+  std::vector<uint8_t> faux_data(data_size);
+  ASSERT_OK(out_stream_->Write(faux_data.data(), data_size));
+
+  // Build schema and crypto context
+  auto schema = MakeNestedOptionalRepeatedIntSchema();
+  const ColumnDescriptor* descr = schema->Column(0);
+  auto sink = std::make_shared<CapturedEncodingProps>();
+
+  CryptoContext ctx;
+  ctx.column_descriptor = descr;
+  ctx.data_decryptor_factory = [sink, descr]() {
+    auto iface = std::make_unique<CapturingTestDecryptor>(
+        sink, descr->path()->ToDotString(), descr->physical_type(),
+        ::arrow::Compression::UNCOMPRESSED);
+    return std::make_unique<Decryptor>(std::move(iface), /*key*/ std::string(),
+                                       /*file_aad*/ std::string("aad_test"),
+                                       /*aad*/ std::string(),
+                                       ::arrow::default_memory_pool());
+  };
+
+  ReaderProperties reader_props;
+  OpenWithCryptoContext(/*num_rows=*/num_rows, Compression::UNCOMPRESSED, reader_props, ctx);
+
+  std::shared_ptr<Page> page = page_reader_->NextPage();
+  ASSERT_NE(page, nullptr);
+  ASSERT_EQ(PageType::DICTIONARY_PAGE, page->type());
+
+  ASSERT_EQ(sink->entries.size(), 1);
+  const auto& props = sink->entries[0];
+  ASSERT_EQ(props.at("column_path"), descr->path()->ToDotString());
+  ASSERT_EQ(props.at("physical_type"), std::string("INT32"));
+  ASSERT_EQ(props.at("compression_codec"), std::string("UNCOMPRESSED"));
+  ASSERT_EQ(props.at("page_type"), std::string("DICTIONARY_PAGE"));
+  ASSERT_EQ(props.at("page_encoding"), std::string("PLAIN"));
+}
+
+TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV1EncodingProperties) {
+  // Prepare a small V1 data page
+  const int32_t num_values = 42;
+  data_page_header_.encoding = format::Encoding::PLAIN;
+  data_page_header_.definition_level_encoding = format::Encoding::RLE;
+  data_page_header_.repetition_level_encoding = format::Encoding::RLE;
+  data_page_header_.num_values = num_values;
+
+  int data_size = 32;
+  ASSERT_NO_FATAL_FAILURE(WriteDataPageHeader(/*max_serialized_len=*/1024, data_size,
+                                              /*compressed_size=*/data_size));
+  std::vector<uint8_t> faux_data(data_size);
+  ASSERT_OK(out_stream_->Write(faux_data.data(), data_size));
+
+  auto schema = MakeSingleInt32Schema("c0");
+  const ColumnDescriptor* descr = schema->Column(0);
+  auto sink = std::make_shared<CapturedEncodingProps>();
+
+  CryptoContext ctx;
+  ctx.column_descriptor = descr;
+  ctx.data_decryptor_factory = [sink, descr]() {
+    auto iface = std::make_unique<CapturingTestDecryptor>(
+        sink, descr->path()->ToDotString(), descr->physical_type(),
+        ::arrow::Compression::UNCOMPRESSED);
+    return std::make_unique<Decryptor>(std::move(iface), /*key*/ std::string(),
+                                       /*file_aad*/ std::string("aad_test"),
+                                       /*aad*/ std::string(),
+                                       ::arrow::default_memory_pool());
+  };
+
+  ReaderProperties reader_props;
+  OpenWithCryptoContext(/*num_rows=*/num_values, Compression::UNCOMPRESSED, reader_props, ctx);
+
+  std::shared_ptr<Page> page = page_reader_->NextPage();
+  ASSERT_NE(page, nullptr);
+  ASSERT_EQ(PageType::DATA_PAGE, page->type());
+
+  ASSERT_EQ(sink->entries.size(), 1);
+  const auto& props = sink->entries[0];
+  ASSERT_EQ(props.at("page_type"), std::string("DATA_PAGE_V1"));
+  ASSERT_EQ(props.at("data_page_num_values"), std::string("42"));
+  // Levels should match what the descriptor reports
+  ASSERT_EQ(props.at("data_page_max_definition_level"),
+            std::to_string(descr->max_definition_level()));
+  ASSERT_EQ(props.at("data_page_max_repetition_level"),
+            std::to_string(descr->max_repetition_level()));
+}
+
+TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV2EncodingProperties) {
+  // Prepare a small V2 data page
+  data_page_header_v2_.encoding = format::Encoding::PLAIN;
+  data_page_header_v2_.num_values = 12;
+  data_page_header_v2_.num_nulls = 3;
+  data_page_header_v2_.definition_levels_byte_length = 5;
+  data_page_header_v2_.repetition_levels_byte_length = 7;
+  data_page_header_v2_.is_compressed = false;
+
+  int data_size = 24;
+  ASSERT_NO_FATAL_FAILURE(WriteDataPageHeaderV2(/*max_serialized_len=*/1024, data_size,
+                                                /*compressed_size=*/data_size));
+  std::vector<uint8_t> faux_data(data_size);
+  ASSERT_OK(out_stream_->Write(faux_data.data(), data_size));
+
+  auto schema = MakeNestedOptionalRepeatedIntSchema();
+  const ColumnDescriptor* descr = schema->Column(0);
+  auto sink = std::make_shared<CapturedEncodingProps>();
+
+  CryptoContext ctx;
+  ctx.column_descriptor = descr;
+  ctx.data_decryptor_factory = [sink, descr]() {
+    auto iface = std::make_unique<CapturingTestDecryptor>(
+        sink, descr->path()->ToDotString(), descr->physical_type(),
+        ::arrow::Compression::UNCOMPRESSED);
+    return std::make_unique<Decryptor>(std::move(iface), /*key*/ std::string(),
+                                       /*file_aad*/ std::string("aad_test"),
+                                       /*aad*/ std::string(),
+                                       ::arrow::default_memory_pool());
+  };
+
+  ReaderProperties reader_props;
+  OpenWithCryptoContext(/*num_rows=*/12, Compression::UNCOMPRESSED, reader_props, ctx);
+
+  std::shared_ptr<Page> page = page_reader_->NextPage();
+  ASSERT_NE(page, nullptr);
+  ASSERT_EQ(PageType::DATA_PAGE_V2, page->type());
+
+  ASSERT_EQ(sink->entries.size(), 1);
+  const auto& props = sink->entries[0];
+  ASSERT_EQ(props.at("page_type"), std::string("DATA_PAGE_V2"));
+  ASSERT_EQ(props.at("data_page_num_values"), std::string("12"));
+  ASSERT_EQ(props.at("page_v2_definition_levels_byte_length"), std::string("5"));
+  ASSERT_EQ(props.at("page_v2_repetition_levels_byte_length"), std::string("7"));
+  ASSERT_EQ(props.at("page_v2_num_nulls"), std::string("3"));
+  ASSERT_EQ(props.at("page_v2_is_compressed"), std::string("false"));
+  // Levels should match what the descriptor reports
+  ASSERT_EQ(props.at("data_page_max_definition_level"),
+            std::to_string(descr->max_definition_level()));
+  ASSERT_EQ(props.at("data_page_max_repetition_level"),
+            std::to_string(descr->max_repetition_level()));
+}
+
+}  // namespace parquet
+
