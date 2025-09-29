@@ -81,8 +81,9 @@ std::unique_ptr<EncryptionResult> DBPATestAgent::Encrypt(
   // In a real implementation, this would use proper encryption
   std::vector<uint8_t> ciphertext_data(plaintext.size());
   
+  const size_t key_len = key_.size();
   for (size_t i = 0; i < plaintext.size(); ++i) {
-    ciphertext_data[i] = plaintext[i] ^ 0xAA; // Simple XOR with 0xAA
+    ciphertext_data[i] = plaintext[i] ^ static_cast<uint8_t>(key_[i % key_len]);
   }
 
   return std::make_unique<TestEncryptionResult>(std::move(ciphertext_data));
@@ -96,8 +97,9 @@ std::unique_ptr<DecryptionResult> DBPATestAgent::Decrypt(
   // In a real implementation, this would perform actual decryption
   std::vector<uint8_t> plaintext_data(ciphertext.size());
   
+  const size_t key_len = key_.size();
   for (size_t i = 0; i < ciphertext.size(); ++i) {
-    plaintext_data[i] = ciphertext[i] ^ 0xAA; // Simple XOR with 0xAA
+    plaintext_data[i] = ciphertext[i] ^ static_cast<uint8_t>(key_[i % key_len]);
   }
 
   return std::make_unique<TestDecryptionResult>(std::move(plaintext_data));

@@ -34,7 +34,12 @@ class DBPATestAgent : public DataBatchProtectionAgentInterface {
       Type::type data_type,
       std::optional<int> datatype_length,
       CompressionCodec::type compression_type) override {
-    // init() intentionally left blank
+
+    if (column_key_id.empty()) {
+      throw std::invalid_argument("column_key_id cannot be empty");
+    }
+    // Store the key id so we can use it for simple test XOR encryption/decryption
+    key_ = std::move(column_key_id);
   }
 
   std::unique_ptr<EncryptionResult> Encrypt(
@@ -46,6 +51,10 @@ class DBPATestAgent : public DataBatchProtectionAgentInterface {
       std::map<std::string, std::string> encoding_attributes) override;
 
   ~DBPATestAgent();
+
+ private:
+  // Used as a simple XOR key for test encryption/decryption
+  std::string key_;
 };
 
 }  // namespace parquet::encryption::external 

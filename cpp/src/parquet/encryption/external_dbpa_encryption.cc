@@ -107,6 +107,10 @@ ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
     encoding_type_(encoding_type), app_context_(app_context),
     connection_config_(connection_config),
     agent_instance_(std::move(agent_instance)) {
+
+      if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+        throw ParquetException("ExternalDBPAEncryptorAdapter -- Only algorithm ExternalDBPA_V1 is supported");
+      }
 }
   
 std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
@@ -127,6 +131,10 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
         std::cout << "[DEBUG]   connection_config:" << std::endl;
         for (const auto& [key, value] : connection_config) {
           std::cout << "[DEBUG]    " << key << " = " << value << std::endl;
+        }
+
+        if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+          throw ParquetException("ExternalDBPAEncryptorAdapter::Make() -- Only algorithm ExternalDBPA_V1 is supported");
         }
 
         std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter() -- loading and initializing agent" << std::endl;
@@ -308,6 +316,10 @@ ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(
     encoding_types_(encoding_types), app_context_(app_context),
     connection_config_(connection_config),
     agent_instance_(std::move(agent_instance)) {
+
+    if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+      throw ParquetException("ExternalDBPADecryptorAdapter -- Only algorithm ExternalDBPA_V1 is supported");
+    }
 }
 
 std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make(
@@ -316,6 +328,10 @@ std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make
     std::vector<Encoding::type> encoding_types, std::string app_context,
     std::map<std::string, std::string> connection_config,
     std::optional<int> datatype_length) {
+
+        if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+          throw ParquetException("ExternalDBPADecryptorAdapter::Make() -- Only algorithm ExternalDBPA_V1 is supported");
+        }
 
         //TODO: figure out logging
         std::cout << "[DEBUG] ExternalDBPADecryptorAdapter::Make() -- Make()" << std::endl;
