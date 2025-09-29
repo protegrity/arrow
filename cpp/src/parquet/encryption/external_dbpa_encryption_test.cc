@@ -68,15 +68,14 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     encryptor->UpdateEncodingProperties(builder.Build());
 
     int32_t expected_ciphertext_length = plaintext.size();
-    int32_t actual_ciphertext_length = encryptor->CiphertextLength(plaintext.size());
-    ASSERT_EQ(expected_ciphertext_length, actual_ciphertext_length);
 
-    std::vector<uint8_t> ciphertext_buffer(expected_ciphertext_length, '\0');
-    int32_t encryption_length = encryptor->Encrypt(
-      str2span(plaintext), str2span(empty_string), str2span(empty_string), ciphertext_buffer);
+    std::shared_ptr<ResizableBuffer> ciphertext_buffer = AllocateBuffer(
+      ::arrow::default_memory_pool(), expected_ciphertext_length);
+    int32_t encryption_length = encryptor->EncryptWithManagedBuffer(
+      str2span(plaintext), ciphertext_buffer.get());  
     ASSERT_EQ(expected_ciphertext_length, encryption_length);
 
-    std::string ciphertext_str(ciphertext_buffer.begin(), ciphertext_buffer.end());
+    std::string ciphertext_str(ciphertext_buffer->data(), ciphertext_buffer->data() + encryption_length);
 
     // We know this uses XOR encryption. Therefore, the ciphertext is the same as the plaintext.
     // XOR encrytion encrypts each byte of the plaintext with 0xAA.

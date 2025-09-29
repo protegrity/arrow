@@ -304,8 +304,6 @@ class SerializedPageWriter : public PageWriter {
 
     if (data_encryptor_.get()) {
       UpdateEncryption(encryption::kDictionaryPage);
-      PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
-          data_encryptor_->CiphertextLength(output_data_len), false));
 
       // Creating an EncodingProperties object from the metadata.
       // We're retrieving the column descriptor and writer properties 
@@ -327,9 +325,17 @@ class SerializedPageWriter : public PageWriter {
           static_cast<const DictionaryPage&>(page));
       data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
-      output_data_len =
-          data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),
-                                   encryption_buffer_->mutable_span_as<uint8_t>());
+      if (data_encryptor_->CanCalculateCiphertextLength()) {
+        PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
+          data_encryptor_->CiphertextLength(output_data_len), false));
+        output_data_len =
+            data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),
+                                    encryption_buffer_->mutable_span_as<uint8_t>());
+      } else {
+        output_data_len =
+            data_encryptor_->EncryptWithManagedBuffer(compressed_data->span_as<uint8_t>(),
+                                                      encryption_buffer_.get());
+      }
       output_data_buffer = encryption_buffer_->data();
     }
 
@@ -416,8 +422,6 @@ class SerializedPageWriter : public PageWriter {
     }
 
     if (data_encryptor_.get()) {
-      PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
-          data_encryptor_->CiphertextLength(output_data_len), false));
       UpdateEncryption(encryption::kDataPage);
 
       // Creating an EncodingProperties object from the metadata.
@@ -439,9 +443,17 @@ class SerializedPageWriter : public PageWriter {
           static_cast<const DataPage&>(page));
       data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
-      output_data_len =
-          data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),
-                                   encryption_buffer_->mutable_span_as<uint8_t>());
+      if (data_encryptor_->CanCalculateCiphertextLength()) {
+        PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
+          data_encryptor_->CiphertextLength(output_data_len), false));
+        output_data_len =
+            data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),
+                                    encryption_buffer_->mutable_span_as<uint8_t>());
+      } else {
+        output_data_len =
+            data_encryptor_->EncryptWithManagedBuffer(compressed_data->span_as<uint8_t>(),
+                                                      encryption_buffer_.get());
+      }
       output_data_buffer = encryption_buffer_->data();
     }
 
