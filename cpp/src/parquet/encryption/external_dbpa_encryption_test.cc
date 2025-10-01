@@ -146,4 +146,23 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, SignedFooterEncryptionThrowsException) 
     encrypted_footer), ParquetException);
 }
 
+TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptCallShouldFail) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+  std::string plaintext = "Jean-Luc Picard";
+  std::vector<uint8_t> ciphertext_buffer(plaintext.size(), '\0');
+
+  std::unique_ptr<ExternalDBPAEncryptorAdapter> encryptor = CreateEncryptor(
+    algorithm, column_name, key_id, data_type, compression_type, encoding_type);
+  ASSERT_FALSE(encryptor->CanCalculateCiphertextLength());
+  EXPECT_THROW(
+    encryptor->Encrypt(
+      str2span(plaintext), str2span(/*key*/""), str2span(/*aad*/""), ciphertext_buffer),
+    ParquetException);
+}
+
 }  // namespace parquet::encryption::test
