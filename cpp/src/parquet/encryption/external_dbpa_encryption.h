@@ -56,7 +56,7 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
     ExternalDBPAEncryptorAdapter(
       ParquetCipher::type algorithm, std::string column_name,
       std::string key_id, Type::type data_type, Compression::type compression_type,
-      Encoding::type encoding_type, std::string app_context,
+      Encoding::type encoding_type, std::optional<int> datatype_length, std::string app_context,
       std::map<std::string, std::string> connection_config,
       std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
 
@@ -71,6 +71,7 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
     Type::type data_type_;
     Compression::type compression_type_;
     Encoding::type encoding_type_;
+    std::optional<int> datatype_length_;
     std::string app_context_;
     std::map<std::string, std::string> connection_config_;
     
@@ -127,7 +128,7 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
     ExternalDBPADecryptorAdapter(
       ParquetCipher::type algorithm, std::string column_name,
       std::string key_id, Type::type data_type, Compression::type compression_type,
-      std::vector<Encoding::type> encoding_types, std::string app_context,
+      std::vector<Encoding::type> encoding_types, std::optional<int> datatype_length, std::string app_context,
       std::map<std::string, std::string> connection_config,
       std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
     
@@ -143,6 +144,7 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
     Compression::type compression_type_;
     // Set of all encodings used for this column. Comes directly from the column chunk metadata.
     std::vector<Encoding::type> encoding_types_;
+    std::optional<int> datatype_length_;
     std::string app_context_;
     std::map<std::string, std::string> connection_config_;
 
