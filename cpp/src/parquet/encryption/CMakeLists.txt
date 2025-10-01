@@ -50,4 +50,10 @@ if(ARROW_TESTING)
   add_parquet_test(dbpa-executor-test
                    SOURCES external/dbpa_executor_test.cc
                    LABELS "parquet-tests" "encryption-tests")
+
+  # Integration-like tests for External DBPA with various parquet settings
+  add_parquet_test(external-dbpa-encryption-it
+                   SOURCES external_dbpa_encryption_it.cc
+                           external/test_utils.cc
+                   LABELS "parquet-tests" "encryption-tests")
 endif()
