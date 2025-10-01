@@ -119,6 +119,13 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
     builder.CompressionCodec(writer_properties->compression(column_descriptor->path()));
     builder.PageType(column_page.type());
 
+    // If the physical type is FIXED_LEN_BYTE_ARRAY, propagate the byte width
+    // from the column descriptor so downstream users (e.g., external agents)
+    // have access to the length. Validation also requires this for data pages.
+    if (column_descriptor->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY) {
+        builder.FixedLengthBytes(column_descriptor->type_length());
+    }
+
     bool is_data_page = (column_page.type() == parquet::PageType::DATA_PAGE) || (column_page.type() == parquet::PageType::DATA_PAGE_V2);
 
     //properties common to V1 and V2 data pages.
