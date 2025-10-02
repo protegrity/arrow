@@ -198,7 +198,15 @@ class TestDecryptionConfiguration
     vector_of_decryption_configurations_.push_back(file_decryption_builder_5.build_external());
 
     // Decryption configuration 6: External decryption configuration with aad_prefix.
+    std::shared_ptr<parquet::StringKeyIdRetriever> string_kr6 =
+    std::make_shared<parquet::StringKeyIdRetriever>();
+    string_kr6->PutKey("kf", kFooterEncryptionKey_);
+    string_kr6->PutKey("kc1", kColumnEncryptionKey1_);
+    string_kr6->PutKey("kc2", kColumnEncryptionKey2_);
+    std::shared_ptr<parquet::DecryptionKeyRetriever> kr6 =
+    std::static_pointer_cast<parquet::StringKeyIdRetriever>(string_kr6);
     parquet::ExternalFileDecryptionProperties::Builder file_decryption_builder_6;
+    file_decryption_builder_6.key_retriever(kr6);
     file_decryption_builder_6.aad_prefix("aad_prefix");
     file_decryption_builder_6.connection_config({
       {parquet::ParquetCipher::EXTERNAL_DBPA_V1, {
