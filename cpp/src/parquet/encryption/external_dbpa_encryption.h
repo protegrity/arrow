@@ -31,14 +31,28 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 
   ~ExternalDBPAEncryptorAdapter() = default;
 
+  /// Signal whether the encryptor can calculate a valid ciphertext length before performing
+  /// encryption.
+  [[nodiscard]] bool CanCalculateCiphertextLength() const override { return false; }
+
   /// The size of the ciphertext, for this cipher and the specified plaintext length.
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override;
 
-  /// We follow the EncryptorInterface specification, but the key and aad are not used.
+  /// Encryption not supported as we cannot calculate the ciphertext before encryption.
   int32_t Encrypt(::arrow::util::span<const uint8_t> plaintext,
                   ::arrow::util::span<const uint8_t> key,
                   ::arrow::util::span<const uint8_t> aad,
-                  ::arrow::util::span<uint8_t> ciphertext) override;
+                  ::arrow::util::span<uint8_t> ciphertext) override {
+     std::stringstream ss;
+     ss << "Encrypt is not supported in ExternalDBPAEncryptorAdapter, ";
+     ss << "use EncryptWithManagedBuffer instead";
+      throw ParquetException(ss.str());
+  }
+
+  /// Encrypt the plaintext and leave the results in the ciphertext buffer.
+  /// The buffer will be resized to the appropriate size by the agent during encryption.
+  int32_t EncryptWithManagedBuffer(::arrow::util::span<const uint8_t> plaintext,
+                                  ::arrow::ResizableBuffer* ciphertext) override;
 
   /// Encrypts plaintext footer, in order to compute footer signature (tag).
   int32_t SignedFooterEncrypt(::arrow::util::span<const uint8_t> footer,
@@ -62,7 +76,7 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 
     int32_t InvokeExternalEncrypt(
       ::arrow::util::span<const uint8_t> plaintext, 
-      ::arrow::util::span<uint8_t> ciphertext,
+      ::arrow::ResizableBuffer* ciphertext,
       std::map<std::string, std::string> encoding_attrs);
     
     ParquetCipher::type algorithm_;

@@ -37,9 +37,18 @@ int32_t Encryptor::CiphertextLength(int64_t plaintext_len) const {
   return encryptor_instance_->CiphertextLength(plaintext_len);
 }
 
+bool Encryptor::CanCalculateCiphertextLength() const {
+  return encryptor_instance_->CanCalculateCiphertextLength();
+}
+
 int32_t Encryptor::Encrypt(::arrow::util::span<const uint8_t> plaintext,
                            ::arrow::util::span<uint8_t> ciphertext) {
   return encryptor_instance_->Encrypt(plaintext, str2span(key_), str2span(aad_), ciphertext);
+}
+
+int32_t Encryptor::EncryptWithManagedBuffer(::arrow::util::span<const uint8_t> plaintext,
+                                           ::arrow::ResizableBuffer* ciphertext) {
+  return encryptor_instance_->EncryptWithManagedBuffer(plaintext, ciphertext);
 }
 
 void Encryptor::UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {

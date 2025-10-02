@@ -186,9 +186,8 @@ void ExternalDBPAEncryptorAdapter::UpdateEncodingProperties(std::unique_ptr<Enco
   encoding_properties_updated_ = true;
 }
 
-int32_t ExternalDBPAEncryptorAdapter::Encrypt(
-    ::arrow::util::span<const uint8_t> plaintext, ::arrow::util::span<const uint8_t> key,
-    ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<uint8_t> ciphertext) {
+int32_t ExternalDBPAEncryptorAdapter::EncryptWithManagedBuffer(
+    ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext) {
 
   if (!encoding_properties_updated_) {
     std::cout << "[ERROR] ExternalDBPAEncryptorAdapter:: EncryptionParams not updated" << std::endl;
@@ -209,7 +208,7 @@ int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
 
 int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
     ::arrow::util::span<const uint8_t> plaintext, 
-    ::arrow::util::span<uint8_t> ciphertext,
+    ::arrow::ResizableBuffer* ciphertext,
     std::map<std::string, std::string> encoding_attrs) {
 
       std::cout << "\n*-*-*- START: ExternalDBPAEncryptor::Encrypt *-*-*-" << std::endl;
@@ -237,14 +236,15 @@ int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
       std::cout << "  result size: " << result->size() << " bytes" << std::endl;
       std::cout << "  result ciphertext size: " << result->ciphertext().size() << " bytes" << std::endl;
   
-      if (ciphertext.size() < result->ciphertext().size()) {
-        std::cout << "[ERROR] Ciphertext buffer too small. Need " << result->ciphertext().size()
-                  << " bytes, have " << ciphertext.size() << " bytes" << std::endl;
-        throw ParquetException("Ciphertext buffer too small for encrypted result");
+      int32_t ciphertext_size = result->ciphertext().size();
+      auto status = ciphertext->Resize(ciphertext_size, false);
+      if (!status.ok()) {
+        std::cout << "[ERROR] Ciphertext buffer resize failed: " << status.ToString() << std::endl;
+        throw ParquetException("Ciphertext buffer resize failed");
       }
   
       std::cout << "[DEBUG] Copying result to ciphertext buffer..." << std::endl;
-      std::copy(result->ciphertext().begin(), result->ciphertext().end(), ciphertext.begin());
+      std::memcpy(ciphertext->mutable_data(), result->ciphertext().data(), ciphertext_size);
       std::cout << "[DEBUG] Encryption completed successfully" << std::endl;
   
       return static_cast<int32_t>(result->size());

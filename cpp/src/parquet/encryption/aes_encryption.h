@@ -71,6 +71,10 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
 
   /// Start of Encryptor Interface methods.
 
+  /// Signal whether the encryptor can calculate a valid ciphertext length before performing
+  /// encryption.
+  [[nodiscard]] bool CanCalculateCiphertextLength() const override { return true; }
+
   /// The size of the ciphertext, for this cipher and the specified plaintext length.
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override;
 
@@ -80,6 +84,14 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
                   ::arrow::util::span<const uint8_t> key,
                   ::arrow::util::span<const uint8_t> aad,
                   ::arrow::util::span<uint8_t> ciphertext) override;
+
+  /// Encrypt the plaintext and leave the results in the ciphertext buffer. This method is
+  /// not supported as we can calculate the ciphertext length before encryption.
+  int32_t EncryptWithManagedBuffer(::arrow::util::span<const uint8_t> plaintext,
+                                  ::arrow::ResizableBuffer* ciphertext) override {
+    throw ParquetException(
+      "EncryptWithManagedBuffer is not supported in AesEncryptor, use Encrypt instead");
+  }
 
   /// Encrypts plaintext footer, in order to compute footer signature (tag).
   int32_t SignedFooterEncrypt(::arrow::util::span<const uint8_t> footer,

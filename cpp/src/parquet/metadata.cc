@@ -812,8 +812,18 @@ class FileMetaData::FileMetaDataImpl {
                                                               serialized_len);
 
       // encrypt the footer key
-      std::vector<uint8_t> encrypted_data(encryptor->CiphertextLength(serialized_len));
-      int32_t encrypted_len = encryptor->Encrypt(serialized_data_span, encrypted_data);
+      std::vector<uint8_t> encrypted_data;
+      int32_t encrypted_len;
+      if (encryptor->CanCalculateCiphertextLength()) {
+        encrypted_data = std::vector<uint8_t>(encryptor->CiphertextLength(serialized_len));
+        encrypted_len = encryptor->Encrypt(serialized_data_span, encrypted_data);
+      } else {
+        auto resizable_buffer = ::arrow::AllocateResizableBuffer(0);
+        encrypted_len = encryptor->EncryptWithManagedBuffer(
+          serialized_data_span, resizable_buffer->get());
+        encrypted_data.assign(resizable_buffer->get()->data(),
+                              resizable_buffer->get()->data() + encrypted_len);
+      }
 
       // write unencrypted footer
       PARQUET_THROW_NOT_OK(dst->Write(serialized_data, serialized_len));
@@ -1690,8 +1700,18 @@ class ColumnChunkMetaDataBuilder::ColumnChunkMetaDataBuilderImpl {
         ::arrow::util::span<const uint8_t> serialized_data_span(serialized_data,
                                                                 serialized_len);
 
-        std::vector<uint8_t> encrypted_data(encryptor->CiphertextLength(serialized_len));
-        int32_t encrypted_len = encryptor->Encrypt(serialized_data_span, encrypted_data);
+        std::vector<uint8_t> encrypted_data;
+        int32_t encrypted_len;
+        if (encryptor->CanCalculateCiphertextLength()) {
+          encrypted_data = std::vector<uint8_t>(encryptor->CiphertextLength(serialized_len));
+          encrypted_len = encryptor->Encrypt(serialized_data_span, encrypted_data);
+        } else {
+          auto resizable_buffer = ::arrow::AllocateResizableBuffer(0);
+          encrypted_len = encryptor->EncryptWithManagedBuffer(
+            serialized_data_span, resizable_buffer->get());
+          encrypted_data.assign(resizable_buffer->get()->data(),
+                                resizable_buffer->get()->data() + encrypted_len);
+        }
 
         const char* temp =
             const_cast<const char*>(reinterpret_cast<char*>(encrypted_data.data()));
