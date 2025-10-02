@@ -152,6 +152,12 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
 
   /// Start of Decryptor Interface methods.
 
+  /// Signal whether the decryptor can calculate a valid plaintext length before performing
+  /// decryption or not. If false, a proper sized buffer cannot be allocated before calling the
+  /// Decrypt method, and Arrow must use this decryptor's DecryptWithManagedBuffer method 
+  /// instead of Decrypt.
+  [[nodiscard]] bool CanCalculatePlaintextLength() const override { return true; }
+
   /// The size of the plaintext, for this cipher and the specified ciphertext length.
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override;
 
@@ -166,6 +172,14 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
                   ::arrow::util::span<const uint8_t> key,
                   ::arrow::util::span<const uint8_t> aad,
                   ::arrow::util::span<uint8_t> plaintext) override;
+
+  /// Decrypt the ciphertext and leave the results in the plaintext buffer.
+  /// This method is not supported as we can calculate the plaintext length before decryption.
+  int32_t DecryptWithManagedBuffer(::arrow::util::span<const uint8_t> ciphertext,
+                                  ::arrow::ResizableBuffer* plaintext) override {
+      throw ParquetException(
+        "DecryptWithManagedBuffer is not supported in AesDecryptor, use Decrypt instead");
+  }
 
   /// End of Decryptor Interface methods.
 

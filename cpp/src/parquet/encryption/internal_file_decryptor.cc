@@ -37,6 +37,10 @@ Decryptor::Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor_i
 
 Decryptor::~Decryptor() = default;
 
+bool Decryptor::CanCalculatePlaintextLength() const {
+  return decryptor_instance_->CanCalculatePlaintextLength();
+}
+
 int32_t Decryptor::PlaintextLength(int32_t ciphertext_len) const {
   return decryptor_instance_->PlaintextLength(ciphertext_len);
 }
@@ -52,6 +56,11 @@ void Decryptor::UpdateEncodingProperties(std::unique_ptr<EncodingProperties> enc
 int32_t Decryptor::Decrypt(::arrow::util::span<const uint8_t> ciphertext,
                            ::arrow::util::span<uint8_t> plaintext) {
   return decryptor_instance_->Decrypt(ciphertext, str2span(key_), str2span(aad_), plaintext);
+}
+
+int32_t Decryptor::DecryptWithManagedBuffer(::arrow::util::span<const uint8_t> ciphertext,
+                                           ::arrow::ResizableBuffer* plaintext) {
+  return decryptor_instance_->DecryptWithManagedBuffer(ciphertext, plaintext);
 }
 
 // InternalFileDecryptor

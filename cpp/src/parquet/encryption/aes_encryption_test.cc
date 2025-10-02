@@ -148,4 +148,14 @@ TEST_F(TestAesEncryption, AesGcmEncryptWithManagedBuffer) {
     ParquetException);
 }
 
+TEST_F(TestAesEncryption, AesGcmDecryptWithManagedBuffer) {
+  AesDecryptor decryptor(
+    ParquetCipher::AES_GCM_V1, /*key_length*/ 16, /*metadata*/ false, /*write_length*/ true);
+  std::unique_ptr<::arrow::ResizableBuffer> ciphertext_buffer;
+  ASSERT_TRUE(decryptor.CanCalculatePlaintextLength());
+  EXPECT_THROW(
+    decryptor.DecryptWithManagedBuffer(str2span("plain_text_"), ciphertext_buffer.get()),
+    ParquetException);
+}
+
 }  // namespace parquet::encryption::test

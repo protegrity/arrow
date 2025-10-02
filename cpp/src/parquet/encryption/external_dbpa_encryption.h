@@ -120,19 +120,34 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
   
   ~ExternalDBPADecryptorAdapter() = default;
 
+  /// Signal whether the decryptor can calculate a valid plaintext length before performing
+  /// decryption or not. If false, a proper sized buffer cannot be allocated before calling the
+  /// Decrypt method, and Arrow must use this decryptor's DecryptWithManagedBuffer method 
+  /// instead of Decrypt.
+  [[nodiscard]] bool CanCalculatePlaintextLength() const override { return false; }
+
   /// The size of the plaintext, for this cipher and the specified ciphertext length.
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override;
 
   /// The size of the ciphertext, for this cipher and the specified plaintext length.
   [[nodiscard]] int32_t CiphertextLength(int32_t plaintext_len) const override;
 
-  /// We follow the DecryptorInterface specification, but the key and aad are not used.
-  /// The caller is responsible for ensuring that the plaintext buffer is at least as
-  /// large as PlaintextLength(ciphertext_len).
+  /// Decrypt is not supported as we cannot calculate the plaintext length before decryption.
   int32_t Decrypt(::arrow::util::span<const uint8_t> ciphertext,
                   ::arrow::util::span<const uint8_t> key,
                   ::arrow::util::span<const uint8_t> aad,
-                  ::arrow::util::span<uint8_t> plaintext) override;
+                  ::arrow::util::span<uint8_t> plaintext) override {
+    std::stringstream ss;
+    ss << "Decrypt is not supported in ExternalDBPADecryptorAdapter, ";
+    ss << "use DecryptWithManagedBuffer instead";
+    throw ParquetException(ss.str());
+  }
+
+  /// Decrypt the ciphertext and leave the results in the plaintext buffer.
+  /// The buffer will be resized to the correct size during decryption. This method is used
+  /// when the decryptor cannot calculate the plaintext length before decryption.
+  int32_t DecryptWithManagedBuffer(::arrow::util::span<const uint8_t> ciphertext,
+                                  ::arrow::ResizableBuffer* plaintext) override;
 
   void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) override;
 
@@ -148,7 +163,7 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
     
     int32_t InvokeExternalDecrypt(
       ::arrow::util::span<const uint8_t> ciphertext, 
-      ::arrow::util::span<uint8_t> plaintext,
+      ::arrow::ResizableBuffer* plaintext,
       std::map<std::string, std::string> encoding_attrs);
     
     ParquetCipher::type algorithm_;

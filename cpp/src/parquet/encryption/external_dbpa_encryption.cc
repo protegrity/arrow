@@ -399,9 +399,8 @@ void ExternalDBPADecryptorAdapter::UpdateEncodingProperties(std::unique_ptr<Enco
   encoding_properties_updated_ = true;
 }
 
-int32_t ExternalDBPADecryptorAdapter::Decrypt(
-    ::arrow::util::span<const uint8_t> ciphertext, ::arrow::util::span<const uint8_t> key,
-    ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<uint8_t> plaintext) {
+int32_t ExternalDBPADecryptorAdapter::DecryptWithManagedBuffer(
+    ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext) {
 
       if (!encoding_properties_updated_) {
         std::cout << "[ERROR] ExternalDBPADecryptorAdapter:: DecryptionParams not updated" << std::endl;
@@ -415,7 +414,7 @@ int32_t ExternalDBPADecryptorAdapter::Decrypt(
 
 int32_t ExternalDBPADecryptorAdapter::InvokeExternalDecrypt(
     ::arrow::util::span<const uint8_t> ciphertext, 
-    ::arrow::util::span<uint8_t> plaintext,
+    ::arrow::ResizableBuffer* plaintext,
     std::map<std::string, std::string> encoding_attrs) {
 
       std::cout << "\n*-*-*- START: ExternalDBPADecryptor::Decrypt *-*-*-" << std::endl;
@@ -447,14 +446,15 @@ int32_t ExternalDBPADecryptorAdapter::InvokeExternalDecrypt(
       std::cout << "  result size: " << result->size() << " bytes" << std::endl;
       std::cout << "  result plaintext size: " << result->plaintext().size() << " bytes" << std::endl;
     
-      if (plaintext.size() < result->plaintext().size()) {
-        std::cout << "[ERROR] Plaintext buffer too small. Need " << result->plaintext().size() 
-                  << " bytes, have " << plaintext.size() << " bytes" << std::endl;
-        throw ParquetException("Plaintext buffer too small for decrypted result");
+      int32_t plaintext_size = result->plaintext().size();
+      auto status = plaintext->Resize(plaintext_size, false);
+      if (!status.ok()) {
+        std::cout << "[ERROR] Plaintext buffer resize failed: " << status.ToString() << std::endl;
+        throw ParquetException("Plaintext buffer resize failed");
       }
       
       std::cout << "[DEBUG] Copying result to plaintext buffer..." << std::endl;
-      std::copy(result->plaintext().begin(), result->plaintext().end(), plaintext.begin());
+      std::memcpy(plaintext->mutable_data(), result->plaintext().data(), plaintext_size);
       std::cout << "[DEBUG] Decryption completed successfully" << std::endl;
     
       return result->size();    

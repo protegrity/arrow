@@ -592,12 +592,18 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {
 
       data_decryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
-      PARQUET_THROW_NOT_OK(
-          decryption_buffer_->Resize(data_decryptor_->PlaintextLength(compressed_len),
-                                     /*shrink_to_fit=*/false));
-      compressed_len =
-          data_decryptor_->Decrypt(page_buffer->span_as<uint8_t>(),
-                                   decryption_buffer_->mutable_span_as<uint8_t>());
+      if (data_decryptor_->CanCalculatePlaintextLength()) {
+        PARQUET_THROW_NOT_OK(
+            decryption_buffer_->Resize(data_decryptor_->PlaintextLength(compressed_len),
+                                      /*shrink_to_fit=*/false));
+        compressed_len =
+            data_decryptor_->Decrypt(page_buffer->span_as<uint8_t>(),
+                                    decryption_buffer_->mutable_span_as<uint8_t>());
+      } else {
+        compressed_len =
+            data_decryptor_->DecryptWithManagedBuffer(page_buffer->span_as<uint8_t>(),
+                                                      decryption_buffer_.get());
+      }
 
       page_buffer = decryption_buffer_;
     }
