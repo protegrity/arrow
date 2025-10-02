@@ -285,6 +285,46 @@ TEST(EncodingPropertiesTest, MakeFromMetadataUnknownPageTypeThrows) {
                std::invalid_argument);
 }
 
+TEST(EncodingPropertiesTest, MakeFromMetadataFixedLenByteArrayPropagatesLength) {
+  using ::parquet::schema::GroupNode;
+  using ::parquet::schema::NodePtr;
+  using ::parquet::schema::NodeVector;
+  using ::parquet::schema::PrimitiveNode;
+
+  // Build a schema with a FIXED_LEN_BYTE_ARRAY(16) column named "col"
+  NodeVector fields;
+  fields.push_back(PrimitiveNode::Make("col", ::parquet::Repetition::REQUIRED,
+                                       Type::FIXED_LEN_BYTE_ARRAY,
+                                       ::parquet::ConvertedType::NONE,
+                                       /*type_length=*/16));
+  NodePtr schema = GroupNode::Make("schema", ::parquet::Repetition::REQUIRED, fields);
+  auto descr = std::make_shared<::parquet::SchemaDescriptor>();
+  descr->Init(schema);
+
+  const ColumnDescriptor* col_descr = descr->Column(0);
+
+  // WriterProperties for path "col"
+  auto path = parquet::schema::ColumnPath::FromDotString("col");
+  parquet::WriterProperties::Builder wp_builder;
+  wp_builder.compression(path, ::arrow::Compression::SNAPPY);
+  auto writer_props = wp_builder.build();
+
+  // Use a DATA_PAGE_V1 with minimal valid settings
+  auto buffer = ::parquet::AllocateBuffer();
+  parquet::DataPageV1 page(buffer, /*num_values=*/3, Encoding::PLAIN, Encoding::RLE,
+                           Encoding::RLE, /*uncompressed_size=*/0);
+
+  auto props = EncodingProperties::MakeFromMetadata(col_descr, writer_props.get(), page);
+  EXPECT_NO_THROW(props->validate());
+  auto m = props->ToPropertiesMap();
+  ASSERT_EQ(m.at("column_path"), std::string("col"));
+  ASSERT_EQ(m.at("physical_type"), std::string("FIXED_LEN_BYTE_ARRAY"));
+  ASSERT_EQ(m.at("compression_codec"), std::string("SNAPPY"));
+  ASSERT_EQ(m.at("page_type"), std::string("DATA_PAGE_V1"));
+  ASSERT_EQ(m.at("page_encoding"), std::string("PLAIN"));
+  ASSERT_EQ(m.at("fixed_length_bytes"), std::to_string(16));
+}
+
 TEST(EncodingPropertiesTest, DataPageV1MissingNumValuesThrows) {
   auto props = EncodingProperties::Builder()
                    .ColumnPath("col")

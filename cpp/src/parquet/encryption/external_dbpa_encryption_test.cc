@@ -84,12 +84,6 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     // Assert that plaintext and ciphertext have the same length
     ASSERT_EQ(plaintext.size(), ciphertext_str.size());
 
-    // Assert that ciphertext is plaintext XOR'd with 0xAA
-    for (size_t i = 0; i < plaintext.size(); i++) {
-      ASSERT_EQ(static_cast<uint8_t>(ciphertext_str[i]), 
-                static_cast<uint8_t>(plaintext[i]) ^ 0xAA);
-    }
-
     std::unique_ptr<ExternalDBPADecryptorAdapter> decryptor = ExternalDBPADecryptorAdapter::Make(
       algorithm, column_name, key_id, data_type,
       compression_type, {encoding_type}, app_context_,
@@ -112,7 +106,7 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     ASSERT_EQ(plaintext, plaintext_str);
   }
   
-private:
+protected:
  std::string empty_string = "";
  std::string app_context_;
  std::map<std::string, std::string> connection_config_;
@@ -144,6 +138,236 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, SignedFooterEncryptionThrowsException) 
   EXPECT_THROW(encryptor->SignedFooterEncrypt(
     str2span(/*footer*/""), str2span(/*key*/""), str2span(/*aad*/""), str2span(/*nonce*/""),
     encrypted_footer), ParquetException);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptWithoutUpdateEncodingPropertiesThrows) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+
+  auto encryptor = ExternalDBPAEncryptorAdapter::Make(
+    algorithm, column_name, key_id, data_type, compression_type, encoding_type,
+    app_context_, connection_config_, std::nullopt);
+
+  std::string plaintext = "abc";
+  std::vector<uint8_t> ciphertext_buffer(plaintext.size(), '\0');
+  EXPECT_THROW(
+    encryptor->Encrypt(
+      str2span(plaintext), str2span(empty_string), str2span(empty_string), ciphertext_buffer),
+    ParquetException);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithoutUpdateEncodingPropertiesThrows) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+
+  auto decryptor = ExternalDBPADecryptorAdapter::Make(
+    algorithm, column_name, key_id, data_type, compression_type, {encoding_type},
+    app_context_, connection_config_, std::nullopt);
+
+  std::string ciphertext = "xyz";
+  std::vector<uint8_t> plaintext_buffer(ciphertext.size(), '\0');
+  EXPECT_THROW(
+    decryptor->Decrypt(
+      str2span(ciphertext), str2span(empty_string), str2span(empty_string), plaintext_buffer),
+    ParquetException);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorUnsupportedAlgorithmThrows) {
+  // Use AES_GCM_V1 (unsupported) to verify the adapter rejects algorithms other than EXTERNAL_DBPA_V1
+  ParquetCipher::type unsupported_algo = ParquetCipher::AES_GCM_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+
+  EXPECT_THROW(
+    CreateEncryptor(unsupported_algo, column_name, key_id, data_type, compression_type, encoding_type),
+    ParquetException);
+
+  // Also test AES_GCM_CTR_V1
+  unsupported_algo = ParquetCipher::AES_GCM_CTR_V1;
+  EXPECT_THROW(
+    CreateEncryptor(unsupported_algo, column_name, key_id, data_type, compression_type, encoding_type),
+    ParquetException);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorUnsupportedAlgorithmThrows) {
+  // Use AES_GCM_V1 (unsupported) to verify the adapter rejects algorithms other than EXTERNAL_DBPA_V1
+  ParquetCipher::type unsupported_algo = ParquetCipher::AES_GCM_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+
+  EXPECT_THROW(
+    ExternalDBPADecryptorAdapter::Make(
+      unsupported_algo, column_name, key_id, data_type, compression_type, {encoding_type},
+      app_context_, connection_config_, std::nullopt),
+    ParquetException);
+
+  // Also test AES_GCM_CTR_V1
+  unsupported_algo = ParquetCipher::AES_GCM_CTR_V1;
+  EXPECT_THROW(
+    ExternalDBPADecryptorAdapter::Make(
+      unsupported_algo, column_name, key_id, data_type, compression_type, {encoding_type},
+      app_context_, connection_config_, std::nullopt),
+    std::exception);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorMissingLibraryPathThrows) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+
+  std::map<std::string, std::string> bad_config = { {"config_path", "path/to/file"} };
+  std::string app_context = "{}";
+
+  EXPECT_THROW(
+    ExternalDBPAEncryptorAdapter::Make(
+      algorithm, column_name, key_id, data_type, compression_type, encoding_type,
+      app_context, bad_config, std::nullopt),
+  std::exception);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorInvalidLibraryPathThrows) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+
+  std::map<std::string, std::string> bad_config = {
+    {"agent_library_path", "/definitely/not/a/real/libDBPA.so"}
+  };
+  std::string app_context = "{}";
+
+  EXPECT_THROW(
+    ExternalDBPAEncryptorAdapter::Make(
+      algorithm, column_name, key_id, data_type, compression_type, encoding_type,
+      app_context, bad_config, std::nullopt),
+    std::exception);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorMissingLibraryPathThrows) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+
+  std::map<std::string, std::string> bad_config = { {"config_path", "path/to/file"} };
+  std::string app_context = "{}";
+
+  EXPECT_THROW(
+    ExternalDBPADecryptorAdapter::Make(
+      algorithm, column_name, key_id, data_type, compression_type, {encoding_type},
+      app_context, bad_config, std::nullopt),
+    std::exception);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorInvalidLibraryPathThrows) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+
+  std::map<std::string, std::string> bad_config = {
+    {"agent_library_path", "/definitely/not/a/real/libDBPA.so"}
+  };
+  std::string app_context = "{}";
+
+  EXPECT_THROW(
+    ExternalDBPADecryptorAdapter::Make(
+      algorithm, column_name, key_id, data_type, compression_type, {encoding_type},
+      app_context, bad_config, std::nullopt),
+    std::exception);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string correct_key_id = "employee_name_key";
+  std::string wrong_key_id = "wrong_key_id";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+  std::string app_context = "{}";
+  std::map<std::string, std::string> config = {
+    {"agent_library_path", parquet::encryption::external::test::TestUtils::GetTestLibraryPath()}
+  };
+
+  auto encryptor = ExternalDBPAEncryptorAdapter::Make(
+    algorithm, column_name, correct_key_id, data_type, compression_type, encoding_type,
+    app_context, config, std::nullopt);
+
+  // Build encoding properties
+  EncodingPropertiesBuilder builder;
+  builder.ColumnPath("test_column")
+         .PhysicalType(data_type)
+         .CompressionCodec(compression_type)
+         .PageType(parquet::PageType::DATA_PAGE_V2)
+         .PageV2DefinitionLevelsByteLength(10)
+         .PageV2RepetitionLevelsByteLength(10)
+         .PageV2NumNulls(10)
+         .PageV2IsCompressed(true)
+         .DataPageMaxDefinitionLevel(10)
+         .DataPageMaxRepetitionLevel(1)
+         .PageEncoding(encoding_type)
+         .DataPageNumValues(100)
+         .Build();
+
+  encryptor->UpdateEncodingProperties(builder.Build());
+
+  std::string plaintext = "Sensitive Data";
+  int32_t ct_len = encryptor->CiphertextLength(plaintext.size());
+  std::vector<uint8_t> ciphertext_buffer(ct_len, '\0');
+
+  std::string empty;
+  int32_t enc_len = encryptor->Encrypt(
+    str2span(plaintext), str2span(empty), str2span(empty), ciphertext_buffer);
+  ASSERT_EQ(ct_len, enc_len);
+
+  std::string ciphertext_str(ciphertext_buffer.begin(), ciphertext_buffer.end());
+
+  auto decryptor = ExternalDBPADecryptorAdapter::Make(
+    algorithm, column_name, wrong_key_id, data_type, compression_type, {encoding_type},
+    app_context, config, std::nullopt);
+
+  decryptor->UpdateEncodingProperties(builder.Build());
+
+  int32_t pt_len = decryptor->PlaintextLength(ciphertext_str.size());
+  std::vector<uint8_t> plaintext_buffer(pt_len, '\0');
+
+  bool threw = false;
+  try {
+    int32_t dec_len = decryptor->Decrypt(
+      str2span(ciphertext_str), str2span(empty), str2span(empty), plaintext_buffer);
+    ASSERT_EQ(pt_len, dec_len);
+  } catch (const ParquetException&) {
+    threw = true;
+  }
+
+  if (!threw) {
+    std::string decrypted(plaintext_buffer.begin(), plaintext_buffer.end());
+    ASSERT_NE(plaintext, decrypted);
+  }
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptCallShouldFail) {

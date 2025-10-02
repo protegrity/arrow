@@ -100,13 +100,17 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
 ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
   ParquetCipher::type algorithm, std::string column_name, std::string key_id,
   Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
-  std::string app_context, std::map<std::string, std::string> connection_config,
+  std::optional<int> datatype_length, std::string app_context, std::map<std::string, std::string> connection_config,
   std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
   : algorithm_(algorithm), column_name_(column_name), key_id_(key_id),
     data_type_(data_type), compression_type_(compression_type),
-    encoding_type_(encoding_type), app_context_(app_context),
+    encoding_type_(encoding_type), datatype_length_(datatype_length), app_context_(app_context),
     connection_config_(connection_config),
     agent_instance_(std::move(agent_instance)) {
+
+      if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+        throw ParquetException("ExternalDBPAEncryptorAdapter -- Only algorithm ExternalDBPA_V1 is supported");
+      }
 }
   
 std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
@@ -129,6 +133,10 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
           std::cout << "[DEBUG]    " << key << " = " << value << std::endl;
         }
 
+        if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+          throw ParquetException("ExternalDBPAEncryptorAdapter::Make() -- Only algorithm ExternalDBPA_V1 is supported");
+        }
+
         std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter() -- loading and initializing agent" << std::endl;
         // Load and initialize the agent using the utility function
         auto agent_instance = LoadAndInitializeAgent(
@@ -146,6 +154,7 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
             /*data_type*/ data_type,
             /*compression_type*/ compression_type,
             /*encoding_type*/ encoding_type,
+            /*datatype_length*/ datatype_length,
             /*app_context*/ app_context,
             /*connection_config*/ connection_config,
             /*agent_instance*/ std::move(agent_instance))
@@ -169,7 +178,7 @@ void ExternalDBPAEncryptorAdapter::UpdateEncodingProperties(std::unique_ptr<Enco
 
   //fill-in values from the decryptor constructor.
   encoding_properties->set_column_path(column_name_);
-  encoding_properties->set_physical_type(data_type_);
+  encoding_properties->set_physical_type(data_type_, datatype_length_);
   encoding_properties->set_compression_codec(compression_type_);
 
   encoding_properties->validate();
@@ -300,14 +309,18 @@ ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
 ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(
   ParquetCipher::type algorithm, std::string column_name, std::string key_id,
   Type::type data_type, Compression::type compression_type,
-  std::vector<Encoding::type> encoding_types, std::string app_context,
+  std::vector<Encoding::type> encoding_types, std::optional<int> datatype_length, std::string app_context,
   std::map<std::string, std::string> connection_config,
   std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
   : algorithm_(algorithm), column_name_(column_name), key_id_(key_id),
     data_type_(data_type), compression_type_(compression_type),
-    encoding_types_(encoding_types), app_context_(app_context),
+    encoding_types_(encoding_types), datatype_length_(datatype_length), app_context_(app_context),
     connection_config_(connection_config),
     agent_instance_(std::move(agent_instance)) {
+
+    if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+      throw ParquetException("ExternalDBPADecryptorAdapter -- Only algorithm ExternalDBPA_V1 is supported");
+    }
 }
 
 std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make(
@@ -316,6 +329,10 @@ std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make
     std::vector<Encoding::type> encoding_types, std::string app_context,
     std::map<std::string, std::string> connection_config,
     std::optional<int> datatype_length) {
+
+        if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+          throw ParquetException("ExternalDBPADecryptorAdapter::Make() -- Only algorithm ExternalDBPA_V1 is supported");
+        }
 
         //TODO: figure out logging
         std::cout << "[DEBUG] ExternalDBPADecryptorAdapter::Make() -- Make()" << std::endl;
@@ -351,6 +368,7 @@ std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make
             /*data_type*/ data_type,
             /*compression_type*/ compression_type,
             /*encoding_types*/ encoding_types,
+            /*datatype_length*/ datatype_length,
             /*app_context*/ app_context,
             /*connection_config*/ connection_config,
             /*agent_instance*/ std::move(agent_instance))
@@ -373,7 +391,7 @@ void ExternalDBPADecryptorAdapter::UpdateEncodingProperties(std::unique_ptr<Enco
 
   //fill-in values from the decryptor constructor.
   encoding_properties->set_column_path(column_name_);
-  encoding_properties->set_physical_type(data_type_);
+  encoding_properties->set_physical_type(data_type_, datatype_length_);
   encoding_properties->set_compression_codec(compression_type_);
   
   encoding_properties->validate();
