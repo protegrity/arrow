@@ -40,6 +40,15 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
       connection_config_, std::nullopt);
   }
 
+  std::unique_ptr<ExternalDBPADecryptorAdapter> CreateDecryptor(
+    ParquetCipher::type algorithm, std::string column_name, std::string key_id, 
+    Type::type data_type, Compression::type compression_type, Encoding::type encoding_type) {
+    return ExternalDBPADecryptorAdapter::Make(
+      algorithm, column_name, key_id, data_type, 
+      compression_type, {encoding_type}, app_context_, 
+      connection_config_, std::nullopt);
+  }
+
   void RoundtripEncryption(
       ParquetCipher::type algorithm, std::string column_name, std::string key_id, 
       Type::type data_type, Compression::type compression_type, Encoding::type encoding_type,
@@ -92,15 +101,14 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     decryptor->UpdateEncodingProperties(builder.Build());
 
     int32_t expected_plaintext_length = ciphertext_str.size();
-    int32_t actual_plaintext_length = decryptor->PlaintextLength(ciphertext_str.size());
-    ASSERT_EQ(expected_plaintext_length, actual_plaintext_length);
-
-    std::vector<uint8_t> plaintext_buffer(expected_plaintext_length, '\0');
-    int32_t decryption_length = decryptor->Decrypt(
-      str2span(ciphertext_str), str2span(empty_string), str2span(empty_string), plaintext_buffer);
+    std::shared_ptr<ResizableBuffer> plaintext_buffer = AllocateBuffer(
+      ::arrow::default_memory_pool(), expected_plaintext_length);
+    int32_t decryption_length = decryptor->DecryptWithManagedBuffer(
+      str2span(ciphertext_str), plaintext_buffer.get());
     ASSERT_EQ(expected_plaintext_length, decryption_length);
 
-    std::string plaintext_str(plaintext_buffer.begin(), plaintext_buffer.end());
+    std::string plaintext_str(
+      plaintext_buffer->data(), plaintext_buffer->data() + decryption_length);
 
     // Assert that the decrypted plaintext matches the original plaintext
     ASSERT_EQ(plaintext, plaintext_str);
@@ -153,10 +161,11 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptWithoutUpdateEncodingPropertiesT
     app_context_, connection_config_, std::nullopt);
 
   std::string plaintext = "abc";
-  std::vector<uint8_t> ciphertext_buffer(plaintext.size(), '\0');
+  std::shared_ptr<ResizableBuffer> ciphertext_buffer = AllocateBuffer(
+    ::arrow::default_memory_pool(), 0);
   EXPECT_THROW(
-    encryptor->Encrypt(
-      str2span(plaintext), str2span(empty_string), str2span(empty_string), ciphertext_buffer),
+    encryptor->EncryptWithManagedBuffer(
+      str2span(plaintext), ciphertext_buffer.get()),
     ParquetException);
 }
 
@@ -173,10 +182,11 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithoutUpdateEncodingPropertiesT
     app_context_, connection_config_, std::nullopt);
 
   std::string ciphertext = "xyz";
-  std::vector<uint8_t> plaintext_buffer(ciphertext.size(), '\0');
+  std::shared_ptr<ResizableBuffer> plaintext_buffer = AllocateBuffer(
+    ::arrow::default_memory_pool(), 0);
   EXPECT_THROW(
-    decryptor->Decrypt(
-      str2span(ciphertext), str2span(empty_string), str2span(empty_string), plaintext_buffer),
+    decryptor->DecryptWithManagedBuffer(
+      str2span(ciphertext), plaintext_buffer.get()),
     ParquetException);
 }
 
@@ -337,14 +347,15 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
 
   std::string plaintext = "Sensitive Data";
   int32_t ct_len = encryptor->CiphertextLength(plaintext.size());
-  std::vector<uint8_t> ciphertext_buffer(ct_len, '\0');
+  std::shared_ptr<ResizableBuffer> ciphertext_buffer = AllocateBuffer(
+    ::arrow::default_memory_pool(), 0);
 
   std::string empty;
-  int32_t enc_len = encryptor->Encrypt(
-    str2span(plaintext), str2span(empty), str2span(empty), ciphertext_buffer);
+  int32_t enc_len = encryptor->EncryptWithManagedBuffer(
+    str2span(plaintext), ciphertext_buffer.get());
   ASSERT_EQ(ct_len, enc_len);
 
-  std::string ciphertext_str(ciphertext_buffer.begin(), ciphertext_buffer.end());
+  std::string ciphertext_str(ciphertext_buffer->data(), ciphertext_buffer->data() + enc_len);
 
   auto decryptor = ExternalDBPADecryptorAdapter::Make(
     algorithm, column_name, wrong_key_id, data_type, compression_type, {encoding_type},
@@ -353,19 +364,21 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
   decryptor->UpdateEncodingProperties(builder.Build());
 
   int32_t pt_len = decryptor->PlaintextLength(ciphertext_str.size());
-  std::vector<uint8_t> plaintext_buffer(pt_len, '\0');
+  std::shared_ptr<ResizableBuffer> plaintext_buffer = AllocateBuffer(
+    ::arrow::default_memory_pool(), 0);
 
   bool threw = false;
+  int32_t dec_len = 0;
   try {
-    int32_t dec_len = decryptor->Decrypt(
-      str2span(ciphertext_str), str2span(empty), str2span(empty), plaintext_buffer);
+    dec_len = decryptor->DecryptWithManagedBuffer(
+      str2span(ciphertext_str), plaintext_buffer.get());
     ASSERT_EQ(pt_len, dec_len);
   } catch (const ParquetException&) {
     threw = true;
   }
 
   if (!threw) {
-    std::string decrypted(plaintext_buffer.begin(), plaintext_buffer.end());
+    std::string decrypted(plaintext_buffer->data(), plaintext_buffer->data() + dec_len);
     ASSERT_NE(plaintext, decrypted);
   }
 }
@@ -386,6 +399,25 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptCallShouldFail) {
   EXPECT_THROW(
     encryptor->Encrypt(
       str2span(plaintext), str2span(/*key*/""), str2span(/*aad*/""), ciphertext_buffer),
+    ParquetException);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptCallShouldFail) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+  std::string ciphertext = "Jean-Luc Picard";
+  std::vector<uint8_t> plaintext_buffer(ciphertext.size(), '\0');
+
+  std::unique_ptr<ExternalDBPADecryptorAdapter> decryptor = CreateDecryptor(
+    algorithm, column_name, key_id, data_type, compression_type, encoding_type);
+  ASSERT_FALSE(decryptor->CanCalculateLengths());
+  EXPECT_THROW(
+    decryptor->Decrypt(
+      str2span(ciphertext), str2span(/*key*/""), str2span(/*aad*/""), plaintext_buffer),
     ParquetException);
 }
 

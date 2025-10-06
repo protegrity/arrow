@@ -443,6 +443,15 @@ class ThriftDeserializer {
       // thrift message is not encrypted
       DeserializeUnencryptedMessage(buf, len, deserialized_msg);
     } else {
+      // This method is only used to deserialize metadata or footer data, so it is not expected 
+      // to be called with a decryptor that can't calculate lengths.
+      if (!decryptor->CanCalculateLengths()) {
+        std::stringstream ss;
+        ss << "Decryptor can't calculate plaintext or ciphertext lengths when deserializing metadata or footer data";
+        ss << "and should not be used to deserialize metadata or footer data";
+        throw ParquetException(ss.str());
+      }
+
       // thrift message is encrypted
       uint32_t clen;
       clen = *len;
@@ -457,6 +466,7 @@ class ThriftDeserializer {
       ::arrow::util::span<const uint8_t> cipher_buf(buf, clen);
       uint32_t decrypted_buffer_len =
           decryptor->Decrypt(cipher_buf, decrypted_buffer->mutable_span_as<uint8_t>());
+
       if (decrypted_buffer_len <= 0) {
         throw ParquetException("Couldn't decrypt buffer\n");
       }

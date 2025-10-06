@@ -1010,6 +1010,10 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
         physical_type_(physical_type),
         compression_codec_(compression_codec) {}
 
+  [[nodiscard]] bool CanCalculateLengths() const override {
+    return true;
+  }
+
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override {
     return ciphertext_len;
   }
@@ -1024,6 +1028,11 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
                   ::arrow::util::span<uint8_t> plaintext) override {
     std::copy(ciphertext.begin(), ciphertext.end(), plaintext.begin());
     return static_cast<int32_t>(ciphertext.size());
+  }
+
+  int32_t DecryptWithManagedBuffer(::arrow::util::span<const uint8_t> ciphertext,
+                                  ::arrow::ResizableBuffer* plaintext) override {
+    throw ParquetException("DecryptWithManagedBuffer not supported");
   }
 
   void UpdateEncodingProperties(
