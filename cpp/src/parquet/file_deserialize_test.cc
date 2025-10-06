@@ -1010,7 +1010,7 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
         physical_type_(physical_type),
         compression_codec_(compression_codec) {}
 
-  [[nodiscard]] bool CanCalculatePlaintextLength() const override {
+  [[nodiscard]] bool CanCalculateLengths() const override {
     return true;
   }
 

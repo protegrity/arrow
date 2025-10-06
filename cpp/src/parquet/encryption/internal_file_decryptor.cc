@@ -37,8 +37,8 @@ Decryptor::Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor_i
 
 Decryptor::~Decryptor() = default;
 
-bool Decryptor::CanCalculatePlaintextLength() const {
-  return decryptor_instance_->CanCalculatePlaintextLength();
+bool Decryptor::CanCalculateLengths() const {
+  return decryptor_instance_->CanCalculateLengths();
 }
 
 int32_t Decryptor::PlaintextLength(int32_t ciphertext_len) const {

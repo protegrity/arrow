@@ -414,7 +414,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptCallShouldFail) {
 
   std::unique_ptr<ExternalDBPADecryptorAdapter> decryptor = CreateDecryptor(
     algorithm, column_name, key_id, data_type, compression_type, encoding_type);
-  ASSERT_FALSE(decryptor->CanCalculatePlaintextLength());
+  ASSERT_FALSE(decryptor->CanCalculateLengths());
   EXPECT_THROW(
     decryptor->Decrypt(
       str2span(ciphertext), str2span(/*key*/""), str2span(/*aad*/""), plaintext_buffer),

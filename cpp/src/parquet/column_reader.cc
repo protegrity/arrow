@@ -592,7 +592,7 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {
 
       data_decryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
-      if (data_decryptor_->CanCalculatePlaintextLength()) {
+      if (data_decryptor_->CanCalculateLengths()) {
         PARQUET_THROW_NOT_OK(
             decryption_buffer_->Resize(data_decryptor_->PlaintextLength(compressed_len),
                                       /*shrink_to_fit=*/false));

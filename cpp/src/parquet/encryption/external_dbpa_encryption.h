@@ -120,11 +120,11 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
   
   ~ExternalDBPADecryptorAdapter() = default;
 
-  /// Signal whether the decryptor can calculate a valid plaintext length before performing
-  /// decryption or not. If false, a proper sized buffer cannot be allocated before calling the
-  /// Decrypt method, and Arrow must use this decryptor's DecryptWithManagedBuffer method 
-  /// instead of Decrypt.
-  [[nodiscard]] bool CanCalculatePlaintextLength() const override { return false; }
+  /// Signal whether the decryptor can calculate a valid plaintext or ciphertext length before 
+  /// performing decryption or not. If false, a proper sized buffer cannot be allocated before 
+  /// calling the Decrypt method, and Arrow must use this decryptor's DecryptWithManagedBuffer
+  /// method instead of Decrypt.
+  [[nodiscard]] bool CanCalculateLengths() const override { return false; }
 
   /// The size of the plaintext, for this cipher and the specified ciphertext length.
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override;
