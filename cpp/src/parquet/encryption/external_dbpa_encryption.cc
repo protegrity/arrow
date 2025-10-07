@@ -37,6 +37,9 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   std::cout << "[DEBUG] Loading agent from library..." << std::endl;
 
   const std::string SHARED_LIBRARY_PATH_KEY = "agent_library_path";
+  const std::string INIT_TIMEOUT_KEY = "init_timeout_ms";
+  const std::string ENCRYPT_TIMEOUT_KEY = "encrypt_timeout_ms";
+  const std::string DECRYPT_TIMEOUT_KEY = "decrypt_timeout_ms";
   
   // Step 1: Get path to the shared library  
   auto it = connection_config.find(SHARED_LIBRARY_PATH_KEY);
@@ -61,14 +64,27 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
 
   //Step 3: Wrap the agent in a DBPAExecutor.
   //operations will timeout, exceptions will be re-thrown.
-  //TODO: figure out timeouts and how to configure them(read them from app_config/connection_config?)
-  //https://github.com/protegrity/arrow/issues/151
 
   std::cout << "[DEBUG] Wrapping Agent in DBPAExecutor" << std::endl;
 
-  const int64_t init_timeout_ms    = 10*1000; //10 seconds
-  const int64_t encrypt_timeout_ms = 30*1000; //30 seconds
-  const int64_t decrypt_timeout_ms = 30*1000; //30 seconds.
+  // Assign default values to the timeouts.
+  int64_t init_timeout_ms    = 10*1000; //10 seconds
+  int64_t encrypt_timeout_ms = 30*1000; //30 seconds
+  int64_t decrypt_timeout_ms = 30*1000; //30 seconds.
+  // Override the default values if they are present in the connection_config.
+  if (connection_config.find(INIT_TIMEOUT_KEY) != connection_config.end()) {
+    init_timeout_ms = std::stoi(connection_config.at(INIT_TIMEOUT_KEY));
+  }
+  if (connection_config.find(ENCRYPT_TIMEOUT_KEY) != connection_config.end()) {
+    encrypt_timeout_ms = std::stoi(connection_config.at(ENCRYPT_TIMEOUT_KEY));
+  }
+  if (connection_config.find(DECRYPT_TIMEOUT_KEY) != connection_config.end()) {
+    decrypt_timeout_ms = std::stoi(connection_config.at(DECRYPT_TIMEOUT_KEY));
+  }
+
+  std::cout << "[DEBUG] init_timeout_ms    = " << init_timeout_ms << std::endl;
+  std::cout << "[DEBUG] encrypt_timeout_ms = " << encrypt_timeout_ms << std::endl;
+  std::cout << "[DEBUG] decrypt_timeout_ms = " << decrypt_timeout_ms << std::endl;
 
   auto executor_wrapped_agent = std::make_unique<DBPAExecutor>(
     /*agent*/ std::move(agent_instance), 

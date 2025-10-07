@@ -27,7 +27,10 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
       "{\"user_id\": \"abc123\", \"location\": {\"lat\": 9.7489, \"lon\": -83.7534}}";
     connection_config_ = {
       {"config_path", "path/to/file"}, 
-      {"agent_library_path", library_path}
+      {"agent_library_path", library_path},
+      {"init_timeout_ms", "1000"},
+      {"encrypt_timeout_ms", "2000"},
+      {"decrypt_timeout_ms", "3000"}
     };
   }
 
