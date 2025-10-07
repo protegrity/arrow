@@ -346,14 +346,12 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
   encryptor->UpdateEncodingProperties(builder.Build());
 
   std::string plaintext = "Sensitive Data";
-  int32_t ct_len = encryptor->CiphertextLength(plaintext.size());
   std::shared_ptr<ResizableBuffer> ciphertext_buffer = AllocateBuffer(
     ::arrow::default_memory_pool(), 0);
 
   std::string empty;
   int32_t enc_len = encryptor->EncryptWithManagedBuffer(
     str2span(plaintext), ciphertext_buffer.get());
-  ASSERT_EQ(ct_len, enc_len);
 
   std::string ciphertext_str(ciphertext_buffer->data(), ciphertext_buffer->data() + enc_len);
 
@@ -363,7 +361,6 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
 
   decryptor->UpdateEncodingProperties(builder.Build());
 
-  int32_t pt_len = decryptor->PlaintextLength(ciphertext_str.size());
   std::shared_ptr<ResizableBuffer> plaintext_buffer = AllocateBuffer(
     ::arrow::default_memory_pool(), 0);
 
@@ -372,7 +369,6 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
   try {
     dec_len = decryptor->DecryptWithManagedBuffer(
       str2span(ciphertext_str), plaintext_buffer.get());
-    ASSERT_EQ(pt_len, dec_len);
   } catch (const ParquetException&) {
     threw = true;
   }
@@ -397,6 +393,9 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptCallShouldFail) {
     algorithm, column_name, key_id, data_type, compression_type, encoding_type);
   ASSERT_FALSE(encryptor->CanCalculateCiphertextLength());
   EXPECT_THROW(
+    (void) encryptor->CiphertextLength(plaintext.size()),
+    ParquetException);
+  EXPECT_THROW(
     encryptor->Encrypt(
       str2span(plaintext), str2span(/*key*/""), str2span(/*aad*/""), ciphertext_buffer),
     ParquetException);
@@ -415,6 +414,12 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptCallShouldFail) {
   std::unique_ptr<ExternalDBPADecryptorAdapter> decryptor = CreateDecryptor(
     algorithm, column_name, key_id, data_type, compression_type, encoding_type);
   ASSERT_FALSE(decryptor->CanCalculateLengths());
+  EXPECT_THROW(
+    (void) decryptor->CiphertextLength(ciphertext.size()),
+    ParquetException);
+  EXPECT_THROW(
+    (void) decryptor->PlaintextLength(ciphertext.size()),
+    ParquetException);
   EXPECT_THROW(
     decryptor->Decrypt(
       str2span(ciphertext), str2span(/*key*/""), str2span(/*aad*/""), plaintext_buffer),

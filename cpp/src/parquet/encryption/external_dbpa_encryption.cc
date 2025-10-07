@@ -166,11 +166,7 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
   }
 
 int32_t ExternalDBPAEncryptorAdapter::CiphertextLength(int64_t plaintext_len) const {
-  std::cout << "ExternalDBPAEncryptorAdapter::CiphertextLength" << std::endl;
-  std::cout << "  plaintext_len = " << plaintext_len << std::endl;
-  int return_value = plaintext_len;
-  std::cout << "  return_value = " << return_value << std::endl;
-  return plaintext_len;
+  throw ParquetException("ExternalDBPAEncryptorAdapter::CiphertextLength is not supported");
 }
 
 void ExternalDBPAEncryptorAdapter::UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {
@@ -379,11 +375,11 @@ std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make
   }
 
 int32_t ExternalDBPADecryptorAdapter::PlaintextLength(int32_t ciphertext_len) const {
-  return ciphertext_len;
+  throw ParquetException("ExternalDBPADecryptorAdapter::PlaintextLength is not supported");
 }
 
 int32_t ExternalDBPADecryptorAdapter::CiphertextLength(int32_t plaintext_len) const {
-  return plaintext_len;
+  throw ParquetException("ExternalDBPADecryptorAdapter::CiphertextLength is not supported");
 }
 
 void ExternalDBPADecryptorAdapter::UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {
