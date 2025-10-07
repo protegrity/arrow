@@ -193,12 +193,13 @@ def get_dbpa_connection_config():
     agent_library_path = os.environ.get('DBPA_LIBRARY_PATH', 'libDBPATestAgent.so')
 
     connection_config = {
-        #TODO: in early discussions, we thought connection_config would be sent via a file.
-        #https://github.com/protegrity/arrow/issues/123
         "EXTERNAL_DBPA_V1": {
             "agent_library_path": agent_library_path,
             "config_file": "path/to/config/file",
-            "config_file_decryption_key": "some_key"
+            "config_file_decryption_key": "some_key",
+            "init_timeout_ms": "15000",
+            "encrypt_timeout_ms": "35000",
+            "decrypt_timeout_ms": "35000"
         }
     }
 
