@@ -200,7 +200,6 @@ def get_dbpa_connection_config():
         "EXTERNAL_DBPA_V1": {
             "agent_library_path": agent_library_path,
             "connection_config_file_path": config_path,
-            "connection_config_file_decryption_key": "some_key",
             "init_timeout_ms": "15000",
             "encrypt_timeout_ms": "35000",
             "decrypt_timeout_ms": "35000"
