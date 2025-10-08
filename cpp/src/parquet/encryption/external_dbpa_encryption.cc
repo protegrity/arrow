@@ -72,15 +72,22 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   int64_t encrypt_timeout_ms = 30*1000; //30 seconds
   int64_t decrypt_timeout_ms = 30*1000; //30 seconds.
   // Override the default values if they are present in the connection_config.
-  if (connection_config.find(INIT_TIMEOUT_KEY) != connection_config.end()) {
-    init_timeout_ms = std::stoi(connection_config.at(INIT_TIMEOUT_KEY));
+  try {
+    if (connection_config.find(INIT_TIMEOUT_KEY) != connection_config.end()) {
+      init_timeout_ms = std::stoi(connection_config.at(INIT_TIMEOUT_KEY));
+    }
+    if (connection_config.find(ENCRYPT_TIMEOUT_KEY) != connection_config.end()) {
+      encrypt_timeout_ms = std::stoi(connection_config.at(ENCRYPT_TIMEOUT_KEY));
+    }
+    if (connection_config.find(DECRYPT_TIMEOUT_KEY) != connection_config.end()) {
+        decrypt_timeout_ms = std::stoi(connection_config.at(DECRYPT_TIMEOUT_KEY));
+    }
+  } catch (const std::exception& e) {
+    std::cout << "[ERROR] Failed to parse timeout values from connection_config: " 
+              << e.what() << std::endl;
+    throw ParquetException("Failed to parse timeout values from connection_config");
   }
-  if (connection_config.find(ENCRYPT_TIMEOUT_KEY) != connection_config.end()) {
-    encrypt_timeout_ms = std::stoi(connection_config.at(ENCRYPT_TIMEOUT_KEY));
-  }
-  if (connection_config.find(DECRYPT_TIMEOUT_KEY) != connection_config.end()) {
-    decrypt_timeout_ms = std::stoi(connection_config.at(DECRYPT_TIMEOUT_KEY));
-  }
+
 
   std::cout << "[DEBUG] init_timeout_ms    = " << init_timeout_ms << std::endl;
   std::cout << "[DEBUG] encrypt_timeout_ms = " << encrypt_timeout_ms << std::endl;

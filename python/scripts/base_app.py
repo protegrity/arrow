@@ -11,7 +11,6 @@ import pyarrow
 import pyarrow.parquet as pp
 import pyarrow.parquet.encryption as ppe
 
-
 class FooKmsClient(ppe.KmsClient):
 
     def __init__(self, kms_connection_config):
@@ -191,12 +190,17 @@ def get_dbpa_connection_config():
     #this library performs key-indenpendent, XOR encryption/decryption, and is built as part of the Parquet Arrow tests.
     #It is located in cpp/src/parquet/encryption/external/dbpa_test_agent.cc
     agent_library_path = os.environ.get('DBPA_LIBRARY_PATH', 'libDBPATestAgent.so')
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_directory, 'test_connection_config_file.json')
+
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Connection config file not found at [${config_path}]")
 
     connection_config = {
         "EXTERNAL_DBPA_V1": {
             "agent_library_path": agent_library_path,
-            "config_file": "path/to/config/file",
-            "config_file_decryption_key": "some_key",
+            "connection_config_file_path": config_path,
+            "connection_config_file_decryption_key": "some_key",
             "init_timeout_ms": "15000",
             "encrypt_timeout_ms": "35000",
             "decrypt_timeout_ms": "35000"

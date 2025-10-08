@@ -275,6 +275,29 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorInvalidLibraryPathThrows) {
     std::exception);
 }
 
+TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorInvalidTimeoutValuesThrows) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+
+  std::string library_path = parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
+  std::map<std::string, std::string> bad_config = {
+    {"config_path", "path/to/file"}, 
+    {"agent_library_path", library_path},
+    {"init_timeout_ms", "nope"},
+  };
+  std::string app_context = "{}";
+
+  EXPECT_THROW(
+    ExternalDBPAEncryptorAdapter::Make(
+      algorithm, column_name, key_id, data_type, compression_type, encoding_type,
+      app_context, bad_config, std::nullopt),
+    std::exception);
+}
+
 TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorMissingLibraryPathThrows) {
   ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
   std::string column_name = "employee_name";
@@ -303,6 +326,29 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorInvalidLibraryPathThrows) {
 
   std::map<std::string, std::string> bad_config = {
     {"agent_library_path", "/definitely/not/a/real/libDBPA.so"}
+  };
+  std::string app_context = "{}";
+
+  EXPECT_THROW(
+    ExternalDBPADecryptorAdapter::Make(
+      algorithm, column_name, key_id, data_type, compression_type, {encoding_type},
+      app_context, bad_config, std::nullopt),
+    std::exception);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorInvalidTimeoutValuesThrows) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+
+  std::string library_path = parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
+  std::map<std::string, std::string> bad_config = {
+    {"config_path", "path/to/file"}, 
+    {"agent_library_path", library_path},
+    {"init_timeout_ms", "nope"},
   };
   std::string app_context = "{}";
 
