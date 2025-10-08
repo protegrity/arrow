@@ -10,6 +10,7 @@ import os
 import pyarrow
 import pyarrow.parquet as pp
 import pyarrow.parquet.encryption as ppe
+import platform
 
 class FooKmsClient(ppe.KmsClient):
 
@@ -184,33 +185,49 @@ def get_external_decryption_config():
         connection_config = get_dbpa_connection_config()
     )
 
+def get_config_file():
+    config_file_name = os.environ.get('DBPA_CONFIG_FILE_NAME', 'test_connection_config_file.json')
+
+    #verify if the file exists (assuming full path)
+    if os.path.exists(config_file_name):
+        return config_file_name
+
+    #did not find the file. check if it exists in the same directory as the script
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_directory, config_file_name)
+    if os.path.exists(config_path):
+        return config_path
+
+    #did not find the file. return None and let the caller handle it.
+    #throw an error
+
+    raise FileNotFoundError(f"Connection config [{config_file_name}] file not found")
+
+
 def get_dbpa_connection_config():
     #we read the name of the external DBPA agent library from the environment variable DBPA_LIBRARY_PATH.
     #if not available, we use the default to 'libDBPATestAgent.so'.
-    #this library performs key-indenpendent, XOR encryption/decryption, and is built as part of the Parquet Arrow tests.
+    #this library performs key-independent, XOR encryption/decryption, and is built as part of the Parquet Arrow tests.
     #It is located in cpp/src/parquet/encryption/external/dbpa_test_agent.cc
-    agent_library_path = os.environ.get('DBPA_LIBRARY_PATH', 'libDBPATestAgent.so')
-    script_directory = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_directory, 'test_connection_config_file.json')
-
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Connection config file not found at [${config_path}]")
+    agent_library_path = os.environ.get(
+        'DBPA_LIBRARY_PATH', 
+        'libDBPATestAgent.so' if platform.system() == 'Linux' else 'libDBPATestAgent.dylib')
 
     connection_config = {
         "EXTERNAL_DBPA_V1": {
             "agent_library_path": agent_library_path,
-            "connection_config_file_path": config_path,
             "init_timeout_ms": "15000",
             "encrypt_timeout_ms": "35000",
             "decrypt_timeout_ms": "35000"
         }
     }
 
-    #server_url is not needed by 'libDBPATestAgent.so'
-    server_url = os.environ.get('DBPA_SERVER_URL')
+    #TODO: need a better way to perform this check
+    config_file_required = "remote" in agent_library_path.lower()
 
-    if server_url is not None:
-        connection_config["EXTERNAL_DBPA_V1"]["server_url"] = server_url
+    if (config_file_required):
+        config_path = get_config_file()
+        connection_config["EXTERNAL_DBPA_V1"]["connection_config_file_path"] = config_path
 
     return connection_config
 
