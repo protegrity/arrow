@@ -5,8 +5,7 @@
 #include <memory>
 #include <string>
 
-#include "parquet/encryption/external/third_party/dbpa_interface.h"
-#include "parquet/encryption/external/third_party/span.hpp"
+#include <dbpa_interface.h>
 
 template <typename T>
 using span = tcb::span<T>;

@@ -10,8 +10,7 @@
 
 #include "parquet/exception.h"
 #include "parquet/encryption/external/dbpa_test_agent.h"
-#include "parquet/encryption/external/third_party/dbpa_interface.h"
-#include "parquet/encryption/external/third_party/span.hpp"
+#include <dbpa_interface.h>
 
 template <typename T>
 using span = tcb::span<T>;

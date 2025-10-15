@@ -6,7 +6,7 @@
 #include <string>
 
 #include "parquet/platform.h"
-#include "parquet/encryption/external/third_party/dbpa_interface.h"
+#include <dbpa_interface.h>
 
 using dbps::external::DataBatchProtectionAgentInterface;
 

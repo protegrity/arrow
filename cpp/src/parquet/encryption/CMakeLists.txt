@@ -25,7 +25,10 @@ if(ARROW_TESTING)
 
   # DBPATestAgent configuration
   target_link_libraries(DBPATestAgent PUBLIC
-                        arrow_shared)
+                        arrow_shared
+                        magic_enum_header_only
+                        tcb_span
+                        dbps_interface)
 
   set_target_properties(DBPATestAgent PROPERTIES OUTPUT_NAME "DBPATestAgent")
   

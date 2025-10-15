@@ -248,6 +248,62 @@ if(PARQUET_REQUIRE_ENCRYPTION)
                    encryption/external/dbpa_executor.cc
                    encryption/external/loadable_encryptor_utils.cc
                    )
+
+  # Header-only dependencies for external DBPA code
+  include(FetchContent)
+
+  # magic_enum
+  FetchContent_Declare(
+    magic_enum_upstream
+    GIT_REPOSITORY https://github.com/Neargye/magic_enum.git
+    GIT_TAG v0.9.7
+  )
+  FetchContent_MakeAvailable(magic_enum_upstream)
+  add_library(magic_enum_header_only INTERFACE)
+  target_include_directories(magic_enum_header_only INTERFACE ${magic_enum_upstream_SOURCE_DIR}/include)
+
+  # tcb/span
+  FetchContent_Declare(
+    tcb_span_upstream
+    GIT_REPOSITORY https://github.com/tcbrindle/span.git
+    GIT_TAG master
+  )
+
+  # Populate sources only; do not add subproject/tests
+  FetchContent_GetProperties(tcb_span_upstream)
+  if(NOT tcb_span_upstream_POPULATED)
+    FetchContent_Populate(tcb_span_upstream)
+  endif()
+  add_library(tcb_span INTERFACE)
+  target_include_directories(tcb_span INTERFACE ${tcb_span_upstream_SOURCE_DIR}/include)
+
+  # DBPS interface (header-only)
+  FetchContent_Declare(
+    dbps_interface_upstream
+    GIT_REPOSITORY https://github.com/protegrity/DataBatchProtectionService.git
+
+    #TODO: Change to a specific tag/commit when we have one.
+    #https://github.com/protegrity/arrow/issues/179
+    GIT_TAG 0dc84fdc0ade54b846d6cd3222cea8819d3aaa75
+    GIT_SHALLOW TRUE
+  )
+  # Only fetch sources; do not add the DBPS project (avoids its dependencies)
+  FetchContent_GetProperties(dbps_interface_upstream)
+  if(NOT dbps_interface_upstream_POPULATED)
+    FetchContent_Populate(dbps_interface_upstream)
+  endif()
+  add_library(dbps_interface INTERFACE)
+  # Expose dbpa_interface.h and friends from DBPS
+  target_include_directories(dbps_interface INTERFACE
+    ${dbps_interface_upstream_SOURCE_DIR}/src/common)
+
+  list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS magic_enum_header_only tcb_span)
+  list(APPEND PARQUET_STATIC_LINK_LIBS magic_enum_header_only tcb_span)
+  if(ARROW_TESTING)
+    list(APPEND PARQUET_TEST_LINK_LIBS magic_enum_header_only tcb_span dbps_interface)
+  endif()
+  list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS dbps_interface)
+  list(APPEND PARQUET_STATIC_LINK_LIBS dbps_interface)
   # Encryption key management
   set(PARQUET_SRCS
       ${PARQUET_SRCS}

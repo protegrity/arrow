@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include "parquet/encryption/external/third_party/dbpa_interface.h"
+#include <dbpa_interface.h>
 
 #include "parquet/encryption/encryptor_interface.h"
 #include "parquet/encryption/decryptor_interface.h"

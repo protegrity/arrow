@@ -7,7 +7,7 @@
 
 #include "gtest/gtest.h"
 #include "parquet/encryption/external/loadable_encryptor_utils.h"
-#include "parquet/encryption/external/third_party/dbpa_interface.h"
+#include <dbpa_interface.h>
 #include "parquet/encryption/external/dbpa_library_wrapper.h"
 #include "parquet/encryption/external/test_utils.h"
 

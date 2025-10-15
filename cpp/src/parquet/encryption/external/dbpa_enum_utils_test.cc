@@ -5,10 +5,10 @@
 #include "parquet/platform.h"
 #include "parquet/types.h"
 #include "arrow/util/type_fwd.h"
-#include "parquet/encryption/external/third_party/dbpa_interface.h"
+#include <dbpa_interface.h>
 #include "parquet/encryption/external/dbpa_enum_utils.h"
 
-#include "parquet/encryption/external/third_party/magic_enum.hpp" //https://github.com/Neargye/magic_enum
+#include <magic_enum/magic_enum.hpp>
 
 using  magic_enum::enum_count;
 

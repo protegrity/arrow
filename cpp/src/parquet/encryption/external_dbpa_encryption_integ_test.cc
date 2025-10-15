@@ -153,7 +153,7 @@ class ExternalDbpaIntegrationTest : public ::testing::TestWithParam<TestParams> 
   void SetUp() override {
 
     // Default library path, can be overridden by environment variable DBPA_LIBRARY_PATH
-    library_path_ = "libdbpsClient.so";
+    library_path_ = "libdbpsRemoteAgent.so";
     if (const char* lib_env = std::getenv("DBPA_LIBRARY_PATH")) {
       if (*lib_env != '\0') {
         library_path_ = std::string(lib_env);

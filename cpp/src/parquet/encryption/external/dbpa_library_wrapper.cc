@@ -1,7 +1,7 @@
 //TODO: figure out the licensing.
 
 #include "parquet/encryption/external/dbpa_library_wrapper.h"
-#include "parquet/encryption/external/third_party/dbpa_interface.h"
+#include <dbpa_interface.h>
 
 #include <stdexcept>
 #include <functional>

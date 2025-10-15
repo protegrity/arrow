@@ -24,11 +24,9 @@
 #include <optional>
 
 #include "gtest/gtest.h"
-#include "parquet/encryption/external/third_party/dbpa_interface.h"
 #include "parquet/encryption/external/dbpa_library_wrapper.h"
 
 #include "parquet/test_util.h"
-#include "parquet/encryption/external/third_party/span.hpp"
 
 template <typename T>
 using span = tcb::span<T>;
