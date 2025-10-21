@@ -284,8 +284,8 @@ if(PARQUET_REQUIRE_ENCRYPTION)
 
     #TODO: Change to a specific tag/commit when we have one.
     #https://github.com/protegrity/arrow/issues/179
-    GIT_TAG 0dc84fdc0ade54b846d6cd3222cea8819d3aaa75
-    GIT_SHALLOW TRUE
+    GIT_TAG ac9ebb7414d5fbbe35d085d7590c826ab23b2182
+    GIT_SHALLOW FALSE
   )
   # Only fetch sources; do not add the DBPS project (avoids its dependencies)
   FetchContent_GetProperties(dbps_interface_upstream)
