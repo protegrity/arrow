@@ -11,6 +11,7 @@
 #include <optional>
 #include <cstdlib>
 #include <map>
+#include <filesystem>
 
 #include "arrow/io/memory.h"
 #include "arrow/result.h"
@@ -163,9 +164,24 @@ class ExternalDbpaIntegrationTest : public ::testing::TestWithParam<TestParams> 
     // Build shared connection_config for both encryption and decryption
     std::map<std::string, std::string> algo_config;
     algo_config["agent_library_path"] = library_path_;
-    if (const char* server_env = std::getenv("DBPA_SERVER_URL")) {
-      if (*server_env != '\0') {
-        algo_config["server_url"] = std::string(server_env);
+    // If using a remote agent, attach the connection config file path
+    {
+      std::string library_path_lower = library_path_;
+      std::transform(library_path_lower.begin(), library_path_lower.end(),
+                     library_path_lower.begin(), ::tolower);
+      const bool is_remote_agent = library_path_lower.find("remote") != std::string::npos;
+      if (is_remote_agent) {
+        std::string config_file_name = "test_connection_config_file.json";
+        if (const char* cfg_env = std::getenv("DBPA_CONFIG_FILE_NAME")) {
+          if (*cfg_env != '\0') {
+            config_file_name = std::string(cfg_env);
+          }
+        }
+
+        if (!std::filesystem::exists(config_file_name)) {
+          FAIL() << "Connection config [" << config_file_name << "] file not found";
+        }
+        algo_config["connection_config_file_path"] = config_file_name;
       }
     }
     
