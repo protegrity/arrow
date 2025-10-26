@@ -31,8 +31,10 @@
 #include "parquet/column_reader.h"
 #include "parquet/exception.h"
 #include "parquet/file_reader.h"
+#include "parquet/file_writer.h"
 #include "parquet/metadata.h"
 #include "parquet/platform.h"
+#include "parquet/properties.h"
 #include "parquet/test_util.h"
 #include "parquet/thrift_internal.h"
 #include "parquet/types.h"
@@ -40,6 +42,7 @@
 #include "parquet/encryption/decryptor_interface.h"
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/encryption/internal_file_decryptor.h"
+#include "parquet/encryption/external/test_utils.h"
 #include "parquet/schema.h"
 
 #include "arrow/io/memory.h"
@@ -1260,6 +1263,92 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV2EncodingProperties) {
             std::to_string(descr->max_definition_level()));
   ASSERT_EQ(props.at("data_page_max_repetition_level"),
             std::to_string(descr->max_repetition_level()));
+}
+
+TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
+  using schema::GroupNode;
+  using schema::NodePtr;
+  using schema::PrimitiveNode;
+
+  NodePtr root = GroupNode::Make(
+      "schema", Repetition::REQUIRED,
+      {PrimitiveNode::Make("col", Repetition::REQUIRED, Type::INT32)});
+  auto schema = std::static_pointer_cast<GroupNode>(root);
+
+  std::vector<int32_t> values = {1, 2, 3, 4, 5};
+
+  const std::string column_name = "col";
+  const std::string column_key_id = "0123456789ABCDEF";
+  const std::string footer_key = "1234567890123456";  // 16 bytes for tests
+  std::string app_context =
+      "{\"user_id\":\"test_user\",\"location\":{\"lat\":0.0,\"lon\":0.0}}";
+  std::string library_path =
+      parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
+
+  std::map<std::string, std::shared_ptr<parquet::ColumnEncryptionProperties>> enc_cols;
+  auto col_enc_builder = parquet::ColumnEncryptionProperties::Builder(column_name);
+  col_enc_builder.key(column_key_id)->key_id(column_key_id)
+      ->parquet_cipher(parquet::ParquetCipher::EXTERNAL_DBPA_V1);
+  enc_cols[column_name] = col_enc_builder.build();
+
+  auto fep_builder = parquet::ExternalFileEncryptionProperties::Builder(footer_key);
+  fep_builder.footer_key_metadata("kf")
+      ->set_plaintext_footer()
+      ->algorithm(parquet::ParquetCipher::AES_GCM_CTR_V1)
+      ->encrypted_columns(enc_cols)
+      ->app_context(app_context)
+      ->connection_config({{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
+                            {{"agent_library_path", library_path}}}});
+  auto file_enc_props = fep_builder.build_external();
+
+  auto sink = CreateOutputStream();
+  auto writer_props = parquet::WriterProperties::Builder().encryption(file_enc_props)->build();
+  auto file_writer = parquet::ParquetFileWriter::Open(sink, schema, writer_props);
+  {
+    auto rg = file_writer->AppendRowGroup();
+    auto w = static_cast<parquet::Int32Writer*>(rg->NextColumn());
+    w->WriteBatch(static_cast<int64_t>(values.size()), nullptr, nullptr, values.data());
+    w->Close();
+  }
+  file_writer->Close();
+  ASSERT_OK_AND_ASSIGN(auto buffer, sink->Finish());
+
+  std::map<std::string, std::shared_ptr<parquet::ColumnDecryptionProperties>> dec_cols;
+  auto col_dec_builder = parquet::ColumnDecryptionProperties::Builder(column_name);
+  dec_cols[column_name] = col_dec_builder.key(column_key_id)->build();
+
+  parquet::ReaderProperties reader_props;
+  auto dep_builder = parquet::ExternalFileDecryptionProperties::Builder();
+  dep_builder.footer_key(footer_key)
+      ->column_keys(dec_cols)
+      ->app_context(app_context)
+      ->connection_config({{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
+                            {{"agent_library_path", library_path}}}});
+  reader_props.file_decryption_properties(dep_builder.build_external());
+
+  auto file_reader = parquet::ParquetFileReader::Open(
+      std::make_shared<::arrow::io::BufferReader>(buffer), reader_props);
+  ASSERT_NE(file_reader, nullptr);
+
+  auto file_md = file_reader->metadata();
+  auto file_algo = file_md->encryption_algorithm();
+  EXPECT_EQ(file_algo.algorithm, parquet::ParquetCipher::AES_GCM_CTR_V1);
+
+  auto rg_md = file_md->RowGroup(0);
+  auto col_md = rg_md->ColumnChunk(0);
+  auto crypto_md = col_md->crypto_metadata();
+  ASSERT_NE(crypto_md, nullptr);
+  ASSERT_TRUE(crypto_md->is_encryption_algorithm_set());
+  EXPECT_EQ(crypto_md->encryption_algorithm().algorithm,
+            parquet::ParquetCipher::EXTERNAL_DBPA_V1);
+
+  auto rg_reader = file_reader->RowGroup(0);
+  auto col_reader = std::static_pointer_cast<TypedColumnReader<Int32Type>>(rg_reader->Column(0));
+  std::vector<int32_t> out(values.size());
+  int64_t read = 0;
+  col_reader->ReadBatch(static_cast<int>(values.size()), nullptr, nullptr, out.data(), &read);
+  ASSERT_EQ(read, static_cast<int64_t>(values.size()));
+  ASSERT_EQ(values, out);
 }
 
 }  // namespace parquet

@@ -2059,7 +2059,7 @@ class FileMetaDataBuilder::FileMetaDataBuilderImpl {
       if (!algo.aad.supply_aad_prefix) {
         signing_algorithm.aad.aad_prefix = algo.aad.aad_prefix;
       }
-      signing_algorithm.algorithm = ParquetCipher::AES_GCM_V1;
+      signing_algorithm.algorithm = algo.algorithm;
 
       metadata_->__set_encryption_algorithm(ToThrift(signing_algorithm));
       const std::string& footer_signing_key_metadata =

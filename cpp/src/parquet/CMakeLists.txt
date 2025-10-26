@@ -496,7 +496,10 @@ endif()
 
 # Those tests need to use static linking as they access thrift-generated
 # symbols which are not exported by parquet.dll on Windows (PARQUET-1420).
-add_parquet_test(file_deserialize_test SOURCES file_deserialize_test.cc)
+add_parquet_test(file_deserialize_test
+                 SOURCES
+                 file_deserialize_test.cc
+                 encryption/external/test_utils.cc)
 add_parquet_test(schema_test)
 
 add_parquet_benchmark(bloom_filter_benchmark SOURCES bloom_filter_benchmark.cc
