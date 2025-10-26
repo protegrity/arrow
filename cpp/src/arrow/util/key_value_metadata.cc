@@ -25,7 +25,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#include <iostream>
 
 #include "arrow/result.h"
 #include "arrow/status.h"
@@ -216,7 +215,7 @@ std::shared_ptr<KeyValueMetadata> KeyValueMetadata::Merge(
       result_keys.push_back(key);
       result_values.push_back(other.value(i));
       observed_keys.insert(key);
-    } 
+    }
   }
   for (size_t i = 0; i < keys_.size(); ++i) {
     auto it = observed_keys.find(keys_[i]);
