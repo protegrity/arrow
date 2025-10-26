@@ -1172,7 +1172,7 @@ int64_t ColumnWriterImpl::Close() {
       metadata_->SetSizeStatistics(chunk_size_statistics);
     }
     if (key_value_metadata_ != nullptr) {
-      metadata_->SetKeyValueMetadata(key_value_metadata_);
+      metadata_->AddKeyValueMetadata(key_value_metadata_);
     }
     pager_->Close(has_dictionary_, fallback_);
   }
