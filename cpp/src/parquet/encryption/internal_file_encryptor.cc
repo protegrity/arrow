@@ -55,6 +55,10 @@ void Encryptor::UpdateEncodingProperties(std::unique_ptr<EncodingProperties> enc
   encryptor_instance_->UpdateEncodingProperties(std::move(encoding_properties));
 }
 
+std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_type) {
+  return encryptor_instance_->GetKeyValueMetadata(module_type);
+}
+
 // InternalFileEncryptor
 InternalFileEncryptor::InternalFileEncryptor(FileEncryptionProperties* properties,
                                              ::arrow::MemoryPool* pool)

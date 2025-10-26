@@ -55,6 +55,8 @@ class PARQUET_EXPORT Encryptor {
 
   void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties);
 
+  std::shared_ptr<KeyValueMetadata> GetKeyValueMetadata(int8_t module_type);
+
   bool EncryptColumnMetaData(
       bool encrypted_footer,
       const std::shared_ptr<ColumnEncryptionProperties>& column_encryption_properties) {

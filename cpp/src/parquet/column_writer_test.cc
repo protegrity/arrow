@@ -1887,6 +1887,9 @@ TEST_F(TestColumnWriterEncryption, AESEncryption) {
   auto rg_reader = file_reader->RowGroup(0);
   auto col_reader = std::static_pointer_cast<TypedColumnReader<Int32Type>>(rg_reader->Column(0));
 
+  auto key_value_metadata = rg_reader->metadata()->ColumnChunk(0)->key_value_metadata();
+  ASSERT_THAT(key_value_metadata, nullptr);
+
   std::vector<int32_t> read_values(values_.size());
   int64_t values_read;
   col_reader->ReadBatch(values_.size(), nullptr, nullptr, read_values.data(), &values_read);
@@ -1949,6 +1952,10 @@ TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption) {
 
   auto rg_reader = file_reader->RowGroup(0);
   auto col_reader = std::static_pointer_cast<TypedColumnReader<Int32Type>>(rg_reader->Column(0));
+  
+  auto key_value_metadata = rg_reader->metadata()->ColumnChunk(0)->key_value_metadata();
+  ASSERT_THAT(key_value_metadata, NotNull());
+  ASSERT_EQ(2, key_value_metadata->size());
 
   std::vector<int32_t> read_values(values_.size());
   int64_t values_read;

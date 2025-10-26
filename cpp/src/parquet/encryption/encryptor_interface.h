@@ -54,6 +54,11 @@ class PARQUET_EXPORT EncryptorInterface {
   // This method will be called from ColumnWriter before invoking the Encrypt method.
   virtual void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {};
 
+  /// Allow encryptors to add column metadata depending on the module (page) type.
+  virtual std::shared_ptr<KeyValueMetadata> GetKeyValueMetadata(int8_t module_type) {
+    return nullptr; 
+  }
+
   /// Encrypt footer metadata for signature verification purposes only.
   /// This method is used specifically for footer signature verification in encrypted
   /// Parquet files with plaintext footers. It encrypts the footer metadata using

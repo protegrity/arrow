@@ -325,6 +325,12 @@ class SerializedPageWriter : public PageWriter {
           static_cast<const DictionaryPage&>(page));
       data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
+      auto data_encryptor_metadata = data_encryptor_->GetKeyValueMetadata(
+        encryption::kDictionaryPage);
+      if (data_encryptor_metadata != nullptr) {
+        metadata_->AddKeyValueMetadata(data_encryptor_metadata);
+      }
+
       if (data_encryptor_->CanCalculateCiphertextLength()) {
         PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
           data_encryptor_->CiphertextLength(output_data_len), false));
@@ -442,6 +448,11 @@ class SerializedPageWriter : public PageWriter {
           metadata_->properties(), 
           static_cast<const DataPage&>(page));
       data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
+
+      auto data_encryptor_metadata = data_encryptor_->GetKeyValueMetadata(encryption::kDataPage);
+      if (data_encryptor_metadata != nullptr) {
+        metadata_->AddKeyValueMetadata(data_encryptor_metadata);
+      }
 
       if (data_encryptor_->CanCalculateCiphertextLength()) {
         PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
@@ -1160,7 +1171,9 @@ int64_t ColumnWriterImpl::Close() {
     if (rows_written_ > 0 && chunk_size_statistics.is_set()) {
       metadata_->SetSizeStatistics(chunk_size_statistics);
     }
-    metadata_->SetKeyValueMetadata(key_value_metadata_);
+    if (key_value_metadata_ != nullptr) {
+      metadata_->SetKeyValueMetadata(key_value_metadata_);
+    }
     pager_->Close(has_dictionary_, fallback_);
   }
 

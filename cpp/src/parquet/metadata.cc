@@ -1744,6 +1744,16 @@ class ColumnChunkMetaDataBuilder::ColumnChunkMetaDataBuilderImpl {
     key_value_metadata_ = std::move(key_value_metadata);
   }
 
+  void AddKeyValueMetadata(std::shared_ptr<const KeyValueMetadata> key_value_metadata) {
+    if (key_value_metadata == nullptr) return;
+
+    if (key_value_metadata_ == nullptr) {
+      key_value_metadata_ = std::move(key_value_metadata);
+    } else {
+      key_value_metadata_ = key_value_metadata_->Merge(*key_value_metadata);
+    }
+  }
+
  private:
   void Init(format::ColumnChunk* column_chunk) {
     column_chunk_ = column_chunk;
@@ -1822,6 +1832,11 @@ void ColumnChunkMetaDataBuilder::SetStatistics(const EncodedStatistics& result) 
 
 void ColumnChunkMetaDataBuilder::SetSizeStatistics(const SizeStatistics& size_stats) {
   impl_->SetSizeStatistics(size_stats);
+}
+
+void ColumnChunkMetaDataBuilder::AddKeyValueMetadata(
+    std::shared_ptr<const KeyValueMetadata> key_value_metadata) {
+  impl_->AddKeyValueMetadata(std::move(key_value_metadata));
 }
 
 void ColumnChunkMetaDataBuilder::SetKeyValueMetadata(

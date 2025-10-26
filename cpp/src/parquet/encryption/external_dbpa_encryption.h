@@ -62,6 +62,8 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
                               ::arrow::util::span<uint8_t> encrypted_footer) override;
 
   void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) override;
+
+  std::shared_ptr<KeyValueMetadata> GetKeyValueMetadata(int8_t module_type) override;
  
  private:
     //agent_instance is assumed to be initialized at the time of construction. 
@@ -116,7 +118,8 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
       std::string key_id, Type::type data_type, Compression::type compression_type,
       std::vector<Encoding::type> encoding_types, std::string app_context,
       std::map<std::string, std::string> connection_config,
-      std::optional<int> datatype_length);
+      std::optional<int> datatype_length,
+      std::shared_ptr<const KeyValueMetadata> key_value_metadata);
   
   ~ExternalDBPADecryptorAdapter() = default;
 
@@ -159,7 +162,8 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
       std::string key_id, Type::type data_type, Compression::type compression_type,
       std::vector<Encoding::type> encoding_types, std::optional<int> datatype_length, std::string app_context,
       std::map<std::string, std::string> connection_config,
-      std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
+      std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance,
+      std::shared_ptr<const KeyValueMetadata> key_value_metadata);
     
     int32_t InvokeExternalDecrypt(
       ::arrow::util::span<const uint8_t> ciphertext, 
@@ -181,6 +185,9 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
 
     std::unique_ptr<EncodingProperties> encoding_properties_;
     bool encoding_properties_updated_ = false;
+
+    // Store the key value metadata from the column chunk metadata.
+    std::shared_ptr<KeyValueMetadata> key_value_metadata_;
 };
 
 /// Factory for ExternalDBPADecryptorAdapter instances. No cache exists for decryptors.
