@@ -225,6 +225,7 @@ std::shared_ptr<KeyValueMetadata> KeyValueMetadata::Merge(
       observed_keys.insert(keys_[i]);
     }
   }
+
   return std::make_shared<KeyValueMetadata>(std::move(result_keys),
                                             std::move(result_values));
 }
