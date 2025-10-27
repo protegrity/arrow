@@ -17,6 +17,8 @@
 
 import base64
 import datetime
+import os
+import platform
 import pyarrow
 import pyarrow.parquet as pp
 import pyarrow.parquet.encryption as ppe
@@ -60,12 +62,20 @@ def kms_client_factory(kms_connection_config):
     return FooKmsClient(kms_connection_config)
 
 
+def get_agent_library_path():
+    return os.environ.get(
+        'DBPA_LIBRARY_PATH', 
+        'libDBPATestAgent.so' if platform.system() == 'Linux' else 'libDBPATestAgent.dylib')
+
+
 def get_kms_connection_config():
     return ppe.KmsConnectionConfig(
         custom_kms_conf={
             "footer_key": "012footer_secret",
             "orderid_key": "column_secret001",
-            "productid_key": "column_secret002"
+            "productid_key": "column_secret002",
+            "price_key": "column_secret003",
+            "vat_key": "column_secret004"
         }
     )
 
@@ -103,7 +113,7 @@ def get_external_encryption_config(plaintext_footer=True):
         plaintext_footer=plaintext_footer,
         per_column_encryption={
             "orderId": {
-                "encryption_algorithm": "AES_GCM_CTR_V1",
+                "encryption_algorithm": "EXTERNAL_DBPA_V1",
                 "encryption_key": "orderid_key"
             },
         },
@@ -114,7 +124,8 @@ def get_external_encryption_config(plaintext_footer=True):
         connection_config={
             "EXTERNAL_DBPA_V1": {
                 "config_file": "path/to/config/file",
-                "config_file_decryption_key": "some_key"
+                "config_file_decryption_key": "some_key",
+                "agent_library_path": get_agent_library_path()
             }
         }
     )
@@ -148,7 +159,8 @@ def get_external_decryption_config():
         connection_config={
             "EXTERNAL_DBPA_V1": {
                 "config_file": "path/to/config/file",
-                "config_file_decryption_key": "some_key"
+                "config_file_decryption_key": "some_key",
+                "agent_library_path": get_agent_library_path(),
             }
         }
     )
@@ -172,6 +184,19 @@ def write_parquet(table, location, encryption_properties):
 def read_parquet(location, decryption_properties):
     reader = pp.ParquetFile(location, decryption_properties=decryption_properties)
     return reader.read()
+
+
+def round_trip_encryption_and_decryption(tmp_path, encryption_properties, decryption_properties):
+    data_table = get_data_table()
+    parquet_path = tmp_path / "test.parquet"
+    write_parquet(data_table, parquet_path, encryption_properties)
+    
+    read_data_table = read_parquet(parquet_path, decryption_properties)
+    assert read_data_table.equals(data_table)
+    assert read_data_table.num_rows == data_table.num_rows
+    assert read_data_table.num_columns == data_table.num_columns
+    assert read_data_table.schema.equals(data_table.schema)
+    assert read_data_table.column_names == data_table.column_names
 
 
 def test_encryption_configuration_properties():
@@ -229,13 +254,14 @@ def test_external_encryption_configuration_properties():
     assert external_encryption_config.connection_config == {
         "EXTERNAL_DBPA_V1": {
             "config_file": "path/to/config/file",
-            "config_file_decryption_key": "some_key"
+            "config_file_decryption_key": "some_key",
+            "agent_library_path": get_agent_library_path()
         }
     }
 
     assert external_encryption_config.per_column_encryption == {
         "orderId": {
-            "encryption_algorithm": "AES_GCM_CTR_V1",
+            "encryption_algorithm": "EXTERNAL_DBPA_V1",
             "encryption_key": "orderid_key"
         },
     }
@@ -382,7 +408,8 @@ def test_external_decryption_configuration_properties():
     assert external_decryption_config.connection_config == {
         "EXTERNAL_DBPA_V1": {
             "config_file": "path/to/config/file",
-            "config_file_decryption_key": "some_key"
+            "config_file_decryption_key": "some_key",
+            "agent_library_path": get_agent_library_path()
         }
     }
 
@@ -441,35 +468,150 @@ def test_external_file_decryption_properties_valid():
     assert external_decryption_properties.__class__.__module__ == "pyarrow._parquet"
 
 
-"""
-TODO(sbrenes): Re-enable test when ExternalDBPADecryptorAdapter
-is integrated into Arrow.
 def test_read_and_write_standard_encryption(tmp_path):
-    Test a roundtrip encryption and decryption using standard encryption.
-
-    data_table = get_data_table()
-    parquet_path = tmp_path / "test.parquet"
-    write_parquet(data_table, parquet_path, get_encryption_properties())
-
-    read_data_table = read_parquet(parquet_path, get_decryption_properties())
-    assert read_data_table.equals(data_table)
-    assert read_data_table.num_rows == data_table.num_rows
-    assert read_data_table.num_columns == data_table.num_columns
-    assert read_data_table.schema.equals(data_table.schema)
-    assert read_data_table.column_names == data_table.column_names
+    # Test a roundtrip encryption and decryption using standard encryption.
+    round_trip_encryption_and_decryption(tmp_path, get_encryption_properties(),
+                                         get_decryption_properties())
 
 
 def test_read_and_write_external_encryption(tmp_path):
-    Test a roundtrip encryption and decryption using external encryption.
+    # Test a roundtrip encryption and decryption using external encryption.
+    round_trip_encryption_and_decryption(tmp_path, get_external_encryption_properties(),
+                                         get_external_decryption_properties())
 
-    data_table = get_data_table()
-    parquet_path = tmp_path / "test.parquet"
-    write_parquet(data_table, parquet_path, get_external_encryption_properties())
 
-    read_data_table = read_parquet(parquet_path, get_external_decryption_properties())
-    assert read_data_table.equals(data_table)
-    assert read_data_table.num_rows == data_table.num_rows
-    assert read_data_table.num_columns == data_table.num_columns
-    assert read_data_table.schema.equals(data_table.schema)
-    assert read_data_table.column_names == data_table.column_names
-"""
+def get_custom_external_encryption_properties(encryption_algorithm, per_column_encryption,
+                                              plaintext_footer):
+    encryption_config = ppe.ExternalEncryptionConfiguration(
+        footer_key="footer_key",
+        column_keys={
+            "productid_key": ["productId"]
+        },
+        encryption_algorithm=encryption_algorithm,
+        cache_lifetime=datetime.timedelta(minutes=2.0),
+        data_key_length_bits=128,
+        plaintext_footer=plaintext_footer,
+        per_column_encryption=per_column_encryption,
+        app_context={
+            "user_id": "Picard1701",
+            "location": "Presidio"
+        },
+        connection_config={
+            "EXTERNAL_DBPA_V1": {
+                "config_file": "path/to/config/file",
+                "config_file_decryption_key": "some_key",
+                "agent_library_path": get_agent_library_path()
+            }
+        }
+    )
+    crypto_factory = ppe.CryptoFactory(kms_client_factory)
+    return crypto_factory.external_file_encryption_properties(
+        get_kms_connection_config(), encryption_config)
+
+
+def test_encrypt_aes_gcm_file_all_algorithms_in_columns_plaintext_footer(tmp_path):
+    encryption_properties = get_custom_external_encryption_properties(
+        "AES_GCM_V1", # encryption_algorithm
+        {
+            "orderId": {
+                "encryption_algorithm": "AES_GCM_CTR_V1",
+                "encryption_key": "orderid_key"
+            },
+            "price": {
+                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_key": "price_key"
+            },
+            "vat": {
+                "encryption_algorithm": "AES_GCM_V1",
+                "encryption_key": "vat_key"
+            },
+        }, # per_column_encryption
+        True # plaintext_footer
+    )
+    round_trip_encryption_and_decryption(tmp_path, encryption_properties,
+                                         get_external_decryption_properties())
+
+
+def test_encrypt_aes_gcm_file_all_algorithms_in_columns_encrypted_footer(tmp_path):
+    encryption_properties = get_custom_external_encryption_properties(
+        "AES_GCM_V1", # encryption_algorithm
+        {
+            "orderId": {
+                "encryption_algorithm": "AES_GCM_CTR_V1",
+                "encryption_key": "orderid_key"
+            },
+            "price": {
+                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_key": "price_key"
+            },
+            "vat": {
+                "encryption_algorithm": "AES_GCM_V1",
+                "encryption_key": "vat_key"
+            },
+        }, # per_column_encryption
+        False # plaintext_footer
+    )
+    round_trip_encryption_and_decryption(tmp_path, encryption_properties,
+                                         get_external_decryption_properties())
+
+
+def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_plaintext_footer(tmp_path):
+    encryption_properties = get_custom_external_encryption_properties(
+        "AES_GCM_CTR_V1", # encryption_algorithm
+        {
+            "orderId": {
+                "encryption_algorithm": "AES_GCM_CTR_V1",
+                "encryption_key": "orderid_key"
+            },
+            "price": {
+                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_key": "price_key"
+            },
+            "vat": {
+                "encryption_algorithm": "AES_GCM_V1",
+                "encryption_key": "vat_key"
+            },
+        }, # per_column_encryption
+        True # plaintext_footer
+    )
+    round_trip_encryption_and_decryption(tmp_path, encryption_properties,
+                                         get_external_decryption_properties())
+
+
+def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_encrypted_footer(tmp_path):
+    encryption_properties = get_custom_external_encryption_properties(
+        "AES_GCM_CTR_V1", # encryption_algorithm
+        {
+            "orderId": {
+                "encryption_algorithm": "AES_GCM_CTR_V1",
+                "encryption_key": "orderid_key"
+            },
+            "price": {
+                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_key": "price_key"
+            },
+            "vat": {
+                "encryption_algorithm": "AES_GCM_V1",
+                "encryption_key": "vat_key"
+            },
+        }, # per_column_encryption
+        False # plaintext_footer
+    )
+    round_trip_encryption_and_decryption(tmp_path, encryption_properties,
+                                         get_external_decryption_properties())
+
+
+def test_encrypt_external_dbpa_file_raises_error(tmp_path):
+    encryption_properties = get_custom_external_encryption_properties(
+        "EXTERNAL_DBPA_V1", # encryption_algorithm
+        {
+            "orderId": {
+                "encryption_algorithm": "AES_GCM_CTR_V1",
+                "encryption_key": "orderid_key"
+            },
+        }, # per_column_encryption
+        True # plaintext_footer
+    )
+    with pytest.raises(ValueError, match="Parquet crypto signature verification failed"):
+        round_trip_encryption_and_decryption(tmp_path, encryption_properties,
+                                            get_external_decryption_properties())
