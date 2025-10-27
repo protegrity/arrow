@@ -25,9 +25,10 @@ void ThrowOpenSSLRequiredException() {
       "Calling encryption method in Arrow/Parquet built without OpenSSL");
 }
 
-class AesEncryptor::AesEncryptorImpl {};
-
-AesEncryptor::~AesEncryptor() {}
+AesCryptoContext::AesCryptoContext(
+    ParquetCipher::type alg_id, int32_t key_len, bool metadata, bool include_length) {
+  ThrowOpenSSLRequiredException();
+}
 
 int32_t AesEncryptor::SignedFooterEncrypt(::arrow::util::span<const uint8_t> footer,
                                           ::arrow::util::span<const uint8_t> key,
@@ -52,11 +53,10 @@ int32_t AesEncryptor::Encrypt(::arrow::util::span<const uint8_t> plaintext,
 }
 
 AesEncryptor::AesEncryptor(ParquetCipher::type alg_id, int32_t key_len, bool metadata,
-                           bool write_length) {
+                           bool write_length)
+    : AesCryptoContext(alg_id, key_len, metadata, write_length) {
   ThrowOpenSSLRequiredException();
 }
-
-class AesDecryptor::AesDecryptorImpl {};
 
 int32_t AesDecryptor::Decrypt(::arrow::util::span<const uint8_t> ciphertext,
                               ::arrow::util::span<const uint8_t> key,
@@ -66,8 +66,6 @@ int32_t AesDecryptor::Decrypt(::arrow::util::span<const uint8_t> ciphertext,
   return -1;
 }
 
-AesDecryptor::~AesDecryptor() {}
-
 std::unique_ptr<AesEncryptor> AesEncryptor::Make(ParquetCipher::type alg_id,
                                                  int32_t key_len, bool metadata,
                                                  bool write_length) {
@@ -76,7 +74,8 @@ std::unique_ptr<AesEncryptor> AesEncryptor::Make(ParquetCipher::type alg_id,
 }
 
 AesDecryptor::AesDecryptor(ParquetCipher::type alg_id, int32_t key_len, bool metadata,
-                           bool contains_length) {
+                           bool contains_length)
+    : AesCryptoContext(alg_id, key_len, metadata, contains_length) {
   ThrowOpenSSLRequiredException();
 }
 
