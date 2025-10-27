@@ -54,7 +54,9 @@ class PARQUET_EXPORT EncryptorInterface {
   // This method will be called from ColumnWriter before invoking the Encrypt method.
   virtual void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {};
 
-  /// Allow encryptors to add column metadata depending on the module (page) type.
+  /// After the column_writer writes a dictionary or a data page, this method will be called
+  /// so that each encryptor can provide any encryptor-specific column metadata that should be
+  /// stored in the Parquet file.
   virtual std::shared_ptr<KeyValueMetadata> GetKeyValueMetadata(int8_t module_type) {
     return nullptr; 
   }

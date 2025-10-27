@@ -210,6 +210,7 @@ void ExternalDBPAEncryptorAdapter::UpdateEncodingProperties(std::unique_ptr<Enco
 std::shared_ptr<KeyValueMetadata> ExternalDBPAEncryptorAdapter::GetKeyValueMetadata(
   int8_t module_type) {
   // TODO: decide what metadata to return for each module type. 
+  // See https://github.com/protegrity/DataBatchProtectionService/issues/129
   switch (module_type) {
     case encryption::kDataPage: {
       std::string key = "external_dbpa_data_page_encryption_version";
