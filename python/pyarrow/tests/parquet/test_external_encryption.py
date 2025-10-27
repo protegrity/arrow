@@ -63,6 +63,8 @@ def kms_client_factory(kms_connection_config):
 
 
 def get_agent_library_path():
+    # TODO: move this code to a common library
+    # See https://github.com/protegrity/arrow/issues/191
     return os.environ.get(
         'DBPA_LIBRARY_PATH', 
         'libDBPATestAgent.so' if platform.system() == 'Linux' else 'libDBPATestAgent.dylib')
