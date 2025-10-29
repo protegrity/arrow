@@ -466,7 +466,8 @@ add_parquet_test(arrow-test
                  arrow/arrow_reader_writer_test.cc
                  arrow/arrow_schema_test.cc
                  arrow/arrow_statistics_test.cc
-                 arrow/variant_test.cc)
+                 arrow/variant_test.cc
+                 $<$<BOOL:${PARQUET_REQUIRE_ENCRYPTION}>:encryption/external/test_utils.cc>)
 
 add_parquet_test(arrow-internals-test SOURCES arrow/path_internal_test.cc
                  arrow/reconstruct_internal_test.cc)
