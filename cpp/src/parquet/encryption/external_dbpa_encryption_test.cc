@@ -6,6 +6,7 @@
 #include <map>
 #include <optional>
 
+#include "arrow/util/key_value_metadata.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/encryption/external/test_utils.h"
@@ -32,6 +33,7 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
       {"encrypt_timeout_ms", "2000"},
       {"decrypt_timeout_ms", "3000"}
     };
+    key_value_metadata_ = KeyValueMetadata::Make({"key1", "key2"}, {"value1", "value2"});
   }
 
   std::unique_ptr<ExternalDBPAEncryptorAdapter> CreateEncryptor(
@@ -49,7 +51,7 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     return ExternalDBPADecryptorAdapter::Make(
       algorithm, column_name, key_id, data_type, 
       compression_type, {encoding_type}, app_context_, 
-      connection_config_, std::nullopt);
+      connection_config_, std::nullopt, key_value_metadata_);
   }
 
   void RoundtripEncryption(
@@ -99,7 +101,7 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     std::unique_ptr<ExternalDBPADecryptorAdapter> decryptor = ExternalDBPADecryptorAdapter::Make(
       algorithm, column_name, key_id, data_type,
       compression_type, {encoding_type}, app_context_,
-      connection_config_, std::nullopt);
+      connection_config_, std::nullopt, key_value_metadata_);
 
     decryptor->UpdateEncodingProperties(builder.Build());
 
@@ -121,6 +123,7 @@ protected:
  std::string empty_string = "";
  std::string app_context_;
  std::map<std::string, std::string> connection_config_;
+ std::shared_ptr<const KeyValueMetadata> key_value_metadata_;
 };
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, RoundtripEncryptionSucceeds) {
@@ -182,7 +185,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithoutUpdateEncodingPropertiesT
 
   auto decryptor = ExternalDBPADecryptorAdapter::Make(
     algorithm, column_name, key_id, data_type, compression_type, {encoding_type},
-    app_context_, connection_config_, std::nullopt);
+    app_context_, connection_config_, std::nullopt, key_value_metadata_);
 
   std::string ciphertext = "xyz";
   std::shared_ptr<ResizableBuffer> plaintext_buffer = AllocateBuffer(
@@ -225,7 +228,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorUnsupportedAlgorithmThrows) {
   EXPECT_THROW(
     ExternalDBPADecryptorAdapter::Make(
       unsupported_algo, column_name, key_id, data_type, compression_type, {encoding_type},
-      app_context_, connection_config_, std::nullopt),
+      app_context_, connection_config_, std::nullopt, key_value_metadata_),
     ParquetException);
 
   // Also test AES_GCM_CTR_V1
@@ -233,7 +236,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorUnsupportedAlgorithmThrows) {
   EXPECT_THROW(
     ExternalDBPADecryptorAdapter::Make(
       unsupported_algo, column_name, key_id, data_type, compression_type, {encoding_type},
-      app_context_, connection_config_, std::nullopt),
+      app_context_, connection_config_, std::nullopt, key_value_metadata_),
     std::exception);
 }
 
@@ -312,7 +315,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorMissingLibraryPathThrows) {
   EXPECT_THROW(
     ExternalDBPADecryptorAdapter::Make(
       algorithm, column_name, key_id, data_type, compression_type, {encoding_type},
-      app_context, bad_config, std::nullopt),
+      app_context, bad_config, std::nullopt, key_value_metadata_),
     std::exception);
 }
 
@@ -332,7 +335,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorInvalidLibraryPathThrows) {
   EXPECT_THROW(
     ExternalDBPADecryptorAdapter::Make(
       algorithm, column_name, key_id, data_type, compression_type, {encoding_type},
-      app_context, bad_config, std::nullopt),
+      app_context, bad_config, std::nullopt, key_value_metadata_),
     std::exception);
 }
 
@@ -355,7 +358,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorInvalidTimeoutValuesThrows) {
   EXPECT_THROW(
     ExternalDBPADecryptorAdapter::Make(
       algorithm, column_name, key_id, data_type, compression_type, {encoding_type},
-      app_context, bad_config, std::nullopt),
+      app_context, bad_config, std::nullopt, key_value_metadata_),
     std::exception);
 }
 
@@ -406,7 +409,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
 
   auto decryptor = ExternalDBPADecryptorAdapter::Make(
     algorithm, column_name, wrong_key_id, data_type, compression_type, {encoding_type},
-    app_context, config, std::nullopt);
+    app_context, config, std::nullopt, key_value_metadata_);
 
   decryptor->UpdateEncodingProperties(builder.Build());
 

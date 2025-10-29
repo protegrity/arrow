@@ -447,6 +447,7 @@ class PARQUET_EXPORT ColumnChunkMetaDataBuilder {
   void SetStatistics(const EncodedStatistics& stats);
   void SetSizeStatistics(const SizeStatistics& size_stats);
 
+  void AddKeyValueMetadata(std::shared_ptr<const KeyValueMetadata> key_value_metadata);
   void SetKeyValueMetadata(std::shared_ptr<const KeyValueMetadata> key_value_metadata);
 
   // get the column descriptor
