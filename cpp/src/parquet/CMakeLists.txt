@@ -279,23 +279,52 @@ if(PARQUET_REQUIRE_ENCRYPTION)
 
   # DBPS interface (header-only)
   FetchContent_Declare(
-    dbps_interface_upstream
+    dbps_agent
     GIT_REPOSITORY https://github.com/protegrity/DataBatchProtectionService.git
 
     #TODO: Change to a specific tag/commit when we have one.
     #https://github.com/protegrity/arrow/issues/179
-    GIT_TAG ac9ebb7414d5fbbe35d085d7590c826ab23b2182
+    GIT_TAG 7ee542399383fb0adc60d0e79a277a6a1a5b6028
     GIT_SHALLOW FALSE
   )
-  # Only fetch sources; do not add the DBPS project (avoids its dependencies)
-  FetchContent_GetProperties(dbps_interface_upstream)
-  if(NOT dbps_interface_upstream_POPULATED)
-    FetchContent_Populate(dbps_interface_upstream)
+ 
+  FetchContent_GetProperties(dbps_agent)
+  if(NOT dbps_agent_POPULATED)
+    FetchContent_Populate(dbps_agent)
   endif()
   add_library(dbps_interface INTERFACE)
   # Expose dbpa_interface.h and friends from DBPS
   target_include_directories(dbps_interface INTERFACE
-    ${dbps_interface_upstream_SOURCE_DIR}/src/common)
+    ${dbps_agent_SOURCE_DIR}/src/common)
+
+  # Allows to disable building DBPS shared libraries
+  option(PARQUET_BUILD_DBPS_LIBS "Build DBPS external libraries" ON)
+
+  if(PARQUET_BUILD_DBPS_LIBS)
+    include(ExternalProject)
+
+    # Allow callers to inject additional CMake args for DBPS (e.g., BOOST_ROOT)
+    set(PARQUET_DBPS_CMAKE_ARGS "${PARQUET_DBPS_CMAKE_ARGS}" CACHE STRING "Extra CMake args for DBPS ExternalProject")
+
+    #builds DBPS shared libraries alongside Parquet
+    #same OS, same architecture, same compiler, same build type, same CMake args
+    ExternalProject_Add(dbps_external
+      DOWNLOAD_COMMAND "" # disables download, assumes (correctly) that sources are already fetched
+      SOURCE_DIR ${dbps_agent_SOURCE_DIR}
+      BINARY_DIR ${dbps_agent_BINARY_DIR}
+      CMAKE_ARGS
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+        -DBUILD_SHARED_LIBS=ON
+        -DBUILD_TESTING=OFF
+        
+        # Place DBPS outputs next to Arrow artifacts
+        -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
+        -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
+        -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
+        ${PARQUET_DBPS_CMAKE_ARGS}
+      INSTALL_COMMAND "" #disables install - artifacts already copied to BUILD_OUTPUT_ROOT_DIRECTORY
+    )
+  endif()
 
   list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS magic_enum_header_only tcb_span)
   list(APPEND PARQUET_STATIC_LINK_LIBS magic_enum_header_only tcb_span)
@@ -367,6 +396,13 @@ add_arrow_lib(parquet
               ${PARQUET_STATIC_LINK_LIBS}
               STATIC_INSTALL_INTERFACE_LIBS
               ${PARQUET_STATIC_INSTALL_INTERFACE_LIBS})
+
+# Ensure DBPS builds when Parquet builds, if requested
+if(PARQUET_REQUIRE_ENCRYPTION AND PARQUET_BUILD_DBPS_LIBS)
+  foreach(LIB_TARGET ${PARQUET_LIBRARIES})
+    add_dependencies(${LIB_TARGET} dbps_external)
+  endforeach()
+endif()
 
 if(WIN32 AND NOT (ARROW_TEST_LINKAGE STREQUAL "static"))
   add_library(parquet_test_support STATIC
