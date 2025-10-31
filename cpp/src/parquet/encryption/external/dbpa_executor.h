@@ -58,7 +58,8 @@ class DBPAExecutor : public DataBatchProtectionAgentInterface {
       std::string column_key_id,
       Type::type data_type,
       std::optional<int> datatype_length,
-      CompressionCodec::type compression_type) override;
+      CompressionCodec::type compression_type,
+      std::optional<std::map<std::string, std::string>> column_encryption_metadata) override;
 
   /**
    * Encrypt the provided plaintext

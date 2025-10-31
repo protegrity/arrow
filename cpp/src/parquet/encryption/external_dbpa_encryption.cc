@@ -2,8 +2,10 @@
 
 #include <iostream>
 #include <map>
+#include <unordered_map>
 #include <optional>
 #include <memory>
+#include <vector>
 
 #include "arrow/util/key_value_metadata.h"
 #include "parquet/encryption/external_dbpa_encryption.h"
@@ -24,6 +26,24 @@ using dbps::external::DecryptionResult;
 
 namespace parquet::encryption {
 
+std::optional<std::map<std::string, std::string>> ExternalDBPAUtils::KeyValueMetadataToStringMap(
+    const std::shared_ptr<const KeyValueMetadata>& key_value_metadata) {
+  if (key_value_metadata == nullptr) {
+    return std::nullopt;
+  }
+  std::map<std::string, std::string> metadata_map;
+  const auto& keys = key_value_metadata->keys();
+  const auto& values = key_value_metadata->values();
+  const auto count = std::min(keys.size(), values.size());
+  for (size_t i = 0; i < count; ++i) {
+    metadata_map.emplace(keys[i], values[i]);
+  }
+  if (metadata_map.empty()) {
+    return std::nullopt;
+  }
+  return metadata_map;
+}
+
 // Utility function to load and initialize a DataBatchProtectionAgentInterface instance
 // Shared between the encryptor and decryptor.
 std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitializeAgent(
@@ -33,7 +53,8 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
     const std::string& key_id,
     Type::type data_type,
     Compression::type compression_type,
-    std::optional<int> datatype_length) {
+    std::optional<int> datatype_length,
+    std::shared_ptr<const KeyValueMetadata> key_value_metadata) {
   
   // Load a new DataBatchProtectionAgentInterface instance from the shared library
   std::cout << "[DEBUG] Loading agent from library..." << std::endl;
@@ -90,7 +111,6 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
     throw ParquetException("Failed to parse timeout values from connection_config");
   }
 
-
   std::cout << "[DEBUG] init_timeout_ms    = " << init_timeout_ms << std::endl;
   std::cout << "[DEBUG] encrypt_timeout_ms = " << encrypt_timeout_ms << std::endl;
   std::cout << "[DEBUG] decrypt_timeout_ms = " << decrypt_timeout_ms << std::endl;
@@ -105,6 +125,10 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   // Step 4: Initialize the agent.
   std::cout << "[DEBUG] Initializing agent instance" << std::endl;
 
+  // Convert KeyValueMetadata (only provided by the decryptor) into a std::map<string,string>
+  std::optional<std::map<std::string, std::string>> column_encryption_metadata =
+      ExternalDBPAUtils::KeyValueMetadataToStringMap(key_value_metadata);
+
   executor_wrapped_agent->init(
     /*column_name*/ column_name,
     /*connection_config*/ connection_config,
@@ -112,13 +136,52 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
     /*column_key_id*/ key_id,
     /*data_type*/ DBPAEnumUtils::ParquetTypeToDBPA(data_type), 
     /*datatype_length*/ datatype_length,
-    /*compression_type*/ DBPAEnumUtils::ArrowCompressionToDBPA(compression_type)
-  ); //LoadAndInitializeAgent()
+    /*compression_type*/ DBPAEnumUtils::ArrowCompressionToDBPA(compression_type),
+    /*column_encryption_metadata*/ std::move(column_encryption_metadata)
+  ); 
   
   std::cout << "[DEBUG] Successfully initialized agent instance" << std::endl;
 
   return executor_wrapped_agent;
-}
+} //LoadAndInitializeAgent()
+
+// Local helper to map encoding properties' page_type to encryption module type
+// Returns std::nullopt if page_type is unsupported
+std::optional<int8_t> GetModuleTypeFromEncodingProperties(const EncodingProperties& encoding_properties) {
+  auto page_type = encoding_properties.GetPageType();
+  if (page_type == parquet::PageType::DICTIONARY_PAGE) {
+    return encryption::kDictionaryPage;
+  }
+  if (page_type == parquet::PageType::DATA_PAGE || page_type == parquet::PageType::DATA_PAGE_V2) {
+    return encryption::kDataPage;
+  }
+  return std::nullopt;
+} //GetModuleTypeFromEncodingProperties()
+
+// Update the encryptor-level metadata accumulator based on encoding attributes and
+// EncryptionResult-provided metadata. If no metadata is available or page_type is
+// unsupported/absent, function performs no-op.
+void UpdateEncryptorMetadata(
+  std::map<int8_t, std::map<std::string, std::string>>& metadata_by_module,
+  const EncodingProperties& encoding_properties,
+  const dbps::external::EncryptionResult& result) {
+  try {
+    auto module_type_opt = GetModuleTypeFromEncodingProperties(encoding_properties);
+    if (!module_type_opt.has_value()) {
+      return;
+    }
+    auto column_encryption_metadata_opt = result.encryption_metadata();
+    if (!column_encryption_metadata_opt.has_value()) {
+      return;
+    }
+    auto& module_metadata = metadata_by_module[module_type_opt.value()];
+    for (const auto& kv : column_encryption_metadata_opt.value()) {
+      module_metadata[kv.first] = kv.second;
+    }
+  } catch (const std::exception& e) {
+    throw ParquetException("UpdateEncryptorMetadata failed: " + std::string(e.what()));
+  }
+} //UpdateEncryptorMetadata()
 
 //this is a private constructor, invoked from Make()
 //at this point, the agent_instance is assumed to be initialized.
@@ -165,7 +228,8 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
         std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter() -- loading and initializing agent" << std::endl;
         // Load and initialize the agent using the utility function
         auto agent_instance = LoadAndInitializeAgent(
-          column_name, connection_config, app_context, key_id, data_type, compression_type, datatype_length);
+          column_name, connection_config, app_context, key_id, data_type, compression_type, datatype_length,
+          /*key_value_metadata*/ nullptr);
 
         //if we got to this point, the agent was initialized successfully
         std::cout << "[DEBUG] ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter() -- creating ExternalDBPAEncryptorAdapter" << std::endl;
@@ -209,24 +273,15 @@ void ExternalDBPAEncryptorAdapter::UpdateEncodingProperties(std::unique_ptr<Enco
 
 std::shared_ptr<KeyValueMetadata> ExternalDBPAEncryptorAdapter::GetKeyValueMetadata(
   int8_t module_type) {
-  // TODO: decide what metadata to return for each module type. 
-  // See https://github.com/protegrity/DataBatchProtectionService/issues/129
-  switch (module_type) {
-    case encryption::kDataPage: {
-      std::string key = "external_dbpa_data_page_encryption_version";
-      std::string value = "1.0.0";
-      return KeyValueMetadata::Make({key}, {value});
-    }
-    case encryption::kDictionaryPage: {
-      std::string key = "external_dbpa_dictionary_page_encryption_version";
-      std::string value = "1.0.0";
-      return KeyValueMetadata::Make({key}, {value});
-    }
-    default: {
-      return nullptr;
-    }
+  auto it = column_encryption_metadata_.find(module_type);
+  if (it == column_encryption_metadata_.end() || it->second.empty()) {
+    return nullptr;
   }
-}
+
+  const auto& metadata_map = it->second;
+  std::unordered_map<std::string, std::string> unordered_map(metadata_map.begin(), metadata_map.end());
+  return ::arrow::key_value_metadata(unordered_map);
+} //GetKeyValueMetadata()
 
 int32_t ExternalDBPAEncryptorAdapter::EncryptWithManagedBuffer(
     ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext) {
@@ -289,6 +344,12 @@ int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
       std::memcpy(ciphertext->mutable_data(), result->ciphertext().data(), ciphertext_size);
       std::cout << "[DEBUG] Encryption completed successfully" << std::endl;
   
+      // Accumulate any column_encryption_metadata returned by the result per module type
+      UpdateEncryptorMetadata(
+        /*metadata_by_module*/ column_encryption_metadata_,
+        /*encoding_properties*/ *encoding_properties_,
+        /*result*/ *result);
+
       return static_cast<int32_t>(result->size());
   }
 
@@ -408,7 +469,8 @@ std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make
         std::cout << "[DEBUG] ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter() -- loading and initializing agent" << std::endl;
         // Load and initialize the agent using the utility function
         auto agent_instance = LoadAndInitializeAgent(
-            column_name, connection_config, app_context, key_id, data_type, compression_type, datatype_length);
+            column_name, connection_config, app_context, key_id, data_type, compression_type, datatype_length,
+            /*key_value_metadata*/ key_value_metadata);
 
         //if we got to this point, the agent was initialized successfully
 

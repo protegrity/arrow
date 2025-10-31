@@ -175,6 +175,7 @@ class MockCompanionDBPA {
   Type::type GetInitDataType() const { return init_data_type_; }
   CompressionCodec::type GetInitCompressionType() const { return init_compression_type_; }
   std::optional<int> GetInitDatatypeLength() const { return init_datatype_length_; }
+  const std::optional<std::map<std::string, std::string>>& GetInitColumnEncryptionMetadata() const { return init_column_encryption_metadata_; }
 
   // State update methods (called by the mock instance)
   void SetEncryptCalled(bool called) { encrypt_called_ = called; }
@@ -201,7 +202,8 @@ class MockCompanionDBPA {
       std::string column_key_id,
       Type::type data_type,
       CompressionCodec::type compression_type,
-      std::optional<int> datatype_length = std::nullopt) {
+      std::optional<int> datatype_length = std::nullopt,
+      std::optional<std::map<std::string, std::string>> column_encryption_metadata = std::nullopt) {
     init_column_name_ = std::move(column_name);
     init_connection_config_ = std::move(connection_config);
     init_app_context_ = std::move(app_context);
@@ -209,6 +211,7 @@ class MockCompanionDBPA {
     init_data_type_ = data_type;
     init_compression_type_ = compression_type;
     init_datatype_length_ = datatype_length;
+    init_column_encryption_metadata_ = std::move(column_encryption_metadata);
   }
 
  private:
@@ -232,6 +235,7 @@ class MockCompanionDBPA {
   Type::type init_data_type_;
   CompressionCodec::type init_compression_type_;
   std::optional<int> init_datatype_length_;
+  std::optional<std::map<std::string, std::string>> init_column_encryption_metadata_;
   std::map<std::string, std::string> last_encrypt_encoding_attrs_;
   std::map<std::string, std::string> last_decrypt_encoding_attrs_;
 }; //MockCompanionDBPA
@@ -291,7 +295,8 @@ class MockDataBatchProtectionAgent : public DataBatchProtectionAgentInterface {
       std::string column_key_id,
       Type::type data_type,
       std::optional<int> datatype_length,
-      CompressionCodec::type compression_type) override {
+      CompressionCodec::type compression_type,
+      std::optional<std::map<std::string, std::string>> column_encryption_metadata) override {
     companion_->SetInitCalled(true);
     companion_->IncrementInitCount();
     companion_->SetInitParameters(
@@ -301,7 +306,8 @@ class MockDataBatchProtectionAgent : public DataBatchProtectionAgentInterface {
         std::move(column_key_id),
         data_type,
         compression_type,
-        datatype_length);
+        datatype_length,
+        std::move(column_encryption_metadata));
   }
 
   std::unique_ptr<EncryptionResult> Encrypt(
@@ -501,9 +507,10 @@ TEST_F(DBPALibraryWrapperTest, InitDelegation) {
   std::string column_key_id = "test_key_id";
   Type::type data_type = Type::INT32;
   CompressionCodec::type compression_type = CompressionCodec::SNAPPY;
+  std::optional<std::map<std::string, std::string>> column_encryption_metadata = std::map<std::string, std::string>{{"metaKey", "metaValue"}};
   
   // Call init through wrapper
-  wrapper->init(column_name, connection_config, app_context, column_key_id, data_type, std::nullopt, compression_type);
+  wrapper->init(column_name, connection_config, app_context, column_key_id, data_type, std::nullopt, compression_type, column_encryption_metadata);
   
   // Verify the mock agent was called
   EXPECT_TRUE(mock_companion_->WasInitCalled());
@@ -516,6 +523,8 @@ TEST_F(DBPALibraryWrapperTest, InitDelegation) {
   EXPECT_EQ(mock_companion_->GetInitColumnKeyId(), column_key_id);
   EXPECT_EQ(mock_companion_->GetInitDataType(), data_type);
   EXPECT_EQ(mock_companion_->GetInitCompressionType(), compression_type);
+  ASSERT_TRUE(mock_companion_->GetInitColumnEncryptionMetadata().has_value());
+  EXPECT_EQ(mock_companion_->GetInitColumnEncryptionMetadata().value().at("metaKey"), "metaValue");
 }
 
 TEST_F(DBPALibraryWrapperTest, InitDelegationWithDatatypeLength) {
@@ -528,11 +537,12 @@ TEST_F(DBPALibraryWrapperTest, InitDelegationWithDatatypeLength) {
   Type::type data_type = Type::FIXED_LEN_BYTE_ARRAY;
   CompressionCodec::type compression_type = CompressionCodec::UNCOMPRESSED;
 
-  wrapper->init(column_name, connection_config, app_context, column_key_id, data_type, 16, compression_type);
+  wrapper->init(column_name, connection_config, app_context, column_key_id, data_type, 16, compression_type, std::nullopt);
 
   EXPECT_TRUE(mock_companion_->WasInitCalled());
   ASSERT_TRUE(mock_companion_->GetInitDatatypeLength().has_value());
   EXPECT_EQ(mock_companion_->GetInitDatatypeLength().value(), 16);
+  EXPECT_FALSE(mock_companion_->GetInitColumnEncryptionMetadata().has_value());
 }
 
 TEST_F(DBPALibraryWrapperTest, InitDelegationWithEmptyParameters) {
@@ -547,7 +557,7 @@ TEST_F(DBPALibraryWrapperTest, InitDelegationWithEmptyParameters) {
   CompressionCodec::type compression_type = CompressionCodec::UNCOMPRESSED;
   
   // Call init through wrapper
-  wrapper->init(empty_column_name, empty_connection_config, empty_app_context, empty_column_key_id, data_type, std::nullopt, compression_type);
+  wrapper->init(empty_column_name, empty_connection_config, empty_app_context, empty_column_key_id, data_type, std::nullopt, compression_type, std::nullopt);
   
   // Verify the mock agent was called
   EXPECT_TRUE(mock_companion_->WasInitCalled());
@@ -560,6 +570,7 @@ TEST_F(DBPALibraryWrapperTest, InitDelegationWithEmptyParameters) {
   EXPECT_EQ(mock_companion_->GetInitColumnKeyId(), empty_column_key_id);
   EXPECT_EQ(mock_companion_->GetInitDataType(), data_type);
   EXPECT_EQ(mock_companion_->GetInitCompressionType(), compression_type);
+  EXPECT_FALSE(mock_companion_->GetInitColumnEncryptionMetadata().has_value());
 }
 
 TEST_F(DBPALibraryWrapperTest, EncryptDelegation) {
@@ -717,7 +728,7 @@ TEST_F(DBPALibraryWrapperTest, InitWithEncryptDecryptOperations) {
   Type::type data_type = Type::INT32;
   CompressionCodec::type compression_type = CompressionCodec::SNAPPY;
   
-  wrapper->init(column_name, connection_config, app_context, column_key_id, data_type, std::nullopt, compression_type);
+  wrapper->init(column_name, connection_config, app_context, column_key_id, data_type, std::nullopt, compression_type, std::nullopt);
   
   // Verify init was called
   EXPECT_TRUE(mock_companion_->WasInitCalled());
@@ -749,6 +760,7 @@ TEST_F(DBPALibraryWrapperTest, InitWithEncryptDecryptOperations) {
   EXPECT_EQ(mock_companion_->GetInitColumnKeyId(), column_key_id);
   EXPECT_EQ(mock_companion_->GetInitDataType(), data_type);
   EXPECT_EQ(mock_companion_->GetInitCompressionType(), compression_type);
+  EXPECT_FALSE(mock_companion_->GetInitColumnEncryptionMetadata().has_value());
 }
 
 TEST_F(DBPALibraryWrapperTest, DelegationWithEmptyData) {
@@ -949,7 +961,7 @@ TEST_F(DBPALibraryWrapperTest, InterfaceCompliancePolymorphic) {
   Type::type data_type = Type::INT64;
   CompressionCodec::type compression_type = CompressionCodec::GZIP;
   
-  interface_ptr->init(column_name, connection_config, app_context, column_key_id, data_type, std::nullopt, compression_type);
+  interface_ptr->init(column_name, connection_config, app_context, column_key_id, data_type, std::nullopt, compression_type, std::nullopt);
   
   // Verify init was called through the interface
   EXPECT_TRUE(mock_companion_->WasInitCalled());
@@ -957,6 +969,7 @@ TEST_F(DBPALibraryWrapperTest, InterfaceCompliancePolymorphic) {
   EXPECT_EQ(mock_companion_->GetInitColumnName(), column_name);
   EXPECT_EQ(mock_companion_->GetInitDataType(), data_type);
   EXPECT_EQ(mock_companion_->GetInitCompressionType(), compression_type);
+  EXPECT_FALSE(mock_companion_->GetInitColumnEncryptionMetadata().has_value());
   
   // Test polymorphic encrypt/decrypt calls
   std::vector<uint8_t> plaintext = {1, 2, 3};

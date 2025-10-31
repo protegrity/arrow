@@ -62,10 +62,11 @@ class DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
       std::string column_key_id,
       Type::type data_type,
       std::optional<int> datatype_length,
-      CompressionCodec::type compression_type) override {
+      CompressionCodec::type compression_type,
+      std::optional<std::map<std::string, std::string>> column_encryption_metadata) override {
     wrapped_agent_->init(std::move(column_name), std::move(connection_config),
                         std::move(app_context), std::move(column_key_id),
-                        data_type, datatype_length, compression_type);
+                        data_type, datatype_length, compression_type, std::move(column_encryption_metadata));
   }
 
   // Decorator implementation of Encrypt method - inlined for performance

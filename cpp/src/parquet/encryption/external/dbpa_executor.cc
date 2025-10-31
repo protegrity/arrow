@@ -134,7 +134,8 @@ void DBPAExecutor::init(
     std::string column_key_id,
     Type::type data_type,
     std::optional<int> datatype_length,
-    CompressionCodec::type compression_type) {
+    CompressionCodec::type compression_type,
+    std::optional<std::map<std::string, std::string>> column_encryption_metadata) {
 
   std::cout << "[DBPAExecutor] init() called for column: " << column_name 
             << ", key_id: " << column_key_id << std::endl;
@@ -146,14 +147,15 @@ void DBPAExecutor::init(
                        std::string col_key_id,
                        Type::type dt,
                        std::optional<int> dt_len,
-                       CompressionCodec::type comp_type) {
+                       CompressionCodec::type comp_type,
+                       std::optional<std::map<std::string, std::string>> col_enc_metadata) {
                   wrapped_agent_->init(std::move(col_name), std::move(conn_config),
                                       std::move(app_ctx), std::move(col_key_id),
-                                      dt, dt_len, comp_type);
+                                      dt, dt_len, comp_type, std::move(col_enc_metadata));
                 },
                 std::move(column_name), std::move(connection_config),
                 std::move(app_context), std::move(column_key_id),
-                data_type, datatype_length, compression_type);
+                data_type, datatype_length, compression_type, std::move(column_encryption_metadata));
 }
 
 std::unique_ptr<EncryptionResult> DBPAExecutor::Encrypt(

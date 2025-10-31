@@ -38,6 +38,9 @@ public:
 
     std::map<std::string, std::string> ToPropertiesMap() const;
 
+    // Lightweight accessor to avoid building maps when only page type is needed
+    parquet::PageType::type GetPageType() const { return page_type_; }
+
 private:
     // Private constructor for builder
     EncodingProperties(const EncodingPropertiesBuilder& builder);

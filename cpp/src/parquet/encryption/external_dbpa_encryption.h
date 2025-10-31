@@ -95,7 +95,28 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
     
     std::unique_ptr<EncodingProperties> encoding_properties_;
     bool encoding_properties_updated_ = false;
+
+    // Accumulated column encryption metadata per module type (e.g., data page, dictionary page)
+    // to be used later by GetKeyValueMetadata.
+    std::map<int8_t, std::map<std::string, std::string>> column_encryption_metadata_;
 };
+
+// Utilities for External DBPA adapters
+class ExternalDBPAUtils {
+ public:
+  // Convert Arrow KeyValueMetadata to a std::map<string, string>.
+  // Returns std::nullopt if the input is null or contains no pairs.
+  static std::optional<std::map<std::string, std::string>> KeyValueMetadataToStringMap(
+      const std::shared_ptr<const KeyValueMetadata>& key_value_metadata);
+};
+
+// Update encryptor-level metadata accumulator based on encoding attributes and
+// EncryptionResult-provided metadata. If no metadata is available or page_type is
+// unsupported/absent, function performs no-op.
+void UpdateEncryptorMetadata(
+  std::map<int8_t, std::map<std::string, std::string>>& metadata_by_module,
+  const EncodingProperties& encoding_properties,
+  const dbps::external::EncryptionResult& result);
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
 /// operation is open, and is used to guarantee the lifetime of the encryptor.

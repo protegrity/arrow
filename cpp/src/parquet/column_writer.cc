@@ -325,12 +325,6 @@ class SerializedPageWriter : public PageWriter {
           static_cast<const DictionaryPage&>(page));
       data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
-      auto data_encryptor_metadata = data_encryptor_->GetKeyValueMetadata(
-        encryption::kDictionaryPage);
-      if (data_encryptor_metadata != nullptr) {
-        metadata_->AddKeyValueMetadata(data_encryptor_metadata);
-      }
-
       if (data_encryptor_->CanCalculateCiphertextLength()) {
         PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
           data_encryptor_->CiphertextLength(output_data_len), false));
@@ -343,6 +337,13 @@ class SerializedPageWriter : public PageWriter {
                                                       encryption_buffer_.get());
       }
       output_data_buffer = encryption_buffer_->data();
+
+      // after the call to encrypt(), add the column encryption metadata to the metadata_ object
+      auto data_encryptor_metadata = data_encryptor_->GetKeyValueMetadata(
+        encryption::kDictionaryPage);
+      if (data_encryptor_metadata != nullptr) {
+        metadata_->AddKeyValueMetadata(data_encryptor_metadata);
+      }
     }
 
     format::PageHeader page_header;
@@ -449,11 +450,6 @@ class SerializedPageWriter : public PageWriter {
           static_cast<const DataPage&>(page));
       data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
-      auto data_encryptor_metadata = data_encryptor_->GetKeyValueMetadata(encryption::kDataPage);
-      if (data_encryptor_metadata != nullptr) {
-        metadata_->AddKeyValueMetadata(data_encryptor_metadata);
-      }
-
       if (data_encryptor_->CanCalculateCiphertextLength()) {
         PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
           data_encryptor_->CiphertextLength(output_data_len), false));
@@ -466,6 +462,13 @@ class SerializedPageWriter : public PageWriter {
                                                       encryption_buffer_.get());
       }
       output_data_buffer = encryption_buffer_->data();
+
+      // after the call to encrypt(), add the column encryption metadata to the metadata_ object
+      auto data_encryptor_metadata = data_encryptor_->GetKeyValueMetadata(
+        encryption::kDataPage);
+      if (data_encryptor_metadata != nullptr) {
+        metadata_->AddKeyValueMetadata(data_encryptor_metadata);
+      }
     }
 
     format::PageHeader page_header;

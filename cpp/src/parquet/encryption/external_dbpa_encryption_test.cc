@@ -11,9 +11,7 @@
 #include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/encryption/external/test_utils.h"
 #include "parquet/encryption/encoding_properties.h"
-
-/// TODO(sbrenes): Add proper testing. Right now we are just going to test that the
-/// encryptor and decryptor are created and that the plaintext is returned as the ciphertext.
+#include "parquet/encryption/encryption_utils.h"
 
 namespace parquet::encryption::test {
 
@@ -137,6 +135,25 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, RoundtripEncryptionSucceeds) {
 
   RoundtripEncryption(
     algorithm, column_name, key_id, data_type, compression_type, encoding_type, plaintext);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, GetKeyValueMetadataReturnsNullWhenEmpty) {
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  std::string column_name = "employee_name";
+  std::string key_id = "employee_name_key";
+  Type::type data_type = Type::BYTE_ARRAY;
+  Compression::type compression_type = Compression::UNCOMPRESSED;
+  Encoding::type encoding_type = Encoding::PLAIN;
+
+  auto encryptor = ExternalDBPAEncryptorAdapter::Make(
+    algorithm, column_name, key_id, data_type, compression_type, encoding_type,
+    app_context_, connection_config_, std::nullopt);
+
+  // No encryption performed yet; metadata should be empty for any module
+  auto md_dict = encryptor->GetKeyValueMetadata(parquet::encryption::kDictionaryPage);
+  auto md_data = encryptor->GetKeyValueMetadata(parquet::encryption::kDataPage);
+  ASSERT_EQ(md_dict, nullptr);
+  ASSERT_EQ(md_data, nullptr);
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, SignedFooterEncryptionThrowsException) {
@@ -362,6 +379,80 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorInvalidTimeoutValuesThrows) {
     std::exception);
 }
 
+// Helper stub EncryptionResult for testing metadata accumulation
+class StubEncryptionResult : public dbps::external::EncryptionResult {
+public:
+  explicit StubEncryptionResult(std::map<std::string, std::string> metadata)
+    : metadata_(std::move(metadata)) {}
+
+  span<const uint8_t> ciphertext() const override { return {}; }
+  std::size_t size() const override { return 0; }
+  bool success() const override { return true; }
+  const std::optional<std::map<std::string, std::string>> encryption_metadata() const override {
+    return metadata_;
+  }
+  const std::string& error_message() const override { return empty_; }
+  const std::map<std::string, std::string>& error_fields() const override { return empty_fields_; }
+
+private:
+  std::optional<std::map<std::string, std::string>> metadata_;
+  mutable std::string empty_;
+  mutable std::map<std::string, std::string> empty_fields_;
+};
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, UpdateEncryptorMetadataAccumulatesByModuleType) {
+  // Build EncodingProperties for dictionary page and data page V2
+  EncodingPropertiesBuilder dict_builder;
+  dict_builder
+    .ColumnPath("col")
+    .PhysicalType(Type::BYTE_ARRAY)
+    .CompressionCodec(Compression::UNCOMPRESSED)
+    .PageType(parquet::PageType::DICTIONARY_PAGE)
+    .PageEncoding(Encoding::PLAIN);
+  auto dict_props = dict_builder.Build();
+
+  EncodingPropertiesBuilder data_builder;
+  data_builder
+    .ColumnPath("col")
+    .PhysicalType(Type::BYTE_ARRAY)
+    .CompressionCodec(Compression::UNCOMPRESSED)
+    .PageType(parquet::PageType::DATA_PAGE_V2)
+    .PageEncoding(Encoding::PLAIN)
+    .DataPageNumValues(100)
+    .DataPageMaxDefinitionLevel(1)
+    .DataPageMaxRepetitionLevel(0)
+    .PageV2DefinitionLevelsByteLength(4)
+    .PageV2RepetitionLevelsByteLength(4)
+    .PageV2NumNulls(0)
+    .PageV2IsCompressed(true);
+  auto data_props = data_builder.Build();
+
+  // Prepare result metadata
+  std::map<std::string, std::string> meta1 = {{"m1", "v1"}, {"m2", "v2"}};
+  std::map<std::string, std::string> meta2 = {{"m2", "v2_override"}, {"m3", "v3"}};
+
+  StubEncryptionResult r1(meta1);
+  StubEncryptionResult r2(meta2);
+
+  std::map<int8_t, std::map<std::string, std::string>> accum;
+
+  // Call helper under test
+  UpdateEncryptorMetadata(accum, *dict_props, r1);
+  UpdateEncryptorMetadata(accum, *data_props, r2);
+
+  // Verify dictionary page accumulation
+  ASSERT_NE(accum.find(parquet::encryption::kDictionaryPage), accum.end());
+  const auto& dict_map = accum.at(parquet::encryption::kDictionaryPage);
+  ASSERT_EQ(dict_map.at("m1"), "v1");
+  ASSERT_EQ(dict_map.at("m2"), "v2");
+
+  // Verify data page accumulation with overwrite behavior
+  ASSERT_NE(accum.find(parquet::encryption::kDataPage), accum.end());
+  const auto& data_map = accum.at(parquet::encryption::kDataPage);
+  ASSERT_EQ(data_map.at("m2"), "v2_override");
+  ASSERT_EQ(data_map.at("m3"), "v3");
+}
+
 TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
   ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
   std::string column_name = "employee_name";
@@ -476,6 +567,46 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptCallShouldFail) {
     decryptor->Decrypt(
       str2span(ciphertext), str2span(/*key*/""), str2span(/*aad*/""), plaintext_buffer),
     ParquetException);
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, KeyValueMetadataToStringMap_Nullptr) {
+  std::shared_ptr<const KeyValueMetadata> md = nullptr;
+  auto result = ExternalDBPAUtils::KeyValueMetadataToStringMap(md);
+  ASSERT_FALSE(result.has_value());
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, KeyValueMetadataToStringMap_Empty) {
+  auto md = ::arrow::key_value_metadata(std::vector<std::string>{}, std::vector<std::string>{});
+  auto result = ExternalDBPAUtils::KeyValueMetadataToStringMap(md);
+  ASSERT_FALSE(result.has_value());
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, KeyValueMetadataToStringMap_Basic) {
+  auto md = KeyValueMetadata::Make({"k1", "k2"}, {"v1", "v2"});
+  auto result = ExternalDBPAUtils::KeyValueMetadataToStringMap(md);
+  ASSERT_TRUE(result.has_value());
+  const auto& m = result.value();
+  ASSERT_EQ(m.size(), 2u);
+  ASSERT_EQ(m.at("k1"), std::string("v1"));
+  ASSERT_EQ(m.at("k2"), std::string("v2"));
+}
+
+TEST_F(ExternalDBPAEncryptorAdapterTest, KeyValueMetadataToStringMap_MismatchedLengths) {
+  auto md_more_keys = KeyValueMetadata::Make({"a", "b", "c"}, {"1", "2"});
+  auto res1 = ExternalDBPAUtils::KeyValueMetadataToStringMap(md_more_keys);
+  ASSERT_TRUE(res1.has_value());
+  const auto& m1 = res1.value();
+  ASSERT_EQ(m1.size(), 2u);
+  ASSERT_EQ(m1.at("a"), std::string("1"));
+  ASSERT_EQ(m1.at("b"), std::string("2"));
+  ASSERT_TRUE(m1.find("c") == m1.end());
+
+  auto md_more_vals = KeyValueMetadata::Make({"only"}, {"v1", "v2"});
+  auto res2 = ExternalDBPAUtils::KeyValueMetadataToStringMap(md_more_vals);
+  ASSERT_TRUE(res2.has_value());
+  const auto& m2 = res2.value();
+  ASSERT_EQ(m2.size(), 1u);
+  ASSERT_EQ(m2.at("only"), std::string("v1"));
 }
 
 }  // namespace parquet::encryption::test

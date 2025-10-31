@@ -76,6 +76,7 @@ public:
     Type::type last_init_data_type_;
     CompressionCodec::type last_init_compression_type_;
     std::optional<int> last_init_datatype_length_;
+    std::optional<std::map<std::string, std::string>> last_init_column_encryption_metadata_;
     std::map<std::string, std::string> last_encrypt_encoding_attrs_;
     std::map<std::string, std::string> last_decrypt_encoding_attrs_;
     
@@ -98,7 +99,8 @@ public:
               std::string column_key_id,
               Type::type data_type,
               std::optional<int> datatype_length,
-              CompressionCodec::type compression_type) override {
+              CompressionCodec::type compression_type,
+              std::optional<std::map<std::string, std::string>> column_encryption_metadata) override {
         init_call_count_++;
         last_init_column_name_ = column_name;
         last_init_connection_config_ = connection_config;
@@ -107,6 +109,7 @@ public:
         last_init_data_type_ = data_type;
         last_init_compression_type_ = compression_type;
         last_init_datatype_length_ = datatype_length;
+        last_init_column_encryption_metadata_ = std::move(column_encryption_metadata);
         
         if (should_throw_on_init_) {
             throw std::runtime_error(throw_message_);
@@ -211,8 +214,9 @@ TEST_F(DBPAExecutorTest, InitForwardsToWrappedAgent) {
   mock_agent_ptr_->ResetCallCounts();
   
   // Call init through executor
+  std::optional<std::map<std::string, std::string>> column_encryption_metadata = std::map<std::string, std::string>{{"metaKey", "metaValue"}};
   EXPECT_NO_THROW(executor_->init(column_name, connection_config, app_context,
-                                 column_key_id, data_type, std::nullopt, compression_type));
+                                 column_key_id, data_type, std::nullopt, compression_type, column_encryption_metadata));
   
   // Verify the mock agent was called exactly once
   EXPECT_EQ(mock_agent_ptr_->init_call_count_, 1);
@@ -224,12 +228,14 @@ TEST_F(DBPAExecutorTest, InitForwardsToWrappedAgent) {
   EXPECT_EQ(mock_agent_ptr_->last_init_column_key_id_, column_key_id);
   EXPECT_EQ(mock_agent_ptr_->last_init_data_type_, data_type);
   EXPECT_EQ(mock_agent_ptr_->last_init_compression_type_, compression_type);
+  ASSERT_TRUE(mock_agent_ptr_->last_init_column_encryption_metadata_.has_value());
+  EXPECT_EQ(mock_agent_ptr_->last_init_column_encryption_metadata_.value().at("metaKey"), "metaValue");
 }
 
 TEST_F(DBPAExecutorTest, EncryptForwardsToWrappedAgent) {
   // Initialize the executor first
   executor_->init("test_column", {}, "test_context", "test_key_id",
-                 Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED);
+                 Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED, std::nullopt);
 
   // Create test data
   std::vector<uint8_t> plaintext = {1, 2, 3, 4, 5};
@@ -256,7 +262,7 @@ TEST_F(DBPAExecutorTest, EncryptForwardsToWrappedAgent) {
 TEST_F(DBPAExecutorTest, DecryptForwardsToWrappedAgent) {
   // Initialize the executor first
   executor_->init("test_column", {}, "test_context", "test_key_id",
-                 Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED);
+                 Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED, std::nullopt);
 
   // Create test data
   std::vector<uint8_t> ciphertext = {5, 4, 3, 2, 1};
@@ -283,7 +289,7 @@ TEST_F(DBPAExecutorTest, DecryptForwardsToWrappedAgent) {
 TEST_F(DBPAExecutorTest, InitForwardsDatatypeLength) {
   mock_agent_ptr_->ResetCallCounts();
   EXPECT_NO_THROW(executor_->init("col", {}, "ctx", "kid",
-                                  Type::type::INT32, 16, CompressionCodec::type::UNCOMPRESSED));
+                                  Type::type::INT32, 16, CompressionCodec::type::UNCOMPRESSED, std::nullopt));
   EXPECT_EQ(mock_agent_ptr_->init_call_count_, 1);
   ASSERT_TRUE(mock_agent_ptr_->last_init_datatype_length_.has_value());
   EXPECT_EQ(mock_agent_ptr_->last_init_datatype_length_.value(), 16);
@@ -296,7 +302,7 @@ TEST_F(DBPAExecutorTest, MultipleCallsAreProperlyForwarded) {
   
   // Make multiple init calls with different parameters
   executor_->init("column1", {{"key1", "value1"}}, "context1", "key1", 
-                 Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED);
+                 Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED, std::nullopt);
   
   // Verify both calls were made
   EXPECT_EQ(mock_agent_ptr_->init_call_count_, 1);
@@ -346,7 +352,8 @@ TEST_F(DBPAExecutorTest, TimeoutExceptionThrownOnSlowOperation) {
   class SlowMockAgent : public DataBatchProtectionAgentInterface {
   public:
       void init(std::string, std::map<std::string, std::string>, std::string, 
-                std::string, Type::type, std::optional<int>, CompressionCodec::type) override {
+                std::string, Type::type, std::optional<int>, CompressionCodec::type,
+                std::optional<std::map<std::string, std::string>>) override {
           // Simulate slow operation that takes 200ms
           std::this_thread::sleep_for(std::chrono::milliseconds(100));
       }
@@ -374,7 +381,7 @@ TEST_F(DBPAExecutorTest, TimeoutExceptionThrownOnSlowOperation) {
   // Test init timeout - should throw DBPAExecutorTimeoutException
   try {
     timeout_executor->init("test_column", {}, "test_context", "test_key_id",
-                          Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED);
+                          Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED, std::nullopt);
     FAIL() << "Expected DBPAExecutorTimeoutException to be thrown";
   } catch (const DBPAExecutorTimeoutException& e) {
     // Verify the timeout exception contains expected information
@@ -427,7 +434,7 @@ TEST_F(DBPAExecutorTest, OriginalExceptionsArePreserved) {
   // Test that init exception is preserved
   try {
     executor_->init("test_column", {}, "test_context", "test_key_id",
-                   Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED);
+                   Type::type::INT32, std::nullopt, CompressionCodec::type::UNCOMPRESSED, std::nullopt);
     FAIL() << "Expected std::runtime_error to be thrown";
   } catch (const std::runtime_error& e) {
     EXPECT_STREQ(e.what(), "Mock init error");

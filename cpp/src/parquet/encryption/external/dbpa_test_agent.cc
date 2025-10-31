@@ -36,6 +36,9 @@ public:
     bool success() const override { return success_; }
     const std::string& error_message() const override { return error_message_; }
     const std::map<std::string, std::string>& error_fields() const override { return error_fields_; }
+    const std::optional<std::map<std::string, std::string>> encryption_metadata() const override {
+        return std::map<std::string, std::string>{{"test_key1", "test_value1"}, {"test_key2", "test_value2"}};
+    }
 
 private:
     std::vector<uint8_t> ciphertext_data_;

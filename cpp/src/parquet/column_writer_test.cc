@@ -1956,6 +1956,10 @@ TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption) {
   auto key_value_metadata = rg_reader->metadata()->ColumnChunk(0)->key_value_metadata();
   ASSERT_THAT(key_value_metadata, NotNull());
   ASSERT_EQ(2, key_value_metadata->size());
+  ASSERT_OK_AND_ASSIGN(auto test_v1, key_value_metadata->Get("test_key1"));
+  ASSERT_EQ("test_value1", test_v1);
+  ASSERT_OK_AND_ASSIGN(auto test_v2, key_value_metadata->Get("test_key2"));
+  ASSERT_EQ("test_value2", test_v2);
 
   std::vector<int32_t> read_values(values_.size());
   int64_t values_read;
