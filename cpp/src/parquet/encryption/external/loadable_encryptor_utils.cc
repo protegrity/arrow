@@ -6,6 +6,7 @@
 
 #include "arrow/util/io_util.h" //utils for loading shared libraries
 #include "arrow/result.h"
+#include "arrow/util/logging.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -24,7 +25,7 @@ typedef DataBatchProtectionAgentInterface* (*create_encryptor_t)();
 std::unique_ptr<DataBatchProtectionAgentInterface> CreateInstance(void* library_handle) {
   auto symbol_result = arrow::internal::GetSymbol(library_handle, "create_new_instance");
   if (!symbol_result.ok()) {
-    std::cerr << "Error: Cannot load symbol 'create_new_instance()': " << symbol_result.status().message() << std::endl;
+    ARROW_LOG(ERROR) << "Cannot load symbol 'create_new_instance()': " << symbol_result.status().message();
     auto status = arrow::internal::CloseDynamicLibrary(library_handle);
 
     throw std::runtime_error("Failed to load symbol 'create_new_instance()': " + symbol_result.status().message());
@@ -38,7 +39,7 @@ std::unique_ptr<DataBatchProtectionAgentInterface> CreateInstance(void* library_
   DataBatchProtectionAgentInterface* instance = create_instance_fn();
 
   if (instance == nullptr) {
-    std::cerr << "Error: Cannot create instance of DataBatchProtectionAgentInterface" << std::endl;
+    ARROW_LOG(ERROR) << "Cannot create instance of DataBatchProtectionAgentInterface";
     auto status = arrow::internal::CloseDynamicLibrary(library_handle);
     throw std::runtime_error("Failed to create instance of DataBatchProtectionAgentInterface");
   }

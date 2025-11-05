@@ -9,6 +9,7 @@
 #include <iostream>
 
 #include "arrow/util/io_util.h"
+#include "arrow/util/logging.h"
 
 namespace parquet::encryption::external {
 
@@ -16,7 +17,7 @@ namespace parquet::encryption::external {
 void DefaultSharedLibraryClosingFn(void* library_handle) {
   auto status = arrow::internal::CloseDynamicLibrary(library_handle);
   if (!status.ok()) {
-    std::cerr << "Error closing library: " << status.message() << std::endl;
+    ARROW_LOG(WARNING) << "Error closing library: " << status.message();
   }
 }
 

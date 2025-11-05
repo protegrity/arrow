@@ -6,6 +6,8 @@
 #include <future>
 #include <string>
 
+#include "arrow/util/logging.h"
+
 namespace parquet::encryption::external {
 
 
@@ -29,38 +31,38 @@ auto ExecuteWithTimeout(const std::string& operation_name,
   // Get the return type of the function that we're executing
   using ReturnType = decltype(func(args...));
   
-  std::cout << "[DBPAExecutor] Starting " << operation_name << " operation with timeout " 
-            << timeout_milliseconds << " milliseconds" << std::endl;
+  ARROW_LOG(DEBUG) << "[DBPAExecutor] Starting " << operation_name << " operation with timeout " 
+                   << timeout_milliseconds << " milliseconds";
   
   auto start_time = std::chrono::steady_clock::now();
   
   // Create a future to run the operation asynchronously
-  std::cout << "[DBPAExecutor] Creating async future for " << operation_name << std::endl;
+  ARROW_LOG(DEBUG) << "[DBPAExecutor] Creating async future for " << operation_name;
   auto future = std::async(std::launch::async, [&]() -> ReturnType {
-    std::cout << "[DBPAExecutor] Async task started for " << operation_name << std::endl;
+    ARROW_LOG(DEBUG) << "[DBPAExecutor] Async task started for " << operation_name;
     try {
       if constexpr (std::is_void_v<ReturnType>) {
         func(args...);
-        std::cout << "[DBPAExecutor] Async task completed successfully for " << operation_name << std::endl;
+        ARROW_LOG(DEBUG) << "[DBPAExecutor] Async task completed successfully for " << operation_name;
       } else {
         auto result = func(args...);
-        std::cout << "[DBPAExecutor] Async task completed successfully for " << operation_name << std::endl;
+        ARROW_LOG(DEBUG) << "[DBPAExecutor] Async task completed successfully for " << operation_name;
         return result;
       }
     } 
     catch (const std::exception& e) {
-      std::cout << "[DBPAExecutor] Async task threw exception for " << operation_name 
-                << ": " << e.what() << std::endl;
+      ARROW_LOG(ERROR) << "[DBPAExecutor] Async task threw exception for " << operation_name 
+                       << ": " << e.what();
       throw; // Re-throw original exception
     }  // TODO: are there exceptions which are not a sub-class of std::exception?
     catch (...) {
-      std::cout << "[DBPAExecutor] Async task threw unknown exception for " << operation_name << std::endl;
+      ARROW_LOG(ERROR) << "[DBPAExecutor] Async task threw unknown exception for " << operation_name;
       throw; // Re-throw original exception
     }
   });
   
-  std::cout << "[DBPAExecutor] Future created, waiting for " << operation_name 
-            << " with timeout " << timeout_milliseconds << " milliseconds" << std::endl;
+  ARROW_LOG(DEBUG) << "[DBPAExecutor] Future created, waiting for " << operation_name 
+                   << " with timeout " << timeout_milliseconds << " milliseconds";
   
   // Wait for the function to complete or timeout.
   auto status = future.wait_for(std::chrono::milliseconds(timeout_milliseconds));
@@ -69,13 +71,13 @@ auto ExecuteWithTimeout(const std::string& operation_name,
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
   
   if (status == std::future_status::timeout) {
-    std::cout << "[DBPAExecutor] TIMEOUT: " << operation_name << " exceeded " 
-              << timeout_milliseconds << " milliseconds (actual: " << duration.count() << "ms)" << std::endl;
+    ARROW_LOG(ERROR) << "[DBPAExecutor] TIMEOUT: " << operation_name << " exceeded " 
+                     << timeout_milliseconds << " milliseconds (actual: " << duration.count() << "ms)";
     throw DBPAExecutorTimeoutException(operation_name, timeout_milliseconds);
   }
   
-  std::cout << "[DBPAExecutor] Future completed for " << operation_name 
-            << " in " << duration.count() << "ms, retrieving result..." << std::endl;
+  ARROW_LOG(DEBUG) << "[DBPAExecutor] Future completed for " << operation_name 
+                   << " in " << duration.count() << "ms, retrieving result...";
   
   try {
     // If any exceptions are thrown in the body of the function,
@@ -83,17 +85,17 @@ auto ExecuteWithTimeout(const std::string& operation_name,
     // TODO: when/if logging is simplified, this block should also be simplified.
     if constexpr (std::is_void_v<ReturnType>) {
       future.get();
-      std::cout << "[DBPAExecutor] SUCCESS: " << operation_name << " completed successfully" << std::endl;
+      ARROW_LOG(DEBUG) << "[DBPAExecutor] SUCCESS: " << operation_name << " completed successfully";
     } else {
       auto result = future.get();
-      std::cout << "[DBPAExecutor] SUCCESS: " << operation_name << " completed successfully" << std::endl;
+      ARROW_LOG(DEBUG) << "[DBPAExecutor] SUCCESS: " << operation_name << " completed successfully";
       return result;
     }
   } catch (const std::exception& e) {
-    std::cout << "[DBPAExecutor] EXCEPTION: " << operation_name << " failed with: " << e.what() << std::endl;
+    ARROW_LOG(ERROR) << "[DBPAExecutor] EXCEPTION: " << operation_name << " failed with: " << e.what();
     throw; // Re-throw original exception
   } catch (...) {
-    std::cout << "[DBPAExecutor] UNKNOWN EXCEPTION: " << operation_name << " failed with unknown exception" << std::endl;
+    ARROW_LOG(ERROR) << "[DBPAExecutor] UNKNOWN EXCEPTION: " << operation_name << " failed with unknown exception";
     throw; // Re-throw original exception
   }
 }
@@ -109,22 +111,22 @@ DBPAExecutor::DBPAExecutor(std::unique_ptr<DataBatchProtectionAgentInterface> ag
   
   // Ensure the wrapped agent is not null
   if (!wrapped_agent_) {
-    std::cout << "[DBPAExecutor] ERROR: Cannot create executor with null agent" << std::endl;
+    ARROW_LOG(ERROR) << "[DBPAExecutor] ERROR: Cannot create executor with null agent";
     throw std::invalid_argument("DBPAExecutor: Cannot create executor with null agent");
   }
 
-  std::cout << "[DBPAExecutor] Constructor called with timeouts - init: " << init_timeout 
-            << "ms, encrypt: " << encrypt_timeout << "ms, decrypt: " << decrypt_timeout << "ms" << std::endl;
+  ARROW_LOG(DEBUG) << "[DBPAExecutor] Constructor called with timeouts - init: " << init_timeout 
+                   << "ms, encrypt: " << encrypt_timeout << "ms, decrypt: " << decrypt_timeout << "ms";
   
   // Validate timeout values
   if (init_timeout_milliseconds_ <= 0 || encrypt_timeout_milliseconds_ <= 0 || decrypt_timeout_milliseconds_ <= 0) {
-    std::cout << "[DBPAExecutor] ERROR: Invalid timeout values - init: " << init_timeout_milliseconds_
-              << ", encrypt: " << encrypt_timeout_milliseconds_ 
-              << ", decrypt: " << decrypt_timeout_milliseconds_ << std::endl;
+    ARROW_LOG(ERROR) << "[DBPAExecutor] ERROR: Invalid timeout values - init: " << init_timeout_milliseconds_
+                     << ", encrypt: " << encrypt_timeout_milliseconds_ 
+                     << ", decrypt: " << decrypt_timeout_milliseconds_;
     throw std::invalid_argument("DBPAExecutor: All timeout values must be positive");
   }
   
-  std::cout << "[DBPAExecutor] Constructor completed successfully" << std::endl;
+  ARROW_LOG(DEBUG) << "[DBPAExecutor] Constructor completed successfully";
 }
 
 void DBPAExecutor::init(
@@ -137,8 +139,8 @@ void DBPAExecutor::init(
     CompressionCodec::type compression_type,
     std::optional<std::map<std::string, std::string>> column_encryption_metadata) {
 
-  std::cout << "[DBPAExecutor] init() called for column: " << column_name 
-            << ", key_id: " << column_key_id << std::endl;
+  ARROW_LOG(DEBUG) << "[DBPAExecutor] init() called for column: " << column_name 
+                   << ", key_id: " << column_key_id;
 
   ExecuteWithTimeout("init", init_timeout_milliseconds_, 
                 [this](std::string col_name, 
@@ -162,7 +164,7 @@ std::unique_ptr<EncryptionResult> DBPAExecutor::Encrypt(
     span<const uint8_t> plaintext,
     std::map<std::string, std::string> encoding_attributes) {
   
-  std::cout << "[DBPAExecutor] Encrypt() called with " << plaintext.size() << " bytes" << std::endl;
+  ARROW_LOG(DEBUG) << "[DBPAExecutor] Encrypt() called with " << plaintext.size() << " bytes";
   
   return ExecuteWithTimeout("encrypt", encrypt_timeout_milliseconds_,
                            [this](span<const uint8_t> pt, std::map<std::string, std::string> attrs) {
@@ -175,7 +177,7 @@ std::unique_ptr<DecryptionResult> DBPAExecutor::Decrypt(
     span<const uint8_t> ciphertext,
     std::map<std::string, std::string> encoding_attributes) {
   
-  std::cout << "[DBPAExecutor] Decrypt() called with " << ciphertext.size() << " bytes" << std::endl;
+  ARROW_LOG(DEBUG) << "[DBPAExecutor] Decrypt() called with " << ciphertext.size() << " bytes";
   
   return ExecuteWithTimeout("decrypt", decrypt_timeout_milliseconds_,
                            [this](span<const uint8_t> ct, std::map<std::string, std::string> attrs) {
