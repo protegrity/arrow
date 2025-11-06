@@ -40,6 +40,7 @@ class DBPATestAgent : public DataBatchProtectionAgentInterface {
     }
     // Store the key id so we can use it for simple test XOR encryption/decryption
     key_ = std::move(column_key_id);
+    connection_config_ = std::move(connection_config);
   }
 
   std::unique_ptr<EncryptionResult> Encrypt(
@@ -55,6 +56,10 @@ class DBPATestAgent : public DataBatchProtectionAgentInterface {
  private:
   // Used as a simple XOR key for test encryption/decryption
   std::string key_;
+  // Stored connection configuration from init(); used to toggle test behaviors
+  std::map<std::string, std::string> connection_config_;
+  // Count Encrypt() calls to allow staged behavior in tests
+  size_t encrypt_calls_ = 0;
 };
 
 }  // namespace parquet::encryption::external 

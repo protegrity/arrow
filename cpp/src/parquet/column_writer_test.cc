@@ -1822,10 +1822,9 @@ class TestColumnWriterEncryption : public ::testing::Test {
       kFooterEncryptionKey_ = "1234567890123456";
       values_ = {1, 2, 3, 4, 5};
       
-      std::string library_path =
-        parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
+      library_path_ = parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
       app_context_ = "{\"user_id\": \"test_user\", \"location\": {\"lat\": 0.0, \"lon\": 0.0}}";
-      connection_config_ = {{"config_path", "test/path"}, {"agent_library_path", library_path}};
+      connection_config_ = {{"config_path", "test/path"}, {"agent_library_path", library_path_}};
     }
 
     std::shared_ptr<::arrow::io::BufferOutputStream> sink_;
@@ -1836,6 +1835,7 @@ class TestColumnWriterEncryption : public ::testing::Test {
     std::string kFooterEncryptionKey_;
     std::vector<int32_t> values_;
     
+    std::string library_path_;
     std::string app_context_;
     std::map<std::string, std::string> connection_config_;
 };
@@ -1967,6 +1967,107 @@ TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption) {
 
   ASSERT_EQ(values_read, static_cast<int64_t>(values_.size()));
   ASSERT_EQ(values_, read_values);
+}
+
+TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption_MultiplePagesNoConflictingOverrides) {
+  const std::string kColumnKeyId = "test_column_key1";
+
+  // Set up EXTERNAL_DBPA encryption on a single column so that the encryptor
+  // returns key/value metadata on dictionary and data pages.
+  auto column_properties_builder = ColumnEncryptionProperties::Builder("encrypted_column");
+  column_properties_builder.key(kColumnKeyId)->key_id(kColumnKeyId)
+      ->parquet_cipher(ParquetCipher::EXTERNAL_DBPA_V1);
+  auto column_properties = column_properties_builder.build();
+
+  std::map<std::string, std::shared_ptr<ColumnEncryptionProperties>> encryption_columns;
+  encryption_columns["encrypted_column"] = column_properties;
+
+  auto fep_builder = ExternalFileEncryptionProperties::Builder(kFooterEncryptionKey_);
+  fep_builder.encrypted_columns(encryption_columns)
+      ->footer_key_metadata(kFooterEncryptionKey_)
+      ->set_plaintext_footer()
+      ->algorithm(ParquetCipher::AES_GCM_V1)
+      ->app_context(app_context_)
+      ->connection_config({{ParquetCipher::EXTERNAL_DBPA_V1, connection_config_}});
+  auto file_encryption_properties = fep_builder.build_external();
+
+  auto writer_properties_builder = WriterProperties::Builder();
+
+  // Force many very small pages so the writer will obtain encryptor metadata
+  // multiple times (dictionary page + several data pages). Disable dictionary
+  // so we always produce multiple data pages.
+  writer_properties_builder.disable_dictionary()
+      ->data_pagesize(100)
+      ->encryption(file_encryption_properties);
+  auto writer_properties = writer_properties_builder.build();
+
+  auto file_writer = ParquetFileWriter::Open(sink_, node_, writer_properties);
+  auto rg_writer = file_writer->AppendRowGroup();
+  auto col_writer = static_cast<Int32Writer*>(rg_writer->NextColumn());
+
+  // Write enough values to guarantee multiple data pages are emitted.
+  // (we're setting page size to 100 above)
+  std::vector<int32_t> many_values;
+  many_values.reserve(1000);
+  for (int i = 0; i < 1000; ++i) {
+    many_values.push_back(values_[i % values_.size()]);
+  }
+
+  col_writer->WriteBatch(many_values.size(), nullptr, nullptr, many_values.data());
+  col_writer->Close();
+
+  // Closing should not throw even across many pages with repeated encryptor metadata,
+  // as long as the encryptor does not change values for the same keys.
+  ASSERT_NO_THROW(file_writer->Close());
+}
+
+TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption_ConflictingMetadataThrows) {
+  const std::string kColumnKeyId = "test_column_key1";
+
+  // Set up EXTERNAL_DBPA with a test-agent flag that forces a conflicting metadata value
+  auto column_properties_builder = ColumnEncryptionProperties::Builder("encrypted_column");
+  column_properties_builder.key(kColumnKeyId)->key_id(kColumnKeyId)
+      ->parquet_cipher(ParquetCipher::EXTERNAL_DBPA_V1);
+  auto column_properties = column_properties_builder.build();
+
+  std::map<std::string, std::shared_ptr<ColumnEncryptionProperties>> encryption_columns;
+  encryption_columns["encrypted_column"] = column_properties;
+
+  auto fep_builder = ExternalFileEncryptionProperties::Builder(kFooterEncryptionKey_);
+  fep_builder.encrypted_columns(encryption_columns)
+      ->footer_key_metadata(kFooterEncryptionKey_)
+      ->set_plaintext_footer()
+      ->algorithm(ParquetCipher::AES_GCM_V1)
+      ->app_context(app_context_)
+      ->connection_config({{ParquetCipher::EXTERNAL_DBPA_V1, {
+        {"dbpa_test_force_conflicting_metadata", "1"},
+        {"agent_library_path", library_path_}
+      }}});
+
+  auto file_encryption_properties = fep_builder.build_external();
+
+  auto writer_properties_builder = WriterProperties::Builder();
+  // Force tiny pages and small write batches so multiple Encrypt() calls occur
+  writer_properties_builder.disable_dictionary()
+      ->data_pagesize(1)
+      ->write_batch_size(1)
+      ->encryption(file_encryption_properties);
+  auto writer_properties = writer_properties_builder.build();
+
+  auto file_writer = ParquetFileWriter::Open(sink_, node_, writer_properties);
+  auto rg_writer = file_writer->AppendRowGroup();
+  auto col_writer = static_cast<Int32Writer*>(rg_writer->NextColumn());
+
+  // Write enough values to guarantee multiple Encrypt() invocations.
+  // (we're setting page size to 1 above)
+  std::vector<int32_t> many_values;
+  many_values.reserve(1000);
+  for (int i = 0; i < 1000; ++i) {
+    many_values.push_back(values_[i % values_.size()]);
+  }
+
+  // Expect that a conflicting encryptor metadata value triggers an exception 
+  EXPECT_THROW(col_writer->WriteBatch(many_values.size(), nullptr, nullptr, many_values.data()), ParquetException);
 }
 
 #ifdef ARROW_WITH_ZSTD

@@ -24,9 +24,11 @@ class TestEncryptionResult : public EncryptionResult {
 public:
     TestEncryptionResult(std::vector<uint8_t> data, bool success = true, 
                         std::string error_msg = "", 
-                        std::map<std::string, std::string> error_fields = {})
+                        std::map<std::string, std::string> error_fields = {},
+                        std::optional<std::map<std::string, std::string>> metadata = std::nullopt)
         : ciphertext_data_(std::move(data)), success_(success), 
-          error_message_(std::move(error_msg)), error_fields_(std::move(error_fields)) {}
+          error_message_(std::move(error_msg)), error_fields_(std::move(error_fields)),
+          metadata_(std::move(metadata)) {}
 
     span<const uint8_t> ciphertext() const override {
         return span<const uint8_t>(ciphertext_data_.data(), ciphertext_data_.size());
@@ -37,6 +39,9 @@ public:
     const std::string& error_message() const override { return error_message_; }
     const std::map<std::string, std::string>& error_fields() const override { return error_fields_; }
     const std::optional<std::map<std::string, std::string>> encryption_metadata() const override {
+        if (metadata_.has_value()) {
+            return metadata_;
+        }
         return std::map<std::string, std::string>{{"test_key1", "test_value1"}, {"test_key2", "test_value2"}};
     }
 
@@ -45,6 +50,7 @@ private:
     bool success_;
     std::string error_message_;
     std::map<std::string, std::string> error_fields_;
+    std::optional<std::map<std::string, std::string>> metadata_;
 };
 
 // Concrete implementation of DecryptionResult for testing
@@ -86,6 +92,16 @@ std::unique_ptr<EncryptionResult> DBPATestAgent::Encrypt(
   const size_t key_len = key_.size();
   for (size_t i = 0; i < plaintext.size(); ++i) {
     ciphertext_data[i] = plaintext[i] ^ static_cast<uint8_t>(key_[i % key_len]);
+  }
+
+  // For tests, optionally force a conflicting metadata value on subsequent calls
+  auto it = connection_config_.find("dbpa_test_force_conflicting_metadata");
+  bool force_conflict = (it != connection_config_.end() && it->second == "1");
+  encrypt_calls_++;
+  if (force_conflict && encrypt_calls_ >= 2) {
+    // Return a different value for test_key1 to trigger conflict in writer
+    std::map<std::string, std::string> md {{"test_key1", "test_value1_conflict"}, {"test_key2", "test_value2"}};
+    return std::make_unique<TestEncryptionResult>(std::move(ciphertext_data), true, "", std::map<std::string, std::string>{}, md);
   }
 
   return std::make_unique<TestEncryptionResult>(std::move(ciphertext_data));

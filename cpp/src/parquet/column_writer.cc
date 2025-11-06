@@ -22,6 +22,7 @@
 #include <cstring>
 #include <map>
 #include <memory>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -341,9 +342,7 @@ class SerializedPageWriter : public PageWriter {
       // after the call to encrypt(), add the column encryption metadata to the metadata_ object
       auto data_encryptor_metadata = data_encryptor_->GetKeyValueMetadata(
         encryption::kDictionaryPage);
-      if (data_encryptor_metadata != nullptr) {
-        metadata_->AddKeyValueMetadata(data_encryptor_metadata);
-      }
+      UpdateDataEncryptorMetadata(data_encryptor_metadata);
     }
 
     format::PageHeader page_header;
@@ -466,9 +465,7 @@ class SerializedPageWriter : public PageWriter {
       // after the call to encrypt(), add the column encryption metadata to the metadata_ object
       auto data_encryptor_metadata = data_encryptor_->GetKeyValueMetadata(
         encryption::kDataPage);
-      if (data_encryptor_metadata != nullptr) {
-        metadata_->AddKeyValueMetadata(data_encryptor_metadata);
-      }
+      UpdateDataEncryptorMetadata(data_encryptor_metadata);
     }
 
     format::PageHeader page_header;
@@ -655,6 +652,42 @@ class SerializedPageWriter : public PageWriter {
     }
   }
 
+  // Updates metadata with encryptor-provided KeyValueMetadata, checking for conflicts.
+  // Throws ParquetException if a key exists with a different value (same value is allowed).
+  void UpdateDataEncryptorMetadata(
+      const std::shared_ptr<const KeyValueMetadata>& data_encryptor_metadata) {
+    if (data_encryptor_metadata == nullptr) {
+      return;
+    }
+
+    // Prevent overriding an existing key with a different value after obtaining
+    // metadata coming from the encryptor (same value is fine).
+    const auto& keys = data_encryptor_metadata->keys();
+    const auto& values = data_encryptor_metadata->values();
+    for (size_t i = 0; i < keys.size(); ++i) {
+      const auto& key = keys[i];
+      const auto& value = values[i];
+      auto it = encryptor_seen_kvmetadata_.find(key);
+      if (it != encryptor_seen_kvmetadata_.end()) {
+
+        //if we're here, the key already exists in the encryptor_seen_kvmetadata_ map
+        // we need to check if the value is the same. If it is not, throw an exception.
+        if (it->second != value) {
+          std::stringstream ss;
+          ss << "Encryptor-provided metadata attempts to override key '" << key
+             << "' with a different value (old='" << it->second
+             << "', new='" << value << "')";
+          throw ParquetException(ss.str());
+        }
+      } else {
+        //if we're here, the key does not exist in the encryptor_seen_kvmetadata_ map
+        // add it to the map.
+        encryptor_seen_kvmetadata_.emplace(key, value);
+      }
+    }
+    metadata_->AddKeyValueMetadata(data_encryptor_metadata);
+  }
+
   std::shared_ptr<ArrowOutputStream> sink_;
   ColumnChunkMetaDataBuilder* metadata_;
   MemoryPool* pool_;
@@ -692,6 +725,10 @@ class SerializedPageWriter : public PageWriter {
 
   ColumnIndexBuilder* column_index_builder_;
   OffsetIndexBuilder* offset_index_builder_;
+  
+  // Tracks keys inserted from the encryptor so we can detect conflicting overrides
+  // across modules (dictionary/data pages). Overriding with an identical value is allowed.
+  std::unordered_map<std::string, std::string> encryptor_seen_kvmetadata_;
 };
 
 // This implementation of the PageWriter writes to the final sink on Close .
