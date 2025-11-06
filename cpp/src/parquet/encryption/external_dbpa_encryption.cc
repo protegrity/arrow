@@ -60,9 +60,9 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   std::cout << "[DEBUG] Loading agent from library..." << std::endl;
 
   const std::string SHARED_LIBRARY_PATH_KEY = "agent_library_path";
-  const std::string INIT_TIMEOUT_KEY = "init_timeout_ms";
-  const std::string ENCRYPT_TIMEOUT_KEY = "encrypt_timeout_ms";
-  const std::string DECRYPT_TIMEOUT_KEY = "decrypt_timeout_ms";
+  const std::string INIT_TIMEOUT_KEY = "agent_init_timeout_ms";
+  const std::string ENCRYPT_TIMEOUT_KEY = "agent_encrypt_timeout_ms";
+  const std::string DECRYPT_TIMEOUT_KEY = "agent_decrypt_timeout_ms";
   
   // Step 1: Get path to the shared library  
   auto it = connection_config.find(SHARED_LIBRARY_PATH_KEY);

@@ -27,9 +27,9 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
     connection_config_ = {
       {"config_path", "path/to/file"}, 
       {"agent_library_path", library_path},
-      {"init_timeout_ms", "1000"},
-      {"encrypt_timeout_ms", "2000"},
-      {"decrypt_timeout_ms", "3000"}
+      {"agent_init_timeout_ms", "1000"},
+      {"agent_encrypt_timeout_ms", "2000"},
+      {"agent_decrypt_timeout_ms", "3000"}
     };
     key_value_metadata_ = KeyValueMetadata::Make({"key1", "key2"}, {"value1", "value2"});
   }
@@ -307,7 +307,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorInvalidTimeoutValuesThrows) {
   std::map<std::string, std::string> bad_config = {
     {"config_path", "path/to/file"}, 
     {"agent_library_path", library_path},
-    {"init_timeout_ms", "nope"},
+    {"agent_init_timeout_ms", "nope"},
   };
   std::string app_context = "{}";
 
@@ -368,7 +368,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorInvalidTimeoutValuesThrows) {
   std::map<std::string, std::string> bad_config = {
     {"config_path", "path/to/file"}, 
     {"agent_library_path", library_path},
-    {"init_timeout_ms", "nope"},
+    {"agent_init_timeout_ms", "nope"},
   };
   std::string app_context = "{}";
 

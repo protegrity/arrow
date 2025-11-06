@@ -216,9 +216,9 @@ def get_dbpa_connection_config():
     connection_config = {
         "EXTERNAL_DBPA_V1": {
             "agent_library_path": agent_library_path,
-            "init_timeout_ms": "15000",
-            "encrypt_timeout_ms": "35000",
-            "decrypt_timeout_ms": "35000"
+            "agent_init_timeout_ms": "15000",
+            "agent_encrypt_timeout_ms": "35000",
+            "agent_decrypt_timeout_ms": "35000"
         }
     }
 
