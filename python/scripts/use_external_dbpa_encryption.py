@@ -142,12 +142,6 @@ def get_external_file_decryption_properties(external_decryption_config):
 
 """
 Set up the application specific context for the external DBPA service.
-
-It is the responsiblity of the application to provide the authorization and user credentials
-to the external DBPA service, and send it as part of the application specific context.
-
-For this example, we simply return a static context with a user ID and location, but this should
-include whatever credentials and authorization information is needed by the external DBPA service.
 """
 def get_app_context():
     return {
@@ -168,11 +162,14 @@ we retrieve the name from an environment variable. If the variable is not availa
 default to 'libDBPATestAgent.so'.
 
 When the external DBPA encryptor is running as a remote service, the application must provide
-the path to the connection config file. This config file must be a valid JSON that contains a
-server_url key pointing to the remote service.
+the path to the connection config file, which must be a valid JSON that contains all the information
+needed to connect to the external DBPA service.
 
-For this example, we retrieve the name from an environment variable. If the variable is not
-available, we default to 'test_connection_config_file.json'.
+This includes the server URL and the authentication credentials (as a JWT token), which the
+application must procure on its own.
+
+For this example, we retrieve the config path name from an environment variable. If the variable is
+not available, we default to 'test_connection_config_file.json'.
 """
 def get_dbpa_connection_config(use_remote_service):
     connection_config = {
@@ -298,7 +295,7 @@ def round_trip_parquet_file_encryption():
         service_path_prefix = 'remote' if use_remote_service else 'local'
         for use_best_case_encryption in [True, False]:
             encryption_path_prefix = 'best_case' if use_best_case_encryption else 'default'
-            parquet_path = f"{service_path_prefix}_sample.parquet"
+            parquet_path = f"{service_path_prefix}_{encryption_path_prefix}_sample.parquet"
             write_encrypted_parquet_file(parquet_path, use_remote_service, use_best_case_encryption)
             read_encrypted_parquet_file(parquet_path, use_remote_service)
 
