@@ -164,19 +164,14 @@ If none are provided, default values are used on the encryptor side.
 These timeout values are not network related, but rather a protection mechanism to avoid the
 external encryptor or decryptor from taking too long to complete their operations.
 
-The application must provide the path to the external DBPA agent library file. For this example,
-we retrieve the name from an environment variable. If the variable is not available, we
-default to 'libDBPATestAgent.so'.
+The application must know the path to the external DBPA agent library file.
 
-When the external DBPA encryptor is running as a remote service, the application must provide
+When the external DBPA encryptor is running as a remote service, the application must also provide
 the path to the connection config file, which must be a valid JSON that contains all the information
 needed to connect to the external DBPA service.
 
 This includes the server URL and the authentication credentials (as a JWT token), which the
 application must procure on its own.
-
-For this example, we retrieve the config path name from an environment variable. If the variable is
-not available, we default to 'test_connection_config_file.json'.
 """
 def get_dbpa_connection_config(use_remote_service):
     connection_config = {
@@ -186,16 +181,16 @@ def get_dbpa_connection_config(use_remote_service):
             "agent_decrypt_timeout_ms": "35000"
         }
     }
-    agent_library_path = os.environ.get(
-        'DBPA_LIBRARY_PATH', 
-        'libDBPATestAgent.so' if platform.system() == 'Linux' else 'libDBPATestAgent.dylib')
-    connection_config["EXTERNAL_DBPA_V1"]["agent_library_path"] = agent_library_path
-    
     if use_remote_service:
-        remote_file_path = os.environ.get(
-            'DBPA_CONNECTION_CONFIG_FILE_PATH', 
-            'test_connection_config_file.json')
+        agent_library_path = (
+            'libdbpsRemoteAgent.so' if platform.system() == 'Linux' else 'libdbpsRemoteAgent.dylib')
+        connection_config["EXTERNAL_DBPA_V1"]["agent_library_path"] = agent_library_path
+        remote_file_path = 'test_connection_config_file.json'
         connection_config["EXTERNAL_DBPA_V1"]["connection_config_file_path"] = remote_file_path
+    else:
+        agent_library_path = (
+            'libdbpsLocalAgent.so' if platform.system() == 'Linux' else 'libdbpsLocalAgent.dylib')
+        connection_config["EXTERNAL_DBPA_V1"]["agent_library_path"] = agent_library_path
 
     return connection_config
 
@@ -212,8 +207,6 @@ The current implementation of the external DBPA library can support a per-value 
 
 If any of these conditions are not met, the external DBPA library will perform traditional
 per-page (as opposed to per-value) encryption.
-
-Support for all other combinations of parameters is actively being worked on.
 """
 def write_encrypted_parquet_file(parquet_path, use_remote_service, use_best_case_encryption):
     print("\n------------------------------------------------------------")
