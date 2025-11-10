@@ -76,7 +76,8 @@ All other parameters are the same as for regular Parquet Arrow encryption.
 def get_external_encryption_config(use_remote_service):
     return ppe.ExternalEncryptionConfiguration(
         footer_key="footer_key",
-        # File level encryption algorithm.
+        # File level encryption algorithm. This is the default algorithm that will apply
+        # when no per column encryption algorithm is specified.
         encryption_algorithm="AES_GCM_V1",
         # These are the usual column keys that will be used for the file-level encryption.
         column_keys={
@@ -101,7 +102,8 @@ def get_external_encryption_config(use_remote_service):
                 "encryption_key": "customer_key"
             }
         },
-        # Additional context for the external encryptor.
+        # Additional context for the external encryptor. Arrow will just forward this value to
+        # the external encryptor, and does not read its contents.
         app_context=get_app_context(),
         # Connection configuration for the external encryptor.
         connection_config=get_dbpa_connection_config(use_remote_service)
@@ -119,8 +121,8 @@ Set up all decryption configuration parameters.
 
 External DBPA decryption requires the use of the ExternalDecryptionConfiguration and the
 ExternalFileDecryptionProperties classes. These allow you to specify the application specific
-context for the external decryptor, and how to connect to the external DBPA decryptor: whether
-via a library file, or via a remote service.
+context for the external decryptor, and how to instantiate the external DBPA decryptor: whether
+via a local instance, or via a remote one.
 
 All other parameters are the same as for regular Parquet Arrow decryption.
 """
@@ -141,7 +143,9 @@ def get_external_file_decryption_properties(external_decryption_config):
 # ################################################################################################
 
 """
-Set up the application specific context for the external DBPA service.
+Set up the application specific context for the external DBPA service. This is a contract
+exclusively between the application and the external DBPA service. Arrow makes no use of this.
+
 """
 def get_app_context():
     return {
@@ -156,6 +160,9 @@ Set up the connection configuration for the external DBPA encryptor.
 
 Each application can provide its own timeout values for the external DBPA encryptor operations.
 If none are provided, default values are used on the encryptor side.
+
+These timeout values are not network related, but rather a protection mechanism to avoid the
+external encryptor or decryptor from taking too long to complete their operations.
 
 The application must provide the path to the external DBPA agent library file. For this example,
 we retrieve the name from an environment variable. If the variable is not available, we
@@ -174,9 +181,9 @@ not available, we default to 'test_connection_config_file.json'.
 def get_dbpa_connection_config(use_remote_service):
     connection_config = {
         "EXTERNAL_DBPA_V1": {
-            "init_timeout_ms": "15000",
-            "encrypt_timeout_ms": "35000",
-            "decrypt_timeout_ms": "35000"
+            "agent_init_timeout_ms": "15000",
+            "agent_encrypt_timeout_ms": "35000",
+            "agent_decrypt_timeout_ms": "35000"
         }
     }
     agent_library_path = os.environ.get(
@@ -197,15 +204,14 @@ def get_dbpa_connection_config(use_remote_service):
 """
 Write an encrypted Parquet file using the external DBPA encryption library.
 
-The current implementation of the external DBPA library (as of late 2025) can support a
-sophisticated encryption algorithm (which we call "best case encryption") only when the following
-conditions are met:
+The current implementation of the external DBPA library can support a per-value encryption algorithm
+(which we call "best case encryption") only when the following conditions are met:
 - No compression algorithm is used.
 - Dictionary encoding is disabled.
 - Column encoding is set to PLAIN for all columns.
 
-If any of these conditions are not met, the external DBPA library will fall back to a simpler
-(XOR) encryption algorithm.
+If any of these conditions are not met, the external DBPA library will perform traditional
+per-page (as opposed to per-value) encryption.
 
 Support for all other combinations of parameters is actively being worked on.
 """
@@ -286,9 +292,9 @@ def read_encrypted_parquet_file(parquet_path, use_remote_service):
 """
 Perform round trip encryption and decryption of example Parquet files.
 
-Exercising a combination of local and remote external DBPA encryptor services, and also
-a combination of settings that will trigger different encryption methods available in the
-external DBPA encryptor library (as of its first version in late 2025).
+We exercise the following combinations of using the external DBPA encryptor services:
+- local and remote instance
+- best case and traditional encryption
 """
 def round_trip_parquet_file_encryption():
     for use_remote_service in [True, False]:
