@@ -8,7 +8,6 @@ Use this script as a template/guide to use the external DBPA encryption library 
 
 import base64
 import datetime
-import os
 import platform
 import pyarrow
 import pyarrow.parquet as pp
