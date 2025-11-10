@@ -86,7 +86,10 @@ def get_external_encryption_config(use_remote_service):
         data_key_length_bits=128,
         plaintext_footer=True,
         # Specify each column's encryption algorithm and key. You can use any of the encryption
-        # algorithms supported by Parquet Arrow.
+        # algorithms supported by Parquet Arrow. Keep in mind:
+        # - A column may appear in either the column_keys or per_column_encryption, but not both.
+        # - If a column does not appear in either, it will not be encrypted.
+        # - Any misspelling of a column name or algorithm name will result in an exception.
         per_column_encryption={
             "orderId": {
                 "encryption_algorithm": "EXTERNAL_DBPA_V1",
@@ -169,8 +172,8 @@ When the external DBPA encryptor is running as a remote service, the application
 the path to the connection config file, which must be a valid JSON that contains all the information
 needed to connect to the external DBPA service.
 
-This includes the server URL and the authentication credentials (as a JWT token), which the
-application must procure on its own.
+This includes the server URL and the authentication credentials, which the application must procure
+on its own.
 """
 def get_dbpa_connection_config(use_remote_service):
     connection_config = {
@@ -224,14 +227,7 @@ def write_encrypted_parquet_file(parquet_path, use_remote_service, use_best_case
             encryption_properties=external_file_encryption_properties,
             use_dictionary=False,
             compression="NONE",
-            use_byte_stream_split=False,
-            column_encoding={
-                "orderId": "PLAIN",
-                "productId": "PLAIN",
-                "price": "PLAIN",
-                "vat": "PLAIN",
-                "customer_name": "PLAIN"
-            })
+            use_byte_stream_split=False)
     else:
         pp.write_table(
             sample_data, parquet_path, 
