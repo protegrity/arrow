@@ -66,6 +66,13 @@ External DBPA encryption requires the use of the ExternalEncryptionConfiguration
 ExternalFileEncryptionProperties classes. These allow you to specify per column encryption
 algorithms and keys.
 
+For this example, the following configuration will apply to each column:
+- productId: encrypted withthe file-level encryption using AES_GCM_V1 and key productid_key
+- orderId: encrypted with the external DBPA encryption using key orderid_key
+- price: encrypted with the AES_GCM_CTR_V1 encryption using key price_key
+- customer_name: encrypted with the external DBPA encryption using key customer_key
+- vat: not encrypted
+
 This is also where you send the application specific context to the external encryptor, and 
 where you specify how to connect to the external DBPA encryptor: whether via a library file,
 or via a remote service.
@@ -88,6 +95,7 @@ def get_external_encryption_config(use_remote_service):
         # Specify each column's encryption algorithm and key. You can use any of the encryption
         # algorithms supported by Parquet Arrow. Keep in mind:
         # - A column may appear in either the column_keys or per_column_encryption, but not both.
+        # - If a column appears in both, an exception will be thrown.
         # - If a column does not appear in either, it will not be encrypted.
         # - Any misspelling of a column name or algorithm name will result in an exception.
         per_column_encryption={
@@ -166,7 +174,9 @@ If none are provided, default values are used on the encryptor side.
 These timeout values are not network related, but rather a protection mechanism to avoid the
 external encryptor or decryptor from taking too long to complete their operations.
 
-The application must know the path to the external DBPA agent library file.
+The application must know the path to the external DBPA agent library file. Important! Please
+ensure that LD_LIBRARY_PATH (or its equivalent) has been modified to include the location of the
+shared library files for the external DBPA encryptor and decryptor.
 
 When the external DBPA encryptor is running as a remote service, the application must also provide
 the path to the connection config file, which must be a valid JSON that contains all the information
@@ -210,28 +220,37 @@ The current implementation of the external DBPA library can support a per-value 
 If any of these conditions are not met, the external DBPA library will perform traditional
 per-page (as opposed to per-value) encryption.
 """
-def write_encrypted_parquet_file(parquet_path, use_remote_service, use_best_case_encryption):
+def write_encrypted_parquet_file(parquet_path, use_remote_service, scenario_id):
     print("\n------------------------------------------------------------")
     print(f"Writing encrypted parquet file to {parquet_path}")
     print(f"Using {'remote' if use_remote_service else 'local'} external DBPA encryptor service")
-    print(f"Using {'best case' if use_best_case_encryption else 'default'} encryption")
+    print(f"Using scenario {scenario_id}")
     print("------------------------------------------------------------\n")
     
     sample_data = get_sample_data()
     encryption_config = get_external_encryption_config(use_remote_service)
     external_file_encryption_properties = get_external_file_encryption_properties(encryption_config)
     
-    if use_best_case_encryption:
-        pp.write_table(
-            sample_data, parquet_path, 
-            encryption_properties=external_file_encryption_properties,
-            use_dictionary=False,
-            compression="NONE",
-            use_byte_stream_split=False)
-    else:
-        pp.write_table(
-            sample_data, parquet_path, 
-            encryption_properties=external_file_encryption_properties)
+    match scenario_id:
+        case 1:
+            # This is the simplest way to write an encrypted Parquet file. It will use the default
+            # values for compression (SNAPPY) and encoding (DICTIONARY).
+            pp.write_table(sample_data, parquet_path,
+                           encryption_properties=external_file_encryption_properties)
+        case 2:
+            # By specifying a combination of parameters that use a plain encoding (not dictionary),
+            #  and no compression, we can ensure that the current external DBPA library will
+            #  perform per-value encryption on the data.
+            pp.write_table(sample_data, parquet_path,
+                           encryption_properties=external_file_encryption_properties,
+                           use_dictionary=False, compression="NONE", use_byte_stream_split=False)
+        case 3:
+            # Other parameters that can be specified involve the data page version (which impacts
+            # how the data bytes are formatted), and specific column encodings. 
+            pp.write_table(sample_data, parquet_path,
+                           encryption_properties=external_file_encryption_properties,
+                           data_page_version="2.0")
+
     print("\n------------------------------------------------------------")
     print(f"Encrypted parquet file written to {parquet_path}")
     print("------------------------------------------------------------\n")
@@ -280,21 +299,29 @@ def read_encrypted_parquet_file(parquet_path, use_remote_service):
 """
 Perform round trip encryption and decryption of example Parquet files.
 
-We exercise the following combinations of using the external DBPA encryptor services:
-- local and remote instance
-- best case and traditional encryption
+We exercise the following cases for using the external DBPA encryptor services:
+- scenario 1: default values for compression (SNAPPY) and encoding (DICTIONARY)
+- scenario 2: plain encoding (not dictionary) and no compression
+- scenario 3: data page version "2.0" and column encoding "BYTE_STREAM_SPLIT"
+
+See the write_encrypted_parquet_file() function for more details on each scenario and its
+implications.
 """
 def round_trip_parquet_file_encryption():
     for use_remote_service in [True, False]:
         service_path_prefix = 'remote' if use_remote_service else 'local'
-        for use_best_case_encryption in [True, False]:
-            encryption_path_prefix = 'best_case' if use_best_case_encryption else 'default'
-            parquet_path = f"{service_path_prefix}_{encryption_path_prefix}_sample.parquet"
-            write_encrypted_parquet_file(parquet_path, use_remote_service, use_best_case_encryption)
+        for scenario_id in [1, 2, 3]:
+            parquet_path = f"{service_path_prefix}_scenario_{scenario_id}_sample.parquet"
+            write_encrypted_parquet_file(parquet_path, use_remote_service, scenario_id)
             read_encrypted_parquet_file(parquet_path, use_remote_service)
 
 # ################################################################################################
 
+"""
+In order for the script to work, you must ensure that LD_LIBRARY_PATH (or its equivalent) has been
+modified to include the location of the shared library files for the external DBPA encryptor and
+decryptor.
+"""
 if __name__ == "__main__":
     print("\n------------------------------------------------------------")
     print("Using external DBPA encryption in Parquet Arrow")
