@@ -284,7 +284,7 @@ if(PARQUET_REQUIRE_ENCRYPTION)
 
     #TODO: Change to a specific tag/commit when we have one.
     #https://github.com/protegrity/arrow/issues/179
-    GIT_TAG 82b98c1e22b58c320c8161b052959602a843b89b
+    GIT_TAG be87857e4d8c40977c3143c57805c7cc1c8394a8
     GIT_SHALLOW FALSE
   )
  
