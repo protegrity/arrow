@@ -284,7 +284,7 @@ if(PARQUET_REQUIRE_ENCRYPTION)
 
     #TODO: Change to a specific tag/commit when we have one.
     #https://github.com/protegrity/arrow/issues/179
-    GIT_TAG 6fcd229df9dd262b7a0993ff7de92cf1e5daf3f6
+    GIT_TAG be87857e4d8c40977c3143c57805c7cc1c8394a8
     GIT_SHALLOW FALSE
   )
  
@@ -316,7 +316,6 @@ if(PARQUET_REQUIRE_ENCRYPTION)
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         -DBUILD_SHARED_LIBS=ON
         -DBUILD_TESTING=OFF
-        -DCMAKE_POLICY_VERSION_MINIMUM=3.5
         
         # Place DBPS outputs next to Arrow artifacts
         -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
