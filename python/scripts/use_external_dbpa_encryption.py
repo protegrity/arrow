@@ -68,8 +68,8 @@ algorithms and keys.
 
 For this example, the following configuration will apply to each column:
 - productId: encrypted withthe file-level encryption using AES_GCM_V1 and key productid_key
-- orderId: encrypted with the external DBPA encryption using key orderid_key
-- price: encrypted with the AES_GCM_CTR_V1 encryption using key price_key
+- orderId: encrypted with the AES_GCM_CTR_V1 encryption using key orderid_key
+- price: encrypted with the external DBPA encryption using key price_key
 - customer_name: encrypted with the external DBPA encryption using key customer_key
 - vat: not encrypted
 
@@ -100,11 +100,11 @@ def get_external_encryption_config(use_remote_service):
         # - Any misspelling of a column name or algorithm name will result in an exception.
         per_column_encryption={
             "orderId": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "AES_GCM_CTR_V1",
                 "encryption_key": "orderid_key"
             },
             "price": {
-                "encryption_algorithm": "AES_GCM_CTR_V1",
+                "encryption_algorithm": "EXTERNAL_DBPA_V1",
                 "encryption_key": "price_key"
             },
             "customer_name": {
@@ -179,8 +179,8 @@ ensure that LD_LIBRARY_PATH (or its equivalent) has been modified to include the
 shared library files for the external DBPA encryptor and decryptor.
 
 When the external DBPA encryptor is running as a remote service, the application must also provide
-the path to the connection config file, which must be a valid JSON that contains all the information
-needed to connect to the external DBPA service.
+the *absolute* path to the connection config file, which must be a valid JSON that contains all the
+information needed to connect to the external DBPA service.
 
 This includes the server URL and the authentication credentials, which the application must procure
 on its own.
@@ -197,7 +197,8 @@ def get_dbpa_connection_config(use_remote_service):
         agent_library_path = (
             'libdbpsRemoteAgent.so' if platform.system() == 'Linux' else 'libdbpsRemoteAgent.dylib')
         connection_config["EXTERNAL_DBPA_V1"]["agent_library_path"] = agent_library_path
-        remote_file_path = 'test_connection_config_file.json'
+        # Make sure this is the absolute path to the connection config file.
+        remote_file_path = 'change/to/absolute/path/test_connection_config_file.json'
         connection_config["EXTERNAL_DBPA_V1"]["connection_config_file_path"] = remote_file_path
     else:
         agent_library_path = (
@@ -234,7 +235,7 @@ def write_encrypted_parquet_file(parquet_path, use_remote_service, scenario_id):
     match scenario_id:
         case 1:
             # This is the simplest way to write an encrypted Parquet file. It will use the default
-            # values for compression (SNAPPY) and encoding (DICTIONARY).
+            # values for compression (SNAPPY) and encoding (RLE_DICTIONARY).
             pp.write_table(sample_data, parquet_path,
                            encryption_properties=external_file_encryption_properties)
         case 2:
@@ -243,7 +244,7 @@ def write_encrypted_parquet_file(parquet_path, use_remote_service, scenario_id):
             #  perform per-value encryption on the data.
             pp.write_table(sample_data, parquet_path,
                            encryption_properties=external_file_encryption_properties,
-                           use_dictionary=False, compression="NONE", use_byte_stream_split=False)
+                           use_dictionary=False, compression="NONE")
         case 3:
             # Other parameters that can be specified involve the data page version (which impacts
             # how the data bytes are formatted), and specific column encodings. 
@@ -258,7 +259,7 @@ def write_encrypted_parquet_file(parquet_path, use_remote_service, scenario_id):
 def get_sample_data():
     # Creating a simple table for encryption. Use your real data, or load data file as needed.
     return pyarrow.Table.from_pydict({
-        "orderId": [1001, 1002, 1003],
+        "orderId": [1024, 1025, 1026],
         "productId": [152, 268, 6548],
         "price": [3.25, 6.48, 2.12],
         "vat": [0.0, 0.2, 0.05],
