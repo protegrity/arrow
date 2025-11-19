@@ -45,19 +45,34 @@ def write_parquet(table, location, encryption_config=None):
         encryption_properties = crypto_factory.external_file_encryption_properties(
             get_kms_connection_config(), encryption_config)
 
-    #writer = pp.ParquetWriter(location, table.schema, encryption_properties=encryption_properties)
-    #writer.write_table(table)
+    # Uncomment the different possible cases for writing the parquet file. See 
+    # https://github.com/protegrity/arrow/issues/204 for more details.
 
+    # Case 1: Uncompressed data, using plain data encoding.
+    pp.write_table(table, location, use_dictionary=False,
+        encryption_properties=encryption_properties, 
+        compression="NONE")
+
+    # Case 2: Compressed data, using RLE dictionary encoding.
+    """
     pp.write_table(table, location, use_dictionary=True,
         encryption_properties=encryption_properties, 
-        compression="NONE",
-        use_byte_stream_split=False)#,
-        #column_encoding={
-        #    "orderId": "PLAIN",
-        #    "productId": "PLAIN",
-        #    "price": "PLAIN",
-        #    "vat": "PLAIN"
-        #})
+        compression="SNAPPY")
+    """
+
+    # Case 3: Uncompressed data, using RLE dictionary encoding.
+    """
+    pp.write_table(table, location, use_dictionary=True,
+        encryption_properties=encryption_properties, 
+        compression="NONE")
+    """
+
+    # Case 4: Compressed data, using plain data encoding.
+    """
+    pp.write_table(table, location, use_dictionary=False,
+        encryption_properties=encryption_properties, 
+        compression="SNAPPY")
+    """
 
 
 def encrypted_data_and_footer_sample(data_table):
