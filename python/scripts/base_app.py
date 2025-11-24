@@ -49,12 +49,14 @@ def write_parquet(table, location, encryption_config=None):
     # https://github.com/protegrity/arrow/issues/204 for more details.
 
     # Case 1: Uncompressed data, using plain data encoding.
+    print("\n!!! Writing uncompressed data, using plain data encoding. !!!\n")
     pp.write_table(table, location, use_dictionary=False,
         encryption_properties=encryption_properties, 
         compression="NONE")
 
     # Case 2: Compressed data, using RLE dictionary encoding.
     """
+    print("\n!!! Writing compressed data, using RLE dictionary encoding. !!!\n")
     pp.write_table(table, location, use_dictionary=True,
         encryption_properties=encryption_properties, 
         compression="SNAPPY")
@@ -62,16 +64,25 @@ def write_parquet(table, location, encryption_config=None):
 
     # Case 3: Uncompressed data, using RLE dictionary encoding.
     """
+    print("\n!!! Writing uncompressed data, using RLE dictionary encoding. !!!\n")
     pp.write_table(table, location, use_dictionary=True,
         encryption_properties=encryption_properties, 
         compression="NONE")
     """
 
-    # Case 4: Compressed data, using plain data encoding.
+    # Case 4a: Compressed data, using plain data encoding and data page version 1.0.
     """
+    print("\n!!! Writing compressed data, using plain data encoding and page version 1.0. !!!\n")
     pp.write_table(table, location, use_dictionary=False,
         encryption_properties=encryption_properties, 
         compression="SNAPPY")
+    """
+
+    # Case 4b: Compressed data, using plain data encoding and data page version 2.0.
+    """
+    print("\n!!! Writing compressed data, using plain data encoding and page version 2.0. !!!\n")
+    pp.write_table(table, location, data_page_version="2.0", use_dictionary=False,
+                   encryption_properties=encryption_properties, compression="SNAPPY")
     """
 
 
