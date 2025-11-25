@@ -27,7 +27,6 @@
 
 namespace parquet::encryption::external {
 
-
 /**
   * Utility function to execute a wrapped operation with timeout using 
   * pure C++ futures
@@ -57,24 +56,12 @@ auto ExecuteWithTimeout(const std::string& operation_name,
   ARROW_LOG(DEBUG) << "[DBPAExecutor] Creating async future for " << operation_name;
   auto future = std::async(std::launch::async, [&]() -> ReturnType {
     ARROW_LOG(DEBUG) << "[DBPAExecutor] Async task started for " << operation_name;
-    try {
-      if constexpr (std::is_void_v<ReturnType>) {
-        func(args...);
-        ARROW_LOG(DEBUG) << "[DBPAExecutor] Async task completed successfully for " << operation_name;
-      } else {
-        auto result = func(args...);
-        ARROW_LOG(DEBUG) << "[DBPAExecutor] Async task completed successfully for " << operation_name;
-        return result;
-      }
-    } 
-    catch (const std::exception& e) {
-      ARROW_LOG(ERROR) << "[DBPAExecutor] Async task threw exception for " << operation_name 
-                       << ": " << e.what();
-      throw; // Re-throw original exception
-    }  // TODO: are there exceptions which are not a sub-class of std::exception?
-    catch (...) {
-      ARROW_LOG(ERROR) << "[DBPAExecutor] Async task threw unknown exception for " << operation_name;
-      throw; // Re-throw original exception
+
+    // Execute without inner exception logging to avoid duplicate logs.
+    if constexpr (std::is_void_v<ReturnType>) {
+      func(args...);
+    } else {
+      return func(args...);
     }
   });
   
@@ -87,6 +74,7 @@ auto ExecuteWithTimeout(const std::string& operation_name,
   auto end_time = std::chrono::steady_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
   
+  // if we timed out, throw a DBPAExecutorTimeoutException
   if (status == std::future_status::timeout) {
     ARROW_LOG(ERROR) << "[DBPAExecutor] TIMEOUT: " << operation_name << " exceeded " 
                      << timeout_milliseconds << " milliseconds (actual: " << duration.count() << "ms)";
@@ -98,20 +86,22 @@ auto ExecuteWithTimeout(const std::string& operation_name,
   
   try {
     // If any exceptions are thrown in the body of the function,
-    // they will be re-thrown by future.get() (unchanged, no wrapping)
-    // TODO: when/if logging is simplified, this block should also be simplified.
+    // they will be re-thrown by future.get()  (original exception is thrown unchanged, no wrapping))
     if constexpr (std::is_void_v<ReturnType>) {
       future.get();
       ARROW_LOG(DEBUG) << "[DBPAExecutor] SUCCESS: " << operation_name << " completed successfully";
+      return;
     } else {
       auto result = future.get();
       ARROW_LOG(DEBUG) << "[DBPAExecutor] SUCCESS: " << operation_name << " completed successfully";
       return result;
     }
-  } catch (const std::exception& e) {
+  } 
+  catch (const std::exception& e) {
     ARROW_LOG(ERROR) << "[DBPAExecutor] EXCEPTION: " << operation_name << " failed with: " << e.what();
     throw; // Re-throw original exception
-  } catch (...) {
+  } 
+  catch (...) {
     ARROW_LOG(ERROR) << "[DBPAExecutor] UNKNOWN EXCEPTION: " << operation_name << " failed with unknown exception";
     throw; // Re-throw original exception
   }
