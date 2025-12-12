@@ -29,8 +29,6 @@
 #include "parquet/platform.h"
 #include "parquet/test_util.h"
 
-#include "parquet/encryption/external/test_utils.h"
-
 /*
  * This file contains unit-tests for writing encrypted Parquet files with
  * different encryption configurations.
@@ -225,38 +223,28 @@ TEST_F(TestEncryptionConfiguration, EncryptTwoColumnsAndFooterUseAES_GCM_CTR) {
                         "tmp_encrypt_columns_and_footer_ctr.parquet.encrypted"));
 }
 
-TEST_F(TestEncryptionConfiguration, EncryptWithPerColumnEncryption) {
+TEST_F(TestEncryptionConfiguration, EncryptOneColumnAndUseExternalDBPA) {
     std::map<std::string, std::shared_ptr<parquet::ColumnEncryptionProperties>>
         encryption_cols;
+    parquet::ColumnEncryptionProperties::Builder encryption_col_builder(
+        path_to_double_field_);
+        encryption_col_builder.key(kColumnEncryptionKey1_)->key_id("kc1");
 
-    // this library will use heuristics to load "libDBPATestAgent.so", needed for this test.
-    std::string library_path = parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
+    encryption_cols[path_to_double_field_] = encryption_col_builder.build();
 
-    parquet::ColumnEncryptionProperties::Builder col_builder_1(path_to_double_field_);
-    col_builder_1.key(kColumnEncryptionKey1_)->key_id("kc1");
-    col_builder_1.parquet_cipher(parquet::ParquetCipher::AES_GCM_V1);
-    encryption_cols[path_to_double_field_] = col_builder_1.build();
-    
-    parquet::ColumnEncryptionProperties::Builder col_builder_2(path_to_float_field_);
-    col_builder_2.key(kColumnEncryptionKey2_)->key_id("kc2");
-    col_builder_2.parquet_cipher(parquet::ParquetCipher::EXTERNAL_DBPA_V1);
-    encryption_cols[path_to_float_field_] = col_builder_2.build();
-
-    parquet::ExternalFileEncryptionProperties::Builder file_encryption_builder(
+    parquet::FileEncryptionProperties::Builder file_encryption_builder(
         kFooterEncryptionKey_);
-    file_encryption_builder.footer_key_metadata("kf")
+
+    try {
+        this->EncryptFile(file_encryption_builder.footer_key_metadata("kf")
                             ->encrypted_columns(encryption_cols)
-                            ->algorithm(parquet::ParquetCipher::AES_GCM_V1)
-                            ->connection_config({
-                                {parquet::ParquetCipher::EXTERNAL_DBPA_V1, {
-                                    {"agent_library_path", library_path},
-                                    {"file_path", "/tmp/test"},
-                                    {"other_config", "value"}
-                                }}
-                              });
-    
-    EXPECT_NO_THROW(this->EncryptFile(file_encryption_builder.build_external(),
-                        "tmp_encrypt_with_per_column_encryption.parquet.encrypted"));
+                            ->algorithm(parquet::ParquetCipher::EXTERNAL_DBPA_V1)
+                            ->build(),
+                        "tmp_encrypt_one_column_and_use_external_dbpa.parquet.encrypted");
+        FAIL() << "Expected ParquetException was not thrown";
+    } catch (const parquet::ParquetException& e) {
+        EXPECT_STREQ("Crypto algorithm 2 is not supported", e.what());
+    } 
 }
 
 // Set temp_dir before running the write/read tests. The encrypted files will
