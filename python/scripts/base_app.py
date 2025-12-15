@@ -254,11 +254,11 @@ def get_external_encryption_config(plaintext_footer=True):
             "customer_name": {
                 "encryption_algorithm": "EXTERNAL_DBPA_V1",
                 "encryption_key": "customer_key"
-            }#, intentionally left out to test per-column encryption for the 'has_subscription' column.
-            # "has_subscription": {
-            #    "encryption_algorithm": "EXTERNAL_DBPA_V1",
-            #    "encryption_key": "has_subscription_key"
-            # }
+            }, 
+            "has_subscription": {
+               "encryption_algorithm": "EXTERNAL_DBPA_V1",
+               "encryption_key": "has_subscription_key"
+            }
         },
         app_context = {
             "user_id": "Picard1701",
