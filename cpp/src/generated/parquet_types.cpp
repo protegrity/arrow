@@ -4222,6 +4222,320 @@ void ColumnMetaData::printTo(std::ostream& out) const {
 }
 
 
+AesGcmV1::~AesGcmV1() noexcept {
+}
+
+AesGcmV1::AesGcmV1() noexcept
+   : aad_prefix(),
+     aad_file_unique(),
+     supply_aad_prefix(0) {
+}
+
+void AesGcmV1::__set_aad_prefix(const std::string& val) {
+  this->aad_prefix = val;
+__isset.aad_prefix = true;
+}
+
+void AesGcmV1::__set_aad_file_unique(const std::string& val) {
+  this->aad_file_unique = val;
+__isset.aad_file_unique = true;
+}
+
+void AesGcmV1::__set_supply_aad_prefix(const bool val) {
+  this->supply_aad_prefix = val;
+__isset.supply_aad_prefix = true;
+}
+std::ostream& operator<<(std::ostream& out, const AesGcmV1& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+
+void swap(AesGcmV1 &a, AesGcmV1 &b) noexcept {
+  using ::std::swap;
+  swap(a.aad_prefix, b.aad_prefix);
+  swap(a.aad_file_unique, b.aad_file_unique);
+  swap(a.supply_aad_prefix, b.supply_aad_prefix);
+  swap(a.__isset, b.__isset);
+}
+
+bool AesGcmV1::operator==(const AesGcmV1 & rhs) const
+{
+  if (__isset.aad_prefix != rhs.__isset.aad_prefix)
+    return false;
+  else if (__isset.aad_prefix && !(aad_prefix == rhs.aad_prefix))
+    return false;
+  if (__isset.aad_file_unique != rhs.__isset.aad_file_unique)
+    return false;
+  else if (__isset.aad_file_unique && !(aad_file_unique == rhs.aad_file_unique))
+    return false;
+  if (__isset.supply_aad_prefix != rhs.__isset.supply_aad_prefix)
+    return false;
+  else if (__isset.supply_aad_prefix && !(supply_aad_prefix == rhs.supply_aad_prefix))
+    return false;
+  return true;
+}
+
+AesGcmV1::AesGcmV1(const AesGcmV1& other229) {
+  aad_prefix = other229.aad_prefix;
+  aad_file_unique = other229.aad_file_unique;
+  supply_aad_prefix = other229.supply_aad_prefix;
+  __isset = other229.__isset;
+}
+AesGcmV1::AesGcmV1(AesGcmV1&& other230) noexcept {
+  aad_prefix = std::move(other230.aad_prefix);
+  aad_file_unique = std::move(other230.aad_file_unique);
+  supply_aad_prefix = other230.supply_aad_prefix;
+  __isset = other230.__isset;
+}
+AesGcmV1& AesGcmV1::operator=(const AesGcmV1& other231) {
+  aad_prefix = other231.aad_prefix;
+  aad_file_unique = other231.aad_file_unique;
+  supply_aad_prefix = other231.supply_aad_prefix;
+  __isset = other231.__isset;
+  return *this;
+}
+AesGcmV1& AesGcmV1::operator=(AesGcmV1&& other232) noexcept {
+  aad_prefix = std::move(other232.aad_prefix);
+  aad_file_unique = std::move(other232.aad_file_unique);
+  supply_aad_prefix = other232.supply_aad_prefix;
+  __isset = other232.__isset;
+  return *this;
+}
+void AesGcmV1::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "AesGcmV1(";
+  out << "aad_prefix="; (__isset.aad_prefix ? (out << to_string(aad_prefix)) : (out << "<null>"));
+  out << ", " << "aad_file_unique="; (__isset.aad_file_unique ? (out << to_string(aad_file_unique)) : (out << "<null>"));
+  out << ", " << "supply_aad_prefix="; (__isset.supply_aad_prefix ? (out << to_string(supply_aad_prefix)) : (out << "<null>"));
+  out << ")";
+}
+
+
+AesGcmCtrV1::~AesGcmCtrV1() noexcept {
+}
+
+AesGcmCtrV1::AesGcmCtrV1() noexcept
+   : aad_prefix(),
+     aad_file_unique(),
+     supply_aad_prefix(0) {
+}
+
+void AesGcmCtrV1::__set_aad_prefix(const std::string& val) {
+  this->aad_prefix = val;
+__isset.aad_prefix = true;
+}
+
+void AesGcmCtrV1::__set_aad_file_unique(const std::string& val) {
+  this->aad_file_unique = val;
+__isset.aad_file_unique = true;
+}
+
+void AesGcmCtrV1::__set_supply_aad_prefix(const bool val) {
+  this->supply_aad_prefix = val;
+__isset.supply_aad_prefix = true;
+}
+std::ostream& operator<<(std::ostream& out, const AesGcmCtrV1& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+
+void swap(AesGcmCtrV1 &a, AesGcmCtrV1 &b) noexcept {
+  using ::std::swap;
+  swap(a.aad_prefix, b.aad_prefix);
+  swap(a.aad_file_unique, b.aad_file_unique);
+  swap(a.supply_aad_prefix, b.supply_aad_prefix);
+  swap(a.__isset, b.__isset);
+}
+
+bool AesGcmCtrV1::operator==(const AesGcmCtrV1 & rhs) const
+{
+  if (__isset.aad_prefix != rhs.__isset.aad_prefix)
+    return false;
+  else if (__isset.aad_prefix && !(aad_prefix == rhs.aad_prefix))
+    return false;
+  if (__isset.aad_file_unique != rhs.__isset.aad_file_unique)
+    return false;
+  else if (__isset.aad_file_unique && !(aad_file_unique == rhs.aad_file_unique))
+    return false;
+  if (__isset.supply_aad_prefix != rhs.__isset.supply_aad_prefix)
+    return false;
+  else if (__isset.supply_aad_prefix && !(supply_aad_prefix == rhs.supply_aad_prefix))
+    return false;
+  return true;
+}
+
+AesGcmCtrV1::AesGcmCtrV1(const AesGcmCtrV1& other233) {
+  aad_prefix = other233.aad_prefix;
+  aad_file_unique = other233.aad_file_unique;
+  supply_aad_prefix = other233.supply_aad_prefix;
+  __isset = other233.__isset;
+}
+AesGcmCtrV1::AesGcmCtrV1(AesGcmCtrV1&& other234) noexcept {
+  aad_prefix = std::move(other234.aad_prefix);
+  aad_file_unique = std::move(other234.aad_file_unique);
+  supply_aad_prefix = other234.supply_aad_prefix;
+  __isset = other234.__isset;
+}
+AesGcmCtrV1& AesGcmCtrV1::operator=(const AesGcmCtrV1& other235) {
+  aad_prefix = other235.aad_prefix;
+  aad_file_unique = other235.aad_file_unique;
+  supply_aad_prefix = other235.supply_aad_prefix;
+  __isset = other235.__isset;
+  return *this;
+}
+AesGcmCtrV1& AesGcmCtrV1::operator=(AesGcmCtrV1&& other236) noexcept {
+  aad_prefix = std::move(other236.aad_prefix);
+  aad_file_unique = std::move(other236.aad_file_unique);
+  supply_aad_prefix = other236.supply_aad_prefix;
+  __isset = other236.__isset;
+  return *this;
+}
+void AesGcmCtrV1::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "AesGcmCtrV1(";
+  out << "aad_prefix="; (__isset.aad_prefix ? (out << to_string(aad_prefix)) : (out << "<null>"));
+  out << ", " << "aad_file_unique="; (__isset.aad_file_unique ? (out << to_string(aad_file_unique)) : (out << "<null>"));
+  out << ", " << "supply_aad_prefix="; (__isset.supply_aad_prefix ? (out << to_string(supply_aad_prefix)) : (out << "<null>"));
+  out << ")";
+}
+
+
+ExternalDBPAV1::~ExternalDBPAV1() noexcept {
+}
+
+ExternalDBPAV1::ExternalDBPAV1() noexcept {
+}
+std::ostream& operator<<(std::ostream& out, const ExternalDBPAV1& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+
+void swap(ExternalDBPAV1 &a, ExternalDBPAV1 &b) noexcept {
+  using ::std::swap;
+  (void) a;
+  (void) b;
+}
+
+bool ExternalDBPAV1::operator==(const ExternalDBPAV1 & /* rhs */) const
+{
+  return true;
+}
+
+ExternalDBPAV1::ExternalDBPAV1(const ExternalDBPAV1& other237) noexcept {
+  (void) other237;
+}
+ExternalDBPAV1::ExternalDBPAV1(ExternalDBPAV1&& other238) noexcept {
+  (void) other238;
+}
+ExternalDBPAV1& ExternalDBPAV1::operator=(const ExternalDBPAV1& other239) noexcept {
+  (void) other239;
+  return *this;
+}
+ExternalDBPAV1& ExternalDBPAV1::operator=(ExternalDBPAV1&& other240) noexcept {
+  (void) other240;
+  return *this;
+}
+void ExternalDBPAV1::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "ExternalDBPAV1(";
+  out << ")";
+}
+
+
+EncryptionAlgorithm::~EncryptionAlgorithm() noexcept {
+}
+
+EncryptionAlgorithm::EncryptionAlgorithm() noexcept {
+}
+
+void EncryptionAlgorithm::__set_AES_GCM_V1(const AesGcmV1& val) {
+  this->AES_GCM_V1 = val;
+__isset.AES_GCM_V1 = true;
+}
+
+void EncryptionAlgorithm::__set_AES_GCM_CTR_V1(const AesGcmCtrV1& val) {
+  this->AES_GCM_CTR_V1 = val;
+__isset.AES_GCM_CTR_V1 = true;
+}
+
+void EncryptionAlgorithm::__set_EXTERNAL_DBPA_V1(const ExternalDBPAV1& val) {
+  this->EXTERNAL_DBPA_V1 = val;
+__isset.EXTERNAL_DBPA_V1 = true;
+}
+std::ostream& operator<<(std::ostream& out, const EncryptionAlgorithm& obj)
+{
+  obj.printTo(out);
+  return out;
+}
+
+
+void swap(EncryptionAlgorithm &a, EncryptionAlgorithm &b) noexcept {
+  using ::std::swap;
+  swap(a.AES_GCM_V1, b.AES_GCM_V1);
+  swap(a.AES_GCM_CTR_V1, b.AES_GCM_CTR_V1);
+  swap(a.EXTERNAL_DBPA_V1, b.EXTERNAL_DBPA_V1);
+  swap(a.__isset, b.__isset);
+}
+
+bool EncryptionAlgorithm::operator==(const EncryptionAlgorithm & rhs) const
+{
+  if (__isset.AES_GCM_V1 != rhs.__isset.AES_GCM_V1)
+    return false;
+  else if (__isset.AES_GCM_V1 && !(AES_GCM_V1 == rhs.AES_GCM_V1))
+    return false;
+  if (__isset.AES_GCM_CTR_V1 != rhs.__isset.AES_GCM_CTR_V1)
+    return false;
+  else if (__isset.AES_GCM_CTR_V1 && !(AES_GCM_CTR_V1 == rhs.AES_GCM_CTR_V1))
+    return false;
+  if (__isset.EXTERNAL_DBPA_V1 != rhs.__isset.EXTERNAL_DBPA_V1)
+    return false;
+  else if (__isset.EXTERNAL_DBPA_V1 && !(EXTERNAL_DBPA_V1 == rhs.EXTERNAL_DBPA_V1))
+    return false;
+  return true;
+}
+
+EncryptionAlgorithm::EncryptionAlgorithm(const EncryptionAlgorithm& other241) {
+  AES_GCM_V1 = other241.AES_GCM_V1;
+  AES_GCM_CTR_V1 = other241.AES_GCM_CTR_V1;
+  EXTERNAL_DBPA_V1 = other241.EXTERNAL_DBPA_V1;
+  __isset = other241.__isset;
+}
+EncryptionAlgorithm::EncryptionAlgorithm(EncryptionAlgorithm&& other242) noexcept {
+  AES_GCM_V1 = std::move(other242.AES_GCM_V1);
+  AES_GCM_CTR_V1 = std::move(other242.AES_GCM_CTR_V1);
+  EXTERNAL_DBPA_V1 = std::move(other242.EXTERNAL_DBPA_V1);
+  __isset = other242.__isset;
+}
+EncryptionAlgorithm& EncryptionAlgorithm::operator=(const EncryptionAlgorithm& other243) {
+  AES_GCM_V1 = other243.AES_GCM_V1;
+  AES_GCM_CTR_V1 = other243.AES_GCM_CTR_V1;
+  EXTERNAL_DBPA_V1 = other243.EXTERNAL_DBPA_V1;
+  __isset = other243.__isset;
+  return *this;
+}
+EncryptionAlgorithm& EncryptionAlgorithm::operator=(EncryptionAlgorithm&& other244) noexcept {
+  AES_GCM_V1 = std::move(other244.AES_GCM_V1);
+  AES_GCM_CTR_V1 = std::move(other244.AES_GCM_CTR_V1);
+  EXTERNAL_DBPA_V1 = std::move(other244.EXTERNAL_DBPA_V1);
+  __isset = other244.__isset;
+  return *this;
+}
+void EncryptionAlgorithm::printTo(std::ostream& out) const {
+  using ::apache::thrift::to_string;
+  out << "EncryptionAlgorithm(";
+  out << "AES_GCM_V1="; (__isset.AES_GCM_V1 ? (out << to_string(AES_GCM_V1)) : (out << "<null>"));
+  out << ", " << "AES_GCM_CTR_V1="; (__isset.AES_GCM_CTR_V1 ? (out << to_string(AES_GCM_CTR_V1)) : (out << "<null>"));
+  out << ", " << "EXTERNAL_DBPA_V1="; (__isset.EXTERNAL_DBPA_V1 ? (out << to_string(EXTERNAL_DBPA_V1)) : (out << "<null>"));
+  out << ")";
+}
+
+
 EncryptionWithFooterKey::~EncryptionWithFooterKey() noexcept {
 }
 
@@ -4245,18 +4559,18 @@ bool EncryptionWithFooterKey::operator==(const EncryptionWithFooterKey & /* rhs 
   return true;
 }
 
-EncryptionWithFooterKey::EncryptionWithFooterKey(const EncryptionWithFooterKey& other229) noexcept {
-  (void) other229;
+EncryptionWithFooterKey::EncryptionWithFooterKey(const EncryptionWithFooterKey& other245) noexcept {
+  (void) other245;
 }
-EncryptionWithFooterKey::EncryptionWithFooterKey(EncryptionWithFooterKey&& other230) noexcept {
-  (void) other230;
+EncryptionWithFooterKey::EncryptionWithFooterKey(EncryptionWithFooterKey&& other246) noexcept {
+  (void) other246;
 }
-EncryptionWithFooterKey& EncryptionWithFooterKey::operator=(const EncryptionWithFooterKey& other231) noexcept {
-  (void) other231;
+EncryptionWithFooterKey& EncryptionWithFooterKey::operator=(const EncryptionWithFooterKey& other247) noexcept {
+  (void) other247;
   return *this;
 }
-EncryptionWithFooterKey& EncryptionWithFooterKey::operator=(EncryptionWithFooterKey&& other232) noexcept {
-  (void) other232;
+EncryptionWithFooterKey& EncryptionWithFooterKey::operator=(EncryptionWithFooterKey&& other248) noexcept {
+  (void) other248;
   return *this;
 }
 void EncryptionWithFooterKey::printTo(std::ostream& out) const {
@@ -4281,6 +4595,11 @@ void EncryptionWithColumnKey::__set_key_metadata(const std::string& val) {
   this->key_metadata = val;
 __isset.key_metadata = true;
 }
+
+void EncryptionWithColumnKey::__set_encryption_algorithm(const EncryptionAlgorithm& val) {
+  this->encryption_algorithm = val;
+__isset.encryption_algorithm = true;
+}
 std::ostream& operator<<(std::ostream& out, const EncryptionWithColumnKey& obj)
 {
   obj.printTo(out);
@@ -4292,6 +4611,7 @@ void swap(EncryptionWithColumnKey &a, EncryptionWithColumnKey &b) noexcept {
   using ::std::swap;
   swap(a.path_in_schema, b.path_in_schema);
   swap(a.key_metadata, b.key_metadata);
+  swap(a.encryption_algorithm, b.encryption_algorithm);
   swap(a.__isset, b.__isset);
 }
 
@@ -4303,29 +4623,37 @@ bool EncryptionWithColumnKey::operator==(const EncryptionWithColumnKey & rhs) co
     return false;
   else if (__isset.key_metadata && !(key_metadata == rhs.key_metadata))
     return false;
+  if (__isset.encryption_algorithm != rhs.__isset.encryption_algorithm)
+    return false;
+  else if (__isset.encryption_algorithm && !(encryption_algorithm == rhs.encryption_algorithm))
+    return false;
   return true;
 }
 
-EncryptionWithColumnKey::EncryptionWithColumnKey(const EncryptionWithColumnKey& other239) {
-  path_in_schema = other239.path_in_schema;
-  key_metadata = other239.key_metadata;
-  __isset = other239.__isset;
+EncryptionWithColumnKey::EncryptionWithColumnKey(const EncryptionWithColumnKey& other255) {
+  path_in_schema = other255.path_in_schema;
+  key_metadata = other255.key_metadata;
+  encryption_algorithm = other255.encryption_algorithm;
+  __isset = other255.__isset;
 }
-EncryptionWithColumnKey::EncryptionWithColumnKey(EncryptionWithColumnKey&& other240) noexcept {
-  path_in_schema = std::move(other240.path_in_schema);
-  key_metadata = std::move(other240.key_metadata);
-  __isset = other240.__isset;
+EncryptionWithColumnKey::EncryptionWithColumnKey(EncryptionWithColumnKey&& other256) noexcept {
+  path_in_schema = std::move(other256.path_in_schema);
+  key_metadata = std::move(other256.key_metadata);
+  encryption_algorithm = std::move(other256.encryption_algorithm);
+  __isset = other256.__isset;
 }
-EncryptionWithColumnKey& EncryptionWithColumnKey::operator=(const EncryptionWithColumnKey& other241) {
-  path_in_schema = other241.path_in_schema;
-  key_metadata = other241.key_metadata;
-  __isset = other241.__isset;
+EncryptionWithColumnKey& EncryptionWithColumnKey::operator=(const EncryptionWithColumnKey& other257) {
+  path_in_schema = other257.path_in_schema;
+  key_metadata = other257.key_metadata;
+  encryption_algorithm = other257.encryption_algorithm;
+  __isset = other257.__isset;
   return *this;
 }
-EncryptionWithColumnKey& EncryptionWithColumnKey::operator=(EncryptionWithColumnKey&& other242) noexcept {
-  path_in_schema = std::move(other242.path_in_schema);
-  key_metadata = std::move(other242.key_metadata);
-  __isset = other242.__isset;
+EncryptionWithColumnKey& EncryptionWithColumnKey::operator=(EncryptionWithColumnKey&& other258) noexcept {
+  path_in_schema = std::move(other258.path_in_schema);
+  key_metadata = std::move(other258.key_metadata);
+  encryption_algorithm = std::move(other258.encryption_algorithm);
+  __isset = other258.__isset;
   return *this;
 }
 void EncryptionWithColumnKey::printTo(std::ostream& out) const {
@@ -4333,6 +4661,7 @@ void EncryptionWithColumnKey::printTo(std::ostream& out) const {
   out << "EncryptionWithColumnKey(";
   out << "path_in_schema=" << to_string(path_in_schema);
   out << ", " << "key_metadata="; (__isset.key_metadata ? (out << to_string(key_metadata)) : (out << "<null>"));
+  out << ", " << "encryption_algorithm="; (__isset.encryption_algorithm ? (out << to_string(encryption_algorithm)) : (out << "<null>"));
   out << ")";
 }
 
@@ -4379,26 +4708,26 @@ bool ColumnCryptoMetaData::operator==(const ColumnCryptoMetaData & rhs) const
   return true;
 }
 
-ColumnCryptoMetaData::ColumnCryptoMetaData(const ColumnCryptoMetaData& other243) {
-  ENCRYPTION_WITH_FOOTER_KEY = other243.ENCRYPTION_WITH_FOOTER_KEY;
-  ENCRYPTION_WITH_COLUMN_KEY = other243.ENCRYPTION_WITH_COLUMN_KEY;
-  __isset = other243.__isset;
+ColumnCryptoMetaData::ColumnCryptoMetaData(const ColumnCryptoMetaData& other259) {
+  ENCRYPTION_WITH_FOOTER_KEY = other259.ENCRYPTION_WITH_FOOTER_KEY;
+  ENCRYPTION_WITH_COLUMN_KEY = other259.ENCRYPTION_WITH_COLUMN_KEY;
+  __isset = other259.__isset;
 }
-ColumnCryptoMetaData::ColumnCryptoMetaData(ColumnCryptoMetaData&& other244) noexcept {
-  ENCRYPTION_WITH_FOOTER_KEY = std::move(other244.ENCRYPTION_WITH_FOOTER_KEY);
-  ENCRYPTION_WITH_COLUMN_KEY = std::move(other244.ENCRYPTION_WITH_COLUMN_KEY);
-  __isset = other244.__isset;
+ColumnCryptoMetaData::ColumnCryptoMetaData(ColumnCryptoMetaData&& other260) noexcept {
+  ENCRYPTION_WITH_FOOTER_KEY = std::move(other260.ENCRYPTION_WITH_FOOTER_KEY);
+  ENCRYPTION_WITH_COLUMN_KEY = std::move(other260.ENCRYPTION_WITH_COLUMN_KEY);
+  __isset = other260.__isset;
 }
-ColumnCryptoMetaData& ColumnCryptoMetaData::operator=(const ColumnCryptoMetaData& other245) {
-  ENCRYPTION_WITH_FOOTER_KEY = other245.ENCRYPTION_WITH_FOOTER_KEY;
-  ENCRYPTION_WITH_COLUMN_KEY = other245.ENCRYPTION_WITH_COLUMN_KEY;
-  __isset = other245.__isset;
+ColumnCryptoMetaData& ColumnCryptoMetaData::operator=(const ColumnCryptoMetaData& other261) {
+  ENCRYPTION_WITH_FOOTER_KEY = other261.ENCRYPTION_WITH_FOOTER_KEY;
+  ENCRYPTION_WITH_COLUMN_KEY = other261.ENCRYPTION_WITH_COLUMN_KEY;
+  __isset = other261.__isset;
   return *this;
 }
-ColumnCryptoMetaData& ColumnCryptoMetaData::operator=(ColumnCryptoMetaData&& other246) noexcept {
-  ENCRYPTION_WITH_FOOTER_KEY = std::move(other246.ENCRYPTION_WITH_FOOTER_KEY);
-  ENCRYPTION_WITH_COLUMN_KEY = std::move(other246.ENCRYPTION_WITH_COLUMN_KEY);
-  __isset = other246.__isset;
+ColumnCryptoMetaData& ColumnCryptoMetaData::operator=(ColumnCryptoMetaData&& other262) noexcept {
+  ENCRYPTION_WITH_FOOTER_KEY = std::move(other262.ENCRYPTION_WITH_FOOTER_KEY);
+  ENCRYPTION_WITH_COLUMN_KEY = std::move(other262.ENCRYPTION_WITH_COLUMN_KEY);
+  __isset = other262.__isset;
   return *this;
 }
 void ColumnCryptoMetaData::printTo(std::ostream& out) const {
@@ -4526,54 +4855,54 @@ bool ColumnChunk::operator==(const ColumnChunk & rhs) const
   return true;
 }
 
-ColumnChunk::ColumnChunk(const ColumnChunk& other247) {
-  file_path = other247.file_path;
-  file_offset = other247.file_offset;
-  meta_data = other247.meta_data;
-  offset_index_offset = other247.offset_index_offset;
-  offset_index_length = other247.offset_index_length;
-  column_index_offset = other247.column_index_offset;
-  column_index_length = other247.column_index_length;
-  crypto_metadata = other247.crypto_metadata;
-  encrypted_column_metadata = other247.encrypted_column_metadata;
-  __isset = other247.__isset;
+ColumnChunk::ColumnChunk(const ColumnChunk& other263) {
+  file_path = other263.file_path;
+  file_offset = other263.file_offset;
+  meta_data = other263.meta_data;
+  offset_index_offset = other263.offset_index_offset;
+  offset_index_length = other263.offset_index_length;
+  column_index_offset = other263.column_index_offset;
+  column_index_length = other263.column_index_length;
+  crypto_metadata = other263.crypto_metadata;
+  encrypted_column_metadata = other263.encrypted_column_metadata;
+  __isset = other263.__isset;
 }
-ColumnChunk::ColumnChunk(ColumnChunk&& other248) noexcept {
-  file_path = std::move(other248.file_path);
-  file_offset = other248.file_offset;
-  meta_data = std::move(other248.meta_data);
-  offset_index_offset = other248.offset_index_offset;
-  offset_index_length = other248.offset_index_length;
-  column_index_offset = other248.column_index_offset;
-  column_index_length = other248.column_index_length;
-  crypto_metadata = std::move(other248.crypto_metadata);
-  encrypted_column_metadata = std::move(other248.encrypted_column_metadata);
-  __isset = other248.__isset;
+ColumnChunk::ColumnChunk(ColumnChunk&& other264) noexcept {
+  file_path = std::move(other264.file_path);
+  file_offset = other264.file_offset;
+  meta_data = std::move(other264.meta_data);
+  offset_index_offset = other264.offset_index_offset;
+  offset_index_length = other264.offset_index_length;
+  column_index_offset = other264.column_index_offset;
+  column_index_length = other264.column_index_length;
+  crypto_metadata = std::move(other264.crypto_metadata);
+  encrypted_column_metadata = std::move(other264.encrypted_column_metadata);
+  __isset = other264.__isset;
 }
-ColumnChunk& ColumnChunk::operator=(const ColumnChunk& other249) {
-  file_path = other249.file_path;
-  file_offset = other249.file_offset;
-  meta_data = other249.meta_data;
-  offset_index_offset = other249.offset_index_offset;
-  offset_index_length = other249.offset_index_length;
-  column_index_offset = other249.column_index_offset;
-  column_index_length = other249.column_index_length;
-  crypto_metadata = other249.crypto_metadata;
-  encrypted_column_metadata = other249.encrypted_column_metadata;
-  __isset = other249.__isset;
+ColumnChunk& ColumnChunk::operator=(const ColumnChunk& other265) {
+  file_path = other265.file_path;
+  file_offset = other265.file_offset;
+  meta_data = other265.meta_data;
+  offset_index_offset = other265.offset_index_offset;
+  offset_index_length = other265.offset_index_length;
+  column_index_offset = other265.column_index_offset;
+  column_index_length = other265.column_index_length;
+  crypto_metadata = other265.crypto_metadata;
+  encrypted_column_metadata = other265.encrypted_column_metadata;
+  __isset = other265.__isset;
   return *this;
 }
-ColumnChunk& ColumnChunk::operator=(ColumnChunk&& other250) noexcept {
-  file_path = std::move(other250.file_path);
-  file_offset = other250.file_offset;
-  meta_data = std::move(other250.meta_data);
-  offset_index_offset = other250.offset_index_offset;
-  offset_index_length = other250.offset_index_length;
-  column_index_offset = other250.column_index_offset;
-  column_index_length = other250.column_index_length;
-  crypto_metadata = std::move(other250.crypto_metadata);
-  encrypted_column_metadata = std::move(other250.encrypted_column_metadata);
-  __isset = other250.__isset;
+ColumnChunk& ColumnChunk::operator=(ColumnChunk&& other266) noexcept {
+  file_path = std::move(other266.file_path);
+  file_offset = other266.file_offset;
+  meta_data = std::move(other266.meta_data);
+  offset_index_offset = other266.offset_index_offset;
+  offset_index_length = other266.offset_index_length;
+  column_index_offset = other266.column_index_offset;
+  column_index_length = other266.column_index_length;
+  crypto_metadata = std::move(other266.crypto_metadata);
+  encrypted_column_metadata = std::move(other266.encrypted_column_metadata);
+  __isset = other266.__isset;
   return *this;
 }
 void ColumnChunk::printTo(std::ostream& out) const {
@@ -4680,46 +5009,46 @@ bool RowGroup::operator==(const RowGroup & rhs) const
   return true;
 }
 
-RowGroup::RowGroup(const RowGroup& other263) {
-  columns = other263.columns;
-  total_byte_size = other263.total_byte_size;
-  num_rows = other263.num_rows;
-  sorting_columns = other263.sorting_columns;
-  file_offset = other263.file_offset;
-  total_compressed_size = other263.total_compressed_size;
-  ordinal = other263.ordinal;
-  __isset = other263.__isset;
+RowGroup::RowGroup(const RowGroup& other279) {
+  columns = other279.columns;
+  total_byte_size = other279.total_byte_size;
+  num_rows = other279.num_rows;
+  sorting_columns = other279.sorting_columns;
+  file_offset = other279.file_offset;
+  total_compressed_size = other279.total_compressed_size;
+  ordinal = other279.ordinal;
+  __isset = other279.__isset;
 }
-RowGroup::RowGroup(RowGroup&& other264) noexcept {
-  columns = std::move(other264.columns);
-  total_byte_size = other264.total_byte_size;
-  num_rows = other264.num_rows;
-  sorting_columns = std::move(other264.sorting_columns);
-  file_offset = other264.file_offset;
-  total_compressed_size = other264.total_compressed_size;
-  ordinal = other264.ordinal;
-  __isset = other264.__isset;
+RowGroup::RowGroup(RowGroup&& other280) noexcept {
+  columns = std::move(other280.columns);
+  total_byte_size = other280.total_byte_size;
+  num_rows = other280.num_rows;
+  sorting_columns = std::move(other280.sorting_columns);
+  file_offset = other280.file_offset;
+  total_compressed_size = other280.total_compressed_size;
+  ordinal = other280.ordinal;
+  __isset = other280.__isset;
 }
-RowGroup& RowGroup::operator=(const RowGroup& other265) {
-  columns = other265.columns;
-  total_byte_size = other265.total_byte_size;
-  num_rows = other265.num_rows;
-  sorting_columns = other265.sorting_columns;
-  file_offset = other265.file_offset;
-  total_compressed_size = other265.total_compressed_size;
-  ordinal = other265.ordinal;
-  __isset = other265.__isset;
+RowGroup& RowGroup::operator=(const RowGroup& other281) {
+  columns = other281.columns;
+  total_byte_size = other281.total_byte_size;
+  num_rows = other281.num_rows;
+  sorting_columns = other281.sorting_columns;
+  file_offset = other281.file_offset;
+  total_compressed_size = other281.total_compressed_size;
+  ordinal = other281.ordinal;
+  __isset = other281.__isset;
   return *this;
 }
-RowGroup& RowGroup::operator=(RowGroup&& other266) noexcept {
-  columns = std::move(other266.columns);
-  total_byte_size = other266.total_byte_size;
-  num_rows = other266.num_rows;
-  sorting_columns = std::move(other266.sorting_columns);
-  file_offset = other266.file_offset;
-  total_compressed_size = other266.total_compressed_size;
-  ordinal = other266.ordinal;
-  __isset = other266.__isset;
+RowGroup& RowGroup::operator=(RowGroup&& other282) noexcept {
+  columns = std::move(other282.columns);
+  total_byte_size = other282.total_byte_size;
+  num_rows = other282.num_rows;
+  sorting_columns = std::move(other282.sorting_columns);
+  file_offset = other282.file_offset;
+  total_compressed_size = other282.total_compressed_size;
+  ordinal = other282.ordinal;
+  __isset = other282.__isset;
   return *this;
 }
 void RowGroup::printTo(std::ostream& out) const {
@@ -4759,18 +5088,18 @@ bool TypeDefinedOrder::operator==(const TypeDefinedOrder & /* rhs */) const
   return true;
 }
 
-TypeDefinedOrder::TypeDefinedOrder(const TypeDefinedOrder& other267) noexcept {
-  (void) other267;
+TypeDefinedOrder::TypeDefinedOrder(const TypeDefinedOrder& other283) noexcept {
+  (void) other283;
 }
-TypeDefinedOrder::TypeDefinedOrder(TypeDefinedOrder&& other268) noexcept {
-  (void) other268;
+TypeDefinedOrder::TypeDefinedOrder(TypeDefinedOrder&& other284) noexcept {
+  (void) other284;
 }
-TypeDefinedOrder& TypeDefinedOrder::operator=(const TypeDefinedOrder& other269) noexcept {
-  (void) other269;
+TypeDefinedOrder& TypeDefinedOrder::operator=(const TypeDefinedOrder& other285) noexcept {
+  (void) other285;
   return *this;
 }
-TypeDefinedOrder& TypeDefinedOrder::operator=(TypeDefinedOrder&& other270) noexcept {
-  (void) other270;
+TypeDefinedOrder& TypeDefinedOrder::operator=(TypeDefinedOrder&& other286) noexcept {
+  (void) other286;
   return *this;
 }
 void TypeDefinedOrder::printTo(std::ostream& out) const {
@@ -4803,18 +5132,18 @@ bool IEEE754TotalOrder::operator==(const IEEE754TotalOrder & /* rhs */) const
   return true;
 }
 
-IEEE754TotalOrder::IEEE754TotalOrder(const IEEE754TotalOrder& other271) noexcept {
-  (void) other271;
+IEEE754TotalOrder::IEEE754TotalOrder(const IEEE754TotalOrder& other287) noexcept {
+  (void) other287;
 }
-IEEE754TotalOrder::IEEE754TotalOrder(IEEE754TotalOrder&& other272) noexcept {
-  (void) other272;
+IEEE754TotalOrder::IEEE754TotalOrder(IEEE754TotalOrder&& other288) noexcept {
+  (void) other288;
 }
-IEEE754TotalOrder& IEEE754TotalOrder::operator=(const IEEE754TotalOrder& other273) noexcept {
-  (void) other273;
+IEEE754TotalOrder& IEEE754TotalOrder::operator=(const IEEE754TotalOrder& other289) noexcept {
+  (void) other289;
   return *this;
 }
-IEEE754TotalOrder& IEEE754TotalOrder::operator=(IEEE754TotalOrder&& other274) noexcept {
-  (void) other274;
+IEEE754TotalOrder& IEEE754TotalOrder::operator=(IEEE754TotalOrder&& other290) noexcept {
+  (void) other290;
   return *this;
 }
 void IEEE754TotalOrder::printTo(std::ostream& out) const {
@@ -4866,26 +5195,26 @@ bool ColumnOrder::operator==(const ColumnOrder & rhs) const
   return true;
 }
 
-ColumnOrder::ColumnOrder(const ColumnOrder& other275) noexcept {
-  TYPE_ORDER = other275.TYPE_ORDER;
-  IEEE_754_TOTAL_ORDER = other275.IEEE_754_TOTAL_ORDER;
-  __isset = other275.__isset;
+ColumnOrder::ColumnOrder(const ColumnOrder& other291) noexcept {
+  TYPE_ORDER = other291.TYPE_ORDER;
+  IEEE_754_TOTAL_ORDER = other291.IEEE_754_TOTAL_ORDER;
+  __isset = other291.__isset;
 }
-ColumnOrder::ColumnOrder(ColumnOrder&& other276) noexcept {
-  TYPE_ORDER = std::move(other276.TYPE_ORDER);
-  IEEE_754_TOTAL_ORDER = std::move(other276.IEEE_754_TOTAL_ORDER);
-  __isset = other276.__isset;
+ColumnOrder::ColumnOrder(ColumnOrder&& other292) noexcept {
+  TYPE_ORDER = std::move(other292.TYPE_ORDER);
+  IEEE_754_TOTAL_ORDER = std::move(other292.IEEE_754_TOTAL_ORDER);
+  __isset = other292.__isset;
 }
-ColumnOrder& ColumnOrder::operator=(const ColumnOrder& other277) noexcept {
-  TYPE_ORDER = other277.TYPE_ORDER;
-  IEEE_754_TOTAL_ORDER = other277.IEEE_754_TOTAL_ORDER;
-  __isset = other277.__isset;
+ColumnOrder& ColumnOrder::operator=(const ColumnOrder& other293) noexcept {
+  TYPE_ORDER = other293.TYPE_ORDER;
+  IEEE_754_TOTAL_ORDER = other293.IEEE_754_TOTAL_ORDER;
+  __isset = other293.__isset;
   return *this;
 }
-ColumnOrder& ColumnOrder::operator=(ColumnOrder&& other278) noexcept {
-  TYPE_ORDER = std::move(other278.TYPE_ORDER);
-  IEEE_754_TOTAL_ORDER = std::move(other278.IEEE_754_TOTAL_ORDER);
-  __isset = other278.__isset;
+ColumnOrder& ColumnOrder::operator=(ColumnOrder&& other294) noexcept {
+  TYPE_ORDER = std::move(other294.TYPE_ORDER);
+  IEEE_754_TOTAL_ORDER = std::move(other294.IEEE_754_TOTAL_ORDER);
+  __isset = other294.__isset;
   return *this;
 }
 void ColumnOrder::printTo(std::ostream& out) const {
@@ -4942,26 +5271,26 @@ bool PageLocation::operator==(const PageLocation & rhs) const
   return true;
 }
 
-PageLocation::PageLocation(const PageLocation& other279) noexcept {
-  offset = other279.offset;
-  compressed_page_size = other279.compressed_page_size;
-  first_row_index = other279.first_row_index;
+PageLocation::PageLocation(const PageLocation& other295) noexcept {
+  offset = other295.offset;
+  compressed_page_size = other295.compressed_page_size;
+  first_row_index = other295.first_row_index;
 }
-PageLocation::PageLocation(PageLocation&& other280) noexcept {
-  offset = other280.offset;
-  compressed_page_size = other280.compressed_page_size;
-  first_row_index = other280.first_row_index;
+PageLocation::PageLocation(PageLocation&& other296) noexcept {
+  offset = other296.offset;
+  compressed_page_size = other296.compressed_page_size;
+  first_row_index = other296.first_row_index;
 }
-PageLocation& PageLocation::operator=(const PageLocation& other281) noexcept {
-  offset = other281.offset;
-  compressed_page_size = other281.compressed_page_size;
-  first_row_index = other281.first_row_index;
+PageLocation& PageLocation::operator=(const PageLocation& other297) noexcept {
+  offset = other297.offset;
+  compressed_page_size = other297.compressed_page_size;
+  first_row_index = other297.first_row_index;
   return *this;
 }
-PageLocation& PageLocation::operator=(PageLocation&& other282) noexcept {
-  offset = other282.offset;
-  compressed_page_size = other282.compressed_page_size;
-  first_row_index = other282.first_row_index;
+PageLocation& PageLocation::operator=(PageLocation&& other298) noexcept {
+  offset = other298.offset;
+  compressed_page_size = other298.compressed_page_size;
+  first_row_index = other298.first_row_index;
   return *this;
 }
 void PageLocation::printTo(std::ostream& out) const {
@@ -5013,26 +5342,26 @@ bool OffsetIndex::operator==(const OffsetIndex & rhs) const
   return true;
 }
 
-OffsetIndex::OffsetIndex(const OffsetIndex& other295) {
-  page_locations = other295.page_locations;
-  unencoded_byte_array_data_bytes = other295.unencoded_byte_array_data_bytes;
-  __isset = other295.__isset;
+OffsetIndex::OffsetIndex(const OffsetIndex& other311) {
+  page_locations = other311.page_locations;
+  unencoded_byte_array_data_bytes = other311.unencoded_byte_array_data_bytes;
+  __isset = other311.__isset;
 }
-OffsetIndex::OffsetIndex(OffsetIndex&& other296) noexcept {
-  page_locations = std::move(other296.page_locations);
-  unencoded_byte_array_data_bytes = std::move(other296.unencoded_byte_array_data_bytes);
-  __isset = other296.__isset;
+OffsetIndex::OffsetIndex(OffsetIndex&& other312) noexcept {
+  page_locations = std::move(other312.page_locations);
+  unencoded_byte_array_data_bytes = std::move(other312.unencoded_byte_array_data_bytes);
+  __isset = other312.__isset;
 }
-OffsetIndex& OffsetIndex::operator=(const OffsetIndex& other297) {
-  page_locations = other297.page_locations;
-  unencoded_byte_array_data_bytes = other297.unencoded_byte_array_data_bytes;
-  __isset = other297.__isset;
+OffsetIndex& OffsetIndex::operator=(const OffsetIndex& other313) {
+  page_locations = other313.page_locations;
+  unencoded_byte_array_data_bytes = other313.unencoded_byte_array_data_bytes;
+  __isset = other313.__isset;
   return *this;
 }
-OffsetIndex& OffsetIndex::operator=(OffsetIndex&& other298) noexcept {
-  page_locations = std::move(other298.page_locations);
-  unencoded_byte_array_data_bytes = std::move(other298.unencoded_byte_array_data_bytes);
-  __isset = other298.__isset;
+OffsetIndex& OffsetIndex::operator=(OffsetIndex&& other314) noexcept {
+  page_locations = std::move(other314.page_locations);
+  unencoded_byte_array_data_bytes = std::move(other314.unencoded_byte_array_data_bytes);
+  __isset = other314.__isset;
   return *this;
 }
 void OffsetIndex::printTo(std::ostream& out) const {
@@ -5135,50 +5464,50 @@ bool ColumnIndex::operator==(const ColumnIndex & rhs) const
   return true;
 }
 
-ColumnIndex::ColumnIndex(const ColumnIndex& other342) {
-  null_pages = other342.null_pages;
-  min_values = other342.min_values;
-  max_values = other342.max_values;
-  boundary_order = other342.boundary_order;
-  null_counts = other342.null_counts;
-  repetition_level_histograms = other342.repetition_level_histograms;
-  definition_level_histograms = other342.definition_level_histograms;
-  nan_counts = other342.nan_counts;
-  __isset = other342.__isset;
+ColumnIndex::ColumnIndex(const ColumnIndex& other358) {
+  null_pages = other358.null_pages;
+  min_values = other358.min_values;
+  max_values = other358.max_values;
+  boundary_order = other358.boundary_order;
+  null_counts = other358.null_counts;
+  repetition_level_histograms = other358.repetition_level_histograms;
+  definition_level_histograms = other358.definition_level_histograms;
+  nan_counts = other358.nan_counts;
+  __isset = other358.__isset;
 }
-ColumnIndex::ColumnIndex(ColumnIndex&& other343) noexcept {
-  null_pages = std::move(other343.null_pages);
-  min_values = std::move(other343.min_values);
-  max_values = std::move(other343.max_values);
-  boundary_order = other343.boundary_order;
-  null_counts = std::move(other343.null_counts);
-  repetition_level_histograms = std::move(other343.repetition_level_histograms);
-  definition_level_histograms = std::move(other343.definition_level_histograms);
-  nan_counts = std::move(other343.nan_counts);
-  __isset = other343.__isset;
+ColumnIndex::ColumnIndex(ColumnIndex&& other359) noexcept {
+  null_pages = std::move(other359.null_pages);
+  min_values = std::move(other359.min_values);
+  max_values = std::move(other359.max_values);
+  boundary_order = other359.boundary_order;
+  null_counts = std::move(other359.null_counts);
+  repetition_level_histograms = std::move(other359.repetition_level_histograms);
+  definition_level_histograms = std::move(other359.definition_level_histograms);
+  nan_counts = std::move(other359.nan_counts);
+  __isset = other359.__isset;
 }
-ColumnIndex& ColumnIndex::operator=(const ColumnIndex& other344) {
-  null_pages = other344.null_pages;
-  min_values = other344.min_values;
-  max_values = other344.max_values;
-  boundary_order = other344.boundary_order;
-  null_counts = other344.null_counts;
-  repetition_level_histograms = other344.repetition_level_histograms;
-  definition_level_histograms = other344.definition_level_histograms;
-  nan_counts = other344.nan_counts;
-  __isset = other344.__isset;
+ColumnIndex& ColumnIndex::operator=(const ColumnIndex& other360) {
+  null_pages = other360.null_pages;
+  min_values = other360.min_values;
+  max_values = other360.max_values;
+  boundary_order = other360.boundary_order;
+  null_counts = other360.null_counts;
+  repetition_level_histograms = other360.repetition_level_histograms;
+  definition_level_histograms = other360.definition_level_histograms;
+  nan_counts = other360.nan_counts;
+  __isset = other360.__isset;
   return *this;
 }
-ColumnIndex& ColumnIndex::operator=(ColumnIndex&& other345) noexcept {
-  null_pages = std::move(other345.null_pages);
-  min_values = std::move(other345.min_values);
-  max_values = std::move(other345.max_values);
-  boundary_order = other345.boundary_order;
-  null_counts = std::move(other345.null_counts);
-  repetition_level_histograms = std::move(other345.repetition_level_histograms);
-  definition_level_histograms = std::move(other345.definition_level_histograms);
-  nan_counts = std::move(other345.nan_counts);
-  __isset = other345.__isset;
+ColumnIndex& ColumnIndex::operator=(ColumnIndex&& other361) noexcept {
+  null_pages = std::move(other361.null_pages);
+  min_values = std::move(other361.min_values);
+  max_values = std::move(other361.max_values);
+  boundary_order = other361.boundary_order;
+  null_counts = std::move(other361.null_counts);
+  repetition_level_histograms = std::move(other361.repetition_level_histograms);
+  definition_level_histograms = std::move(other361.definition_level_histograms);
+  nan_counts = std::move(other361.nan_counts);
+  __isset = other361.__isset;
   return *this;
 }
 void ColumnIndex::printTo(std::ostream& out) const {
@@ -5192,261 +5521,6 @@ void ColumnIndex::printTo(std::ostream& out) const {
   out << ", " << "repetition_level_histograms="; (__isset.repetition_level_histograms ? (out << to_string(repetition_level_histograms)) : (out << "<null>"));
   out << ", " << "definition_level_histograms="; (__isset.definition_level_histograms ? (out << to_string(definition_level_histograms)) : (out << "<null>"));
   out << ", " << "nan_counts="; (__isset.nan_counts ? (out << to_string(nan_counts)) : (out << "<null>"));
-  out << ")";
-}
-
-
-AesGcmV1::~AesGcmV1() noexcept {
-}
-
-AesGcmV1::AesGcmV1() noexcept
-   : aad_prefix(),
-     aad_file_unique(),
-     supply_aad_prefix(0) {
-}
-
-void AesGcmV1::__set_aad_prefix(const std::string& val) {
-  this->aad_prefix = val;
-__isset.aad_prefix = true;
-}
-
-void AesGcmV1::__set_aad_file_unique(const std::string& val) {
-  this->aad_file_unique = val;
-__isset.aad_file_unique = true;
-}
-
-void AesGcmV1::__set_supply_aad_prefix(const bool val) {
-  this->supply_aad_prefix = val;
-__isset.supply_aad_prefix = true;
-}
-std::ostream& operator<<(std::ostream& out, const AesGcmV1& obj)
-{
-  obj.printTo(out);
-  return out;
-}
-
-
-void swap(AesGcmV1 &a, AesGcmV1 &b) noexcept {
-  using ::std::swap;
-  swap(a.aad_prefix, b.aad_prefix);
-  swap(a.aad_file_unique, b.aad_file_unique);
-  swap(a.supply_aad_prefix, b.supply_aad_prefix);
-  swap(a.__isset, b.__isset);
-}
-
-bool AesGcmV1::operator==(const AesGcmV1 & rhs) const
-{
-  if (__isset.aad_prefix != rhs.__isset.aad_prefix)
-    return false;
-  else if (__isset.aad_prefix && !(aad_prefix == rhs.aad_prefix))
-    return false;
-  if (__isset.aad_file_unique != rhs.__isset.aad_file_unique)
-    return false;
-  else if (__isset.aad_file_unique && !(aad_file_unique == rhs.aad_file_unique))
-    return false;
-  if (__isset.supply_aad_prefix != rhs.__isset.supply_aad_prefix)
-    return false;
-  else if (__isset.supply_aad_prefix && !(supply_aad_prefix == rhs.supply_aad_prefix))
-    return false;
-  return true;
-}
-
-AesGcmV1::AesGcmV1(const AesGcmV1& other346) {
-  aad_prefix = other346.aad_prefix;
-  aad_file_unique = other346.aad_file_unique;
-  supply_aad_prefix = other346.supply_aad_prefix;
-  __isset = other346.__isset;
-}
-AesGcmV1::AesGcmV1(AesGcmV1&& other347) noexcept {
-  aad_prefix = std::move(other347.aad_prefix);
-  aad_file_unique = std::move(other347.aad_file_unique);
-  supply_aad_prefix = other347.supply_aad_prefix;
-  __isset = other347.__isset;
-}
-AesGcmV1& AesGcmV1::operator=(const AesGcmV1& other348) {
-  aad_prefix = other348.aad_prefix;
-  aad_file_unique = other348.aad_file_unique;
-  supply_aad_prefix = other348.supply_aad_prefix;
-  __isset = other348.__isset;
-  return *this;
-}
-AesGcmV1& AesGcmV1::operator=(AesGcmV1&& other349) noexcept {
-  aad_prefix = std::move(other349.aad_prefix);
-  aad_file_unique = std::move(other349.aad_file_unique);
-  supply_aad_prefix = other349.supply_aad_prefix;
-  __isset = other349.__isset;
-  return *this;
-}
-void AesGcmV1::printTo(std::ostream& out) const {
-  using ::apache::thrift::to_string;
-  out << "AesGcmV1(";
-  out << "aad_prefix="; (__isset.aad_prefix ? (out << to_string(aad_prefix)) : (out << "<null>"));
-  out << ", " << "aad_file_unique="; (__isset.aad_file_unique ? (out << to_string(aad_file_unique)) : (out << "<null>"));
-  out << ", " << "supply_aad_prefix="; (__isset.supply_aad_prefix ? (out << to_string(supply_aad_prefix)) : (out << "<null>"));
-  out << ")";
-}
-
-
-AesGcmCtrV1::~AesGcmCtrV1() noexcept {
-}
-
-AesGcmCtrV1::AesGcmCtrV1() noexcept
-   : aad_prefix(),
-     aad_file_unique(),
-     supply_aad_prefix(0) {
-}
-
-void AesGcmCtrV1::__set_aad_prefix(const std::string& val) {
-  this->aad_prefix = val;
-__isset.aad_prefix = true;
-}
-
-void AesGcmCtrV1::__set_aad_file_unique(const std::string& val) {
-  this->aad_file_unique = val;
-__isset.aad_file_unique = true;
-}
-
-void AesGcmCtrV1::__set_supply_aad_prefix(const bool val) {
-  this->supply_aad_prefix = val;
-__isset.supply_aad_prefix = true;
-}
-std::ostream& operator<<(std::ostream& out, const AesGcmCtrV1& obj)
-{
-  obj.printTo(out);
-  return out;
-}
-
-
-void swap(AesGcmCtrV1 &a, AesGcmCtrV1 &b) noexcept {
-  using ::std::swap;
-  swap(a.aad_prefix, b.aad_prefix);
-  swap(a.aad_file_unique, b.aad_file_unique);
-  swap(a.supply_aad_prefix, b.supply_aad_prefix);
-  swap(a.__isset, b.__isset);
-}
-
-bool AesGcmCtrV1::operator==(const AesGcmCtrV1 & rhs) const
-{
-  if (__isset.aad_prefix != rhs.__isset.aad_prefix)
-    return false;
-  else if (__isset.aad_prefix && !(aad_prefix == rhs.aad_prefix))
-    return false;
-  if (__isset.aad_file_unique != rhs.__isset.aad_file_unique)
-    return false;
-  else if (__isset.aad_file_unique && !(aad_file_unique == rhs.aad_file_unique))
-    return false;
-  if (__isset.supply_aad_prefix != rhs.__isset.supply_aad_prefix)
-    return false;
-  else if (__isset.supply_aad_prefix && !(supply_aad_prefix == rhs.supply_aad_prefix))
-    return false;
-  return true;
-}
-
-AesGcmCtrV1::AesGcmCtrV1(const AesGcmCtrV1& other350) {
-  aad_prefix = other350.aad_prefix;
-  aad_file_unique = other350.aad_file_unique;
-  supply_aad_prefix = other350.supply_aad_prefix;
-  __isset = other350.__isset;
-}
-AesGcmCtrV1::AesGcmCtrV1(AesGcmCtrV1&& other351) noexcept {
-  aad_prefix = std::move(other351.aad_prefix);
-  aad_file_unique = std::move(other351.aad_file_unique);
-  supply_aad_prefix = other351.supply_aad_prefix;
-  __isset = other351.__isset;
-}
-AesGcmCtrV1& AesGcmCtrV1::operator=(const AesGcmCtrV1& other352) {
-  aad_prefix = other352.aad_prefix;
-  aad_file_unique = other352.aad_file_unique;
-  supply_aad_prefix = other352.supply_aad_prefix;
-  __isset = other352.__isset;
-  return *this;
-}
-AesGcmCtrV1& AesGcmCtrV1::operator=(AesGcmCtrV1&& other353) noexcept {
-  aad_prefix = std::move(other353.aad_prefix);
-  aad_file_unique = std::move(other353.aad_file_unique);
-  supply_aad_prefix = other353.supply_aad_prefix;
-  __isset = other353.__isset;
-  return *this;
-}
-void AesGcmCtrV1::printTo(std::ostream& out) const {
-  using ::apache::thrift::to_string;
-  out << "AesGcmCtrV1(";
-  out << "aad_prefix="; (__isset.aad_prefix ? (out << to_string(aad_prefix)) : (out << "<null>"));
-  out << ", " << "aad_file_unique="; (__isset.aad_file_unique ? (out << to_string(aad_file_unique)) : (out << "<null>"));
-  out << ", " << "supply_aad_prefix="; (__isset.supply_aad_prefix ? (out << to_string(supply_aad_prefix)) : (out << "<null>"));
-  out << ")";
-}
-
-
-EncryptionAlgorithm::~EncryptionAlgorithm() noexcept {
-}
-
-EncryptionAlgorithm::EncryptionAlgorithm() noexcept {
-}
-
-void EncryptionAlgorithm::__set_AES_GCM_V1(const AesGcmV1& val) {
-  this->AES_GCM_V1 = val;
-__isset.AES_GCM_V1 = true;
-}
-
-void EncryptionAlgorithm::__set_AES_GCM_CTR_V1(const AesGcmCtrV1& val) {
-  this->AES_GCM_CTR_V1 = val;
-__isset.AES_GCM_CTR_V1 = true;
-}
-std::ostream& operator<<(std::ostream& out, const EncryptionAlgorithm& obj)
-{
-  obj.printTo(out);
-  return out;
-}
-
-
-void swap(EncryptionAlgorithm &a, EncryptionAlgorithm &b) noexcept {
-  using ::std::swap;
-  swap(a.AES_GCM_V1, b.AES_GCM_V1);
-  swap(a.AES_GCM_CTR_V1, b.AES_GCM_CTR_V1);
-  swap(a.__isset, b.__isset);
-}
-
-bool EncryptionAlgorithm::operator==(const EncryptionAlgorithm & rhs) const
-{
-  if (__isset.AES_GCM_V1 != rhs.__isset.AES_GCM_V1)
-    return false;
-  else if (__isset.AES_GCM_V1 && !(AES_GCM_V1 == rhs.AES_GCM_V1))
-    return false;
-  if (__isset.AES_GCM_CTR_V1 != rhs.__isset.AES_GCM_CTR_V1)
-    return false;
-  else if (__isset.AES_GCM_CTR_V1 && !(AES_GCM_CTR_V1 == rhs.AES_GCM_CTR_V1))
-    return false;
-  return true;
-}
-
-EncryptionAlgorithm::EncryptionAlgorithm(const EncryptionAlgorithm& other354) {
-  AES_GCM_V1 = other354.AES_GCM_V1;
-  AES_GCM_CTR_V1 = other354.AES_GCM_CTR_V1;
-  __isset = other354.__isset;
-}
-EncryptionAlgorithm::EncryptionAlgorithm(EncryptionAlgorithm&& other355) noexcept {
-  AES_GCM_V1 = std::move(other355.AES_GCM_V1);
-  AES_GCM_CTR_V1 = std::move(other355.AES_GCM_CTR_V1);
-  __isset = other355.__isset;
-}
-EncryptionAlgorithm& EncryptionAlgorithm::operator=(const EncryptionAlgorithm& other356) {
-  AES_GCM_V1 = other356.AES_GCM_V1;
-  AES_GCM_CTR_V1 = other356.AES_GCM_CTR_V1;
-  __isset = other356.__isset;
-  return *this;
-}
-EncryptionAlgorithm& EncryptionAlgorithm::operator=(EncryptionAlgorithm&& other357) noexcept {
-  AES_GCM_V1 = std::move(other357.AES_GCM_V1);
-  AES_GCM_CTR_V1 = std::move(other357.AES_GCM_CTR_V1);
-  __isset = other357.__isset;
-  return *this;
-}
-void EncryptionAlgorithm::printTo(std::ostream& out) const {
-  using ::apache::thrift::to_string;
-  out << "EncryptionAlgorithm(";
-  out << "AES_GCM_V1="; (__isset.AES_GCM_V1 ? (out << to_string(AES_GCM_V1)) : (out << "<null>"));
-  out << ", " << "AES_GCM_CTR_V1="; (__isset.AES_GCM_CTR_V1 ? (out << to_string(AES_GCM_CTR_V1)) : (out << "<null>"));
   out << ")";
 }
 
@@ -5555,54 +5629,54 @@ bool FileMetaData::operator==(const FileMetaData & rhs) const
   return true;
 }
 
-FileMetaData::FileMetaData(const FileMetaData& other382) {
-  version = other382.version;
-  schema = other382.schema;
-  num_rows = other382.num_rows;
-  row_groups = other382.row_groups;
-  key_value_metadata = other382.key_value_metadata;
-  created_by = other382.created_by;
-  column_orders = other382.column_orders;
-  encryption_algorithm = other382.encryption_algorithm;
-  footer_signing_key_metadata = other382.footer_signing_key_metadata;
-  __isset = other382.__isset;
+FileMetaData::FileMetaData(const FileMetaData& other386) {
+  version = other386.version;
+  schema = other386.schema;
+  num_rows = other386.num_rows;
+  row_groups = other386.row_groups;
+  key_value_metadata = other386.key_value_metadata;
+  created_by = other386.created_by;
+  column_orders = other386.column_orders;
+  encryption_algorithm = other386.encryption_algorithm;
+  footer_signing_key_metadata = other386.footer_signing_key_metadata;
+  __isset = other386.__isset;
 }
-FileMetaData::FileMetaData(FileMetaData&& other383) noexcept {
-  version = other383.version;
-  schema = std::move(other383.schema);
-  num_rows = other383.num_rows;
-  row_groups = std::move(other383.row_groups);
-  key_value_metadata = std::move(other383.key_value_metadata);
-  created_by = std::move(other383.created_by);
-  column_orders = std::move(other383.column_orders);
-  encryption_algorithm = std::move(other383.encryption_algorithm);
-  footer_signing_key_metadata = std::move(other383.footer_signing_key_metadata);
-  __isset = other383.__isset;
+FileMetaData::FileMetaData(FileMetaData&& other387) noexcept {
+  version = other387.version;
+  schema = std::move(other387.schema);
+  num_rows = other387.num_rows;
+  row_groups = std::move(other387.row_groups);
+  key_value_metadata = std::move(other387.key_value_metadata);
+  created_by = std::move(other387.created_by);
+  column_orders = std::move(other387.column_orders);
+  encryption_algorithm = std::move(other387.encryption_algorithm);
+  footer_signing_key_metadata = std::move(other387.footer_signing_key_metadata);
+  __isset = other387.__isset;
 }
-FileMetaData& FileMetaData::operator=(const FileMetaData& other384) {
-  version = other384.version;
-  schema = other384.schema;
-  num_rows = other384.num_rows;
-  row_groups = other384.row_groups;
-  key_value_metadata = other384.key_value_metadata;
-  created_by = other384.created_by;
-  column_orders = other384.column_orders;
-  encryption_algorithm = other384.encryption_algorithm;
-  footer_signing_key_metadata = other384.footer_signing_key_metadata;
-  __isset = other384.__isset;
+FileMetaData& FileMetaData::operator=(const FileMetaData& other388) {
+  version = other388.version;
+  schema = other388.schema;
+  num_rows = other388.num_rows;
+  row_groups = other388.row_groups;
+  key_value_metadata = other388.key_value_metadata;
+  created_by = other388.created_by;
+  column_orders = other388.column_orders;
+  encryption_algorithm = other388.encryption_algorithm;
+  footer_signing_key_metadata = other388.footer_signing_key_metadata;
+  __isset = other388.__isset;
   return *this;
 }
-FileMetaData& FileMetaData::operator=(FileMetaData&& other385) noexcept {
-  version = other385.version;
-  schema = std::move(other385.schema);
-  num_rows = other385.num_rows;
-  row_groups = std::move(other385.row_groups);
-  key_value_metadata = std::move(other385.key_value_metadata);
-  created_by = std::move(other385.created_by);
-  column_orders = std::move(other385.column_orders);
-  encryption_algorithm = std::move(other385.encryption_algorithm);
-  footer_signing_key_metadata = std::move(other385.footer_signing_key_metadata);
-  __isset = other385.__isset;
+FileMetaData& FileMetaData::operator=(FileMetaData&& other389) noexcept {
+  version = other389.version;
+  schema = std::move(other389.schema);
+  num_rows = other389.num_rows;
+  row_groups = std::move(other389.row_groups);
+  key_value_metadata = std::move(other389.key_value_metadata);
+  created_by = std::move(other389.created_by);
+  column_orders = std::move(other389.column_orders);
+  encryption_algorithm = std::move(other389.encryption_algorithm);
+  footer_signing_key_metadata = std::move(other389.footer_signing_key_metadata);
+  __isset = other389.__isset;
   return *this;
 }
 void FileMetaData::printTo(std::ostream& out) const {
@@ -5661,26 +5735,26 @@ bool FileCryptoMetaData::operator==(const FileCryptoMetaData & rhs) const
   return true;
 }
 
-FileCryptoMetaData::FileCryptoMetaData(const FileCryptoMetaData& other386) {
-  encryption_algorithm = other386.encryption_algorithm;
-  key_metadata = other386.key_metadata;
-  __isset = other386.__isset;
+FileCryptoMetaData::FileCryptoMetaData(const FileCryptoMetaData& other390) {
+  encryption_algorithm = other390.encryption_algorithm;
+  key_metadata = other390.key_metadata;
+  __isset = other390.__isset;
 }
-FileCryptoMetaData::FileCryptoMetaData(FileCryptoMetaData&& other387) noexcept {
-  encryption_algorithm = std::move(other387.encryption_algorithm);
-  key_metadata = std::move(other387.key_metadata);
-  __isset = other387.__isset;
+FileCryptoMetaData::FileCryptoMetaData(FileCryptoMetaData&& other391) noexcept {
+  encryption_algorithm = std::move(other391.encryption_algorithm);
+  key_metadata = std::move(other391.key_metadata);
+  __isset = other391.__isset;
 }
-FileCryptoMetaData& FileCryptoMetaData::operator=(const FileCryptoMetaData& other388) {
-  encryption_algorithm = other388.encryption_algorithm;
-  key_metadata = other388.key_metadata;
-  __isset = other388.__isset;
+FileCryptoMetaData& FileCryptoMetaData::operator=(const FileCryptoMetaData& other392) {
+  encryption_algorithm = other392.encryption_algorithm;
+  key_metadata = other392.key_metadata;
+  __isset = other392.__isset;
   return *this;
 }
-FileCryptoMetaData& FileCryptoMetaData::operator=(FileCryptoMetaData&& other389) noexcept {
-  encryption_algorithm = std::move(other389.encryption_algorithm);
-  key_metadata = std::move(other389.key_metadata);
-  __isset = other389.__isset;
+FileCryptoMetaData& FileCryptoMetaData::operator=(FileCryptoMetaData&& other393) noexcept {
+  encryption_algorithm = std::move(other393.encryption_algorithm);
+  key_metadata = std::move(other393.key_metadata);
+  __isset = other393.__isset;
   return *this;
 }
 void FileCryptoMetaData::printTo(std::ostream& out) const {

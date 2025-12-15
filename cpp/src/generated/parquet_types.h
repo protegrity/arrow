@@ -454,6 +454,14 @@ class PageEncodingStats;
 
 class ColumnMetaData;
 
+class AesGcmV1;
+
+class AesGcmCtrV1;
+
+class ExternalDBPAV1;
+
+class EncryptionAlgorithm;
+
 class EncryptionWithFooterKey;
 
 class EncryptionWithColumnKey;
@@ -475,12 +483,6 @@ class PageLocation;
 class OffsetIndex;
 
 class ColumnIndex;
-
-class AesGcmV1;
-
-class AesGcmCtrV1;
-
-class EncryptionAlgorithm;
 
 class FileMetaData;
 
@@ -2870,6 +2872,201 @@ void swap(ColumnMetaData &a, ColumnMetaData &b) noexcept;
 
 std::ostream& operator<<(std::ostream& out, const ColumnMetaData& obj);
 
+typedef struct _AesGcmV1__isset {
+  _AesGcmV1__isset() : aad_prefix(false), aad_file_unique(false), supply_aad_prefix(false) {}
+  bool aad_prefix :1;
+  bool aad_file_unique :1;
+  bool supply_aad_prefix :1;
+} _AesGcmV1__isset;
+
+class AesGcmV1 {
+ public:
+
+  AesGcmV1(const AesGcmV1&);
+  AesGcmV1(AesGcmV1&&) noexcept;
+  AesGcmV1& operator=(const AesGcmV1&);
+  AesGcmV1& operator=(AesGcmV1&&) noexcept;
+  AesGcmV1() noexcept;
+
+  ~AesGcmV1() noexcept;
+  /**
+   * AAD prefix *
+   */
+  std::string aad_prefix;
+  /**
+   * Unique file identifier part of AAD suffix *
+   */
+  std::string aad_file_unique;
+  /**
+   * In files encrypted with AAD prefix without storing it,
+   * readers must supply the prefix *
+   */
+  bool supply_aad_prefix;
+
+  _AesGcmV1__isset __isset;
+
+  void __set_aad_prefix(const std::string& val);
+
+  void __set_aad_file_unique(const std::string& val);
+
+  void __set_supply_aad_prefix(const bool val);
+
+  bool operator == (const AesGcmV1 & rhs) const;
+  bool operator != (const AesGcmV1 &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const AesGcmV1 & ) const;
+
+  template <class Protocol_>
+  uint32_t read(Protocol_* iprot);
+  template <class Protocol_>
+  uint32_t write(Protocol_* oprot) const;
+
+  void printTo(std::ostream& out) const;
+};
+
+void swap(AesGcmV1 &a, AesGcmV1 &b) noexcept;
+
+std::ostream& operator<<(std::ostream& out, const AesGcmV1& obj);
+
+typedef struct _AesGcmCtrV1__isset {
+  _AesGcmCtrV1__isset() : aad_prefix(false), aad_file_unique(false), supply_aad_prefix(false) {}
+  bool aad_prefix :1;
+  bool aad_file_unique :1;
+  bool supply_aad_prefix :1;
+} _AesGcmCtrV1__isset;
+
+class AesGcmCtrV1 {
+ public:
+
+  AesGcmCtrV1(const AesGcmCtrV1&);
+  AesGcmCtrV1(AesGcmCtrV1&&) noexcept;
+  AesGcmCtrV1& operator=(const AesGcmCtrV1&);
+  AesGcmCtrV1& operator=(AesGcmCtrV1&&) noexcept;
+  AesGcmCtrV1() noexcept;
+
+  ~AesGcmCtrV1() noexcept;
+  /**
+   * AAD prefix *
+   */
+  std::string aad_prefix;
+  /**
+   * Unique file identifier part of AAD suffix *
+   */
+  std::string aad_file_unique;
+  /**
+   * In files encrypted with AAD prefix without storing it,
+   * readers must supply the prefix *
+   */
+  bool supply_aad_prefix;
+
+  _AesGcmCtrV1__isset __isset;
+
+  void __set_aad_prefix(const std::string& val);
+
+  void __set_aad_file_unique(const std::string& val);
+
+  void __set_supply_aad_prefix(const bool val);
+
+  bool operator == (const AesGcmCtrV1 & rhs) const;
+  bool operator != (const AesGcmCtrV1 &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const AesGcmCtrV1 & ) const;
+
+  template <class Protocol_>
+  uint32_t read(Protocol_* iprot);
+  template <class Protocol_>
+  uint32_t write(Protocol_* oprot) const;
+
+  void printTo(std::ostream& out) const;
+};
+
+void swap(AesGcmCtrV1 &a, AesGcmCtrV1 &b) noexcept;
+
+std::ostream& operator<<(std::ostream& out, const AesGcmCtrV1& obj);
+
+
+class ExternalDBPAV1 {
+ public:
+
+  ExternalDBPAV1(const ExternalDBPAV1&) noexcept;
+  ExternalDBPAV1(ExternalDBPAV1&&) noexcept;
+  ExternalDBPAV1& operator=(const ExternalDBPAV1&) noexcept;
+  ExternalDBPAV1& operator=(ExternalDBPAV1&&) noexcept;
+  ExternalDBPAV1() noexcept;
+
+  ~ExternalDBPAV1() noexcept;
+
+  bool operator == (const ExternalDBPAV1 & /* rhs */) const;
+  bool operator != (const ExternalDBPAV1 &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ExternalDBPAV1 & ) const;
+
+  template <class Protocol_>
+  uint32_t read(Protocol_* iprot);
+  template <class Protocol_>
+  uint32_t write(Protocol_* oprot) const;
+
+  void printTo(std::ostream& out) const;
+};
+
+void swap(ExternalDBPAV1 &a, ExternalDBPAV1 &b) noexcept;
+
+std::ostream& operator<<(std::ostream& out, const ExternalDBPAV1& obj);
+
+typedef struct _EncryptionAlgorithm__isset {
+  _EncryptionAlgorithm__isset() : AES_GCM_V1(false), AES_GCM_CTR_V1(false), EXTERNAL_DBPA_V1(false) {}
+  bool AES_GCM_V1 :1;
+  bool AES_GCM_CTR_V1 :1;
+  bool EXTERNAL_DBPA_V1 :1;
+} _EncryptionAlgorithm__isset;
+
+class EncryptionAlgorithm {
+ public:
+
+  EncryptionAlgorithm(const EncryptionAlgorithm&);
+  EncryptionAlgorithm(EncryptionAlgorithm&&) noexcept;
+  EncryptionAlgorithm& operator=(const EncryptionAlgorithm&);
+  EncryptionAlgorithm& operator=(EncryptionAlgorithm&&) noexcept;
+  EncryptionAlgorithm() noexcept;
+
+  ~EncryptionAlgorithm() noexcept;
+  AesGcmV1 AES_GCM_V1;
+  AesGcmCtrV1 AES_GCM_CTR_V1;
+  ExternalDBPAV1 EXTERNAL_DBPA_V1;
+
+  _EncryptionAlgorithm__isset __isset;
+
+  void __set_AES_GCM_V1(const AesGcmV1& val);
+
+  void __set_AES_GCM_CTR_V1(const AesGcmCtrV1& val);
+
+  void __set_EXTERNAL_DBPA_V1(const ExternalDBPAV1& val);
+
+  bool operator == (const EncryptionAlgorithm & rhs) const;
+  bool operator != (const EncryptionAlgorithm &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const EncryptionAlgorithm & ) const;
+
+  template <class Protocol_>
+  uint32_t read(Protocol_* iprot);
+  template <class Protocol_>
+  uint32_t write(Protocol_* oprot) const;
+
+  void printTo(std::ostream& out) const;
+};
+
+void swap(EncryptionAlgorithm &a, EncryptionAlgorithm &b) noexcept;
+
+std::ostream& operator<<(std::ostream& out, const EncryptionAlgorithm& obj);
+
 
 class EncryptionWithFooterKey {
  public:
@@ -2902,8 +3099,9 @@ void swap(EncryptionWithFooterKey &a, EncryptionWithFooterKey &b) noexcept;
 std::ostream& operator<<(std::ostream& out, const EncryptionWithFooterKey& obj);
 
 typedef struct _EncryptionWithColumnKey__isset {
-  _EncryptionWithColumnKey__isset() : key_metadata(false) {}
+  _EncryptionWithColumnKey__isset() : key_metadata(false), encryption_algorithm(false) {}
   bool key_metadata :1;
+  bool encryption_algorithm :1;
 } _EncryptionWithColumnKey__isset;
 
 class EncryptionWithColumnKey {
@@ -2924,12 +3122,18 @@ class EncryptionWithColumnKey {
    * Retrieval metadata of column encryption key *
    */
   std::string key_metadata;
+  /**
+   * Column specific encryption algorithm *
+   */
+  EncryptionAlgorithm encryption_algorithm;
 
   _EncryptionWithColumnKey__isset __isset;
 
   void __set_path_in_schema(const std::vector<std::string> & val);
 
   void __set_key_metadata(const std::string& val);
+
+  void __set_encryption_algorithm(const EncryptionAlgorithm& val);
 
   bool operator == (const EncryptionWithColumnKey & rhs) const;
   bool operator != (const EncryptionWithColumnKey &rhs) const {
@@ -3677,166 +3881,6 @@ class ColumnIndex {
 void swap(ColumnIndex &a, ColumnIndex &b) noexcept;
 
 std::ostream& operator<<(std::ostream& out, const ColumnIndex& obj);
-
-typedef struct _AesGcmV1__isset {
-  _AesGcmV1__isset() : aad_prefix(false), aad_file_unique(false), supply_aad_prefix(false) {}
-  bool aad_prefix :1;
-  bool aad_file_unique :1;
-  bool supply_aad_prefix :1;
-} _AesGcmV1__isset;
-
-class AesGcmV1 {
- public:
-
-  AesGcmV1(const AesGcmV1&);
-  AesGcmV1(AesGcmV1&&) noexcept;
-  AesGcmV1& operator=(const AesGcmV1&);
-  AesGcmV1& operator=(AesGcmV1&&) noexcept;
-  AesGcmV1() noexcept;
-
-  ~AesGcmV1() noexcept;
-  /**
-   * AAD prefix *
-   */
-  std::string aad_prefix;
-  /**
-   * Unique file identifier part of AAD suffix *
-   */
-  std::string aad_file_unique;
-  /**
-   * In files encrypted with AAD prefix without storing it,
-   * readers must supply the prefix *
-   */
-  bool supply_aad_prefix;
-
-  _AesGcmV1__isset __isset;
-
-  void __set_aad_prefix(const std::string& val);
-
-  void __set_aad_file_unique(const std::string& val);
-
-  void __set_supply_aad_prefix(const bool val);
-
-  bool operator == (const AesGcmV1 & rhs) const;
-  bool operator != (const AesGcmV1 &rhs) const {
-    return !(*this == rhs);
-  }
-
-  bool operator < (const AesGcmV1 & ) const;
-
-  template <class Protocol_>
-  uint32_t read(Protocol_* iprot);
-  template <class Protocol_>
-  uint32_t write(Protocol_* oprot) const;
-
-  void printTo(std::ostream& out) const;
-};
-
-void swap(AesGcmV1 &a, AesGcmV1 &b) noexcept;
-
-std::ostream& operator<<(std::ostream& out, const AesGcmV1& obj);
-
-typedef struct _AesGcmCtrV1__isset {
-  _AesGcmCtrV1__isset() : aad_prefix(false), aad_file_unique(false), supply_aad_prefix(false) {}
-  bool aad_prefix :1;
-  bool aad_file_unique :1;
-  bool supply_aad_prefix :1;
-} _AesGcmCtrV1__isset;
-
-class AesGcmCtrV1 {
- public:
-
-  AesGcmCtrV1(const AesGcmCtrV1&);
-  AesGcmCtrV1(AesGcmCtrV1&&) noexcept;
-  AesGcmCtrV1& operator=(const AesGcmCtrV1&);
-  AesGcmCtrV1& operator=(AesGcmCtrV1&&) noexcept;
-  AesGcmCtrV1() noexcept;
-
-  ~AesGcmCtrV1() noexcept;
-  /**
-   * AAD prefix *
-   */
-  std::string aad_prefix;
-  /**
-   * Unique file identifier part of AAD suffix *
-   */
-  std::string aad_file_unique;
-  /**
-   * In files encrypted with AAD prefix without storing it,
-   * readers must supply the prefix *
-   */
-  bool supply_aad_prefix;
-
-  _AesGcmCtrV1__isset __isset;
-
-  void __set_aad_prefix(const std::string& val);
-
-  void __set_aad_file_unique(const std::string& val);
-
-  void __set_supply_aad_prefix(const bool val);
-
-  bool operator == (const AesGcmCtrV1 & rhs) const;
-  bool operator != (const AesGcmCtrV1 &rhs) const {
-    return !(*this == rhs);
-  }
-
-  bool operator < (const AesGcmCtrV1 & ) const;
-
-  template <class Protocol_>
-  uint32_t read(Protocol_* iprot);
-  template <class Protocol_>
-  uint32_t write(Protocol_* oprot) const;
-
-  void printTo(std::ostream& out) const;
-};
-
-void swap(AesGcmCtrV1 &a, AesGcmCtrV1 &b) noexcept;
-
-std::ostream& operator<<(std::ostream& out, const AesGcmCtrV1& obj);
-
-typedef struct _EncryptionAlgorithm__isset {
-  _EncryptionAlgorithm__isset() : AES_GCM_V1(false), AES_GCM_CTR_V1(false) {}
-  bool AES_GCM_V1 :1;
-  bool AES_GCM_CTR_V1 :1;
-} _EncryptionAlgorithm__isset;
-
-class EncryptionAlgorithm {
- public:
-
-  EncryptionAlgorithm(const EncryptionAlgorithm&);
-  EncryptionAlgorithm(EncryptionAlgorithm&&) noexcept;
-  EncryptionAlgorithm& operator=(const EncryptionAlgorithm&);
-  EncryptionAlgorithm& operator=(EncryptionAlgorithm&&) noexcept;
-  EncryptionAlgorithm() noexcept;
-
-  ~EncryptionAlgorithm() noexcept;
-  AesGcmV1 AES_GCM_V1;
-  AesGcmCtrV1 AES_GCM_CTR_V1;
-
-  _EncryptionAlgorithm__isset __isset;
-
-  void __set_AES_GCM_V1(const AesGcmV1& val);
-
-  void __set_AES_GCM_CTR_V1(const AesGcmCtrV1& val);
-
-  bool operator == (const EncryptionAlgorithm & rhs) const;
-  bool operator != (const EncryptionAlgorithm &rhs) const {
-    return !(*this == rhs);
-  }
-
-  bool operator < (const EncryptionAlgorithm & ) const;
-
-  template <class Protocol_>
-  uint32_t read(Protocol_* iprot);
-  template <class Protocol_>
-  uint32_t write(Protocol_* oprot) const;
-
-  void printTo(std::ostream& out) const;
-};
-
-void swap(EncryptionAlgorithm &a, EncryptionAlgorithm &b) noexcept;
-
-std::ostream& operator<<(std::ostream& out, const EncryptionAlgorithm& obj);
 
 typedef struct _FileMetaData__isset {
   _FileMetaData__isset() : key_value_metadata(false), created_by(false), column_orders(false), encryption_algorithm(false), footer_signing_key_metadata(false) {}

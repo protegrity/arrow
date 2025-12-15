@@ -17,7 +17,7 @@
 
 #include <span>
 
-#include "parquet/encryption/encryption_internal.h"
+#include "parquet/encryption/aes_encryption.h"
 #include "parquet/exception.h"
 
 namespace parquet::encryption {
@@ -31,9 +31,10 @@ void ThrowOpenSSLRequiredException() {
 
 }  // namespace
 
-class AesEncryptor::AesEncryptorImpl {};
-
-AesEncryptor::~AesEncryptor() {}
+AesCryptoContext::AesCryptoContext(ParquetCipher::type alg_id, int32_t key_len,
+                                   bool metadata, bool include_length) {
+  ThrowOpenSSLRequiredException();
+}
 
 int32_t AesEncryptor::SignedFooterEncrypt(std::span<const uint8_t> footer,
                                           std::span<const uint8_t> key,
@@ -57,11 +58,10 @@ int32_t AesEncryptor::Encrypt(std::span<const uint8_t> plaintext,
 }
 
 AesEncryptor::AesEncryptor(ParquetCipher::type alg_id, int32_t key_len, bool metadata,
-                           bool write_length) {
+                           bool write_length)
+    : AesCryptoContext(alg_id, key_len, metadata, write_length) {
   ThrowOpenSSLRequiredException();
 }
-
-class AesDecryptor::AesDecryptorImpl {};
 
 int32_t AesDecryptor::Decrypt(std::span<const uint8_t> ciphertext,
                               std::span<const uint8_t> key, std::span<const uint8_t> aad,
@@ -69,8 +69,6 @@ int32_t AesDecryptor::Decrypt(std::span<const uint8_t> ciphertext,
   ThrowOpenSSLRequiredException();
   return -1;
 }
-
-AesDecryptor::~AesDecryptor() {}
 
 std::unique_ptr<AesEncryptor> AesEncryptor::Make(ParquetCipher::type alg_id,
                                                  int32_t key_len, bool metadata,
@@ -80,7 +78,8 @@ std::unique_ptr<AesEncryptor> AesEncryptor::Make(ParquetCipher::type alg_id,
 }
 
 AesDecryptor::AesDecryptor(ParquetCipher::type alg_id, int32_t key_len, bool metadata,
-                           bool contains_length) {
+                           bool contains_length)
+    : AesCryptoContext(alg_id, key_len, metadata, contains_length) {
   ThrowOpenSSLRequiredException();
 }
 
