@@ -43,9 +43,11 @@ class TestEncryptionResult : public EncryptionResult {
 public:
     TestEncryptionResult(std::vector<uint8_t> data, bool success = true, 
                         std::string error_msg = "", 
-                        std::map<std::string, std::string> error_fields = {})
+                        std::map<std::string, std::string> error_fields = {},
+                        std::optional<std::map<std::string, std::string>> metadata = std::nullopt)
         : ciphertext_data_(std::move(data)), success_(success), 
-          error_message_(std::move(error_msg)), error_fields_(std::move(error_fields)) {}
+          error_message_(std::move(error_msg)), error_fields_(std::move(error_fields)),
+          metadata_(std::move(metadata)) {}
 
     span<const uint8_t> ciphertext() const override {
         return span<const uint8_t>(ciphertext_data_.data(), ciphertext_data_.size());
@@ -53,6 +55,9 @@ public:
 
     std::size_t size() const override { return ciphertext_data_.size(); }
     bool success() const override { return success_; }
+    const std::optional<std::map<std::string, std::string>> encryption_metadata() const override {
+        return metadata_;
+    }
     const std::string& error_message() const override { return error_message_; }
     const std::map<std::string, std::string>& error_fields() const override { return error_fields_; }
 
@@ -61,6 +66,7 @@ private:
     bool success_;
     std::string error_message_;
     std::map<std::string, std::string> error_fields_;
+    std::optional<std::map<std::string, std::string>> metadata_;
 };
 
 // Simple implementation of DecryptionResult for testing
@@ -166,6 +172,20 @@ class MockCompanionDBPA {
   const std::vector<uint8_t>& GetDecryptCiphertext() const { return decrypt_ciphertext_; }
   size_t GetEncryptCiphertextSize() const { return encrypt_ciphertext_size_; }
   std::shared_ptr<DestructionOrderTracker> GetOrderTracker() const { return order_tracker_; }
+  const std::map<std::string, std::string>& GetLastEncryptEncodingAttrs() const {
+    return last_encrypt_encoding_attrs_;
+  }
+  const std::map<std::string, std::string>& GetLastDecryptEncodingAttrs() const {
+    return last_decrypt_encoding_attrs_;
+  }
+  void SetNextEncryptResultMetadata(std::optional<std::map<std::string, std::string>> metadata) {
+    next_encrypt_result_metadata_ = std::move(metadata);
+  }
+  std::optional<std::map<std::string, std::string>> ConsumeNextEncryptResultMetadata() {
+    auto tmp = std::move(next_encrypt_result_metadata_);
+    next_encrypt_result_metadata_.reset();
+    return tmp;
+  }
 
   // Init tracking methods
   const std::string& GetInitColumnName() const { return init_column_name_; }
@@ -193,7 +213,13 @@ class MockCompanionDBPA {
   void SetEncryptPlaintext(const std::vector<uint8_t>& plaintext) { encrypt_plaintext_ = plaintext; }
   void SetDecryptCiphertext(const std::vector<uint8_t>& ciphertext) { decrypt_ciphertext_ = ciphertext; }
   void SetEncryptCiphertextSize(size_t size) { encrypt_ciphertext_size_ = size; }
-  
+  void SetLastEncryptEncodingAttrs(std::map<std::string, std::string> attrs) {
+    last_encrypt_encoding_attrs_ = std::move(attrs);
+  }
+  void SetLastDecryptEncodingAttrs(std::map<std::string, std::string> attrs) {
+    last_decrypt_encoding_attrs_ = std::move(attrs);
+  }
+
   // Init parameter tracking
   void SetInitParameters(
       std::string column_name,
@@ -238,6 +264,7 @@ class MockCompanionDBPA {
   std::optional<std::map<std::string, std::string>> init_column_encryption_metadata_;
   std::map<std::string, std::string> last_encrypt_encoding_attrs_;
   std::map<std::string, std::string> last_decrypt_encoding_attrs_;
+  std::optional<std::map<std::string, std::string>> next_encrypt_result_metadata_;
 }; //MockCompanionDBPA
 
 // Companion object to track shared library handle management operations
@@ -312,24 +339,29 @@ class MockDataBatchProtectionAgent : public DataBatchProtectionAgentInterface {
 
   std::unique_ptr<EncryptionResult> Encrypt(
       span<const uint8_t> plaintext,
-      std::map<std::string, std::string>) override {
+      std::map<std::string, std::string> encoding_attributes) override {
     companion_->SetEncryptCalled(true);
     companion_->IncrementEncryptCount();
     companion_->SetEncryptPlaintext(std::vector<uint8_t>(plaintext.begin(), plaintext.end()));
     companion_->SetEncryptCiphertextSize(plaintext.size());
-    
+    companion_->SetLastEncryptEncodingAttrs(std::move(encoding_attributes));
+
     // Create a simple mock encryption result
     std::vector<uint8_t> ciphertext_data(plaintext.begin(), plaintext.end());
-    return std::make_unique<TestEncryptionResult>(std::move(ciphertext_data));
+    auto result_metadata = companion_->ConsumeNextEncryptResultMetadata();
+    return std::make_unique<TestEncryptionResult>(std::move(ciphertext_data), true, "",
+                                                  std::map<std::string, std::string>{},
+                                                  std::move(result_metadata));
   }
 
   std::unique_ptr<DecryptionResult> Decrypt(
       span<const uint8_t> ciphertext,
-      std::map<std::string, std::string>) override {
+      std::map<std::string, std::string> encoding_attributes) override {
     companion_->SetDecryptCalled(true);
     companion_->IncrementDecryptCount();
     companion_->SetDecryptCiphertext(std::vector<uint8_t>(ciphertext.begin(), ciphertext.end()));
-    
+    companion_->SetLastDecryptEncodingAttrs(std::move(encoding_attributes));
+
     // Create a simple mock decryption result
     std::vector<uint8_t> plaintext_data(ciphertext.begin(), ciphertext.end());
     return std::make_unique<TestDecryptionResult>(std::move(plaintext_data));
@@ -605,6 +637,9 @@ TEST_F(DBPALibraryWrapperTest, EncryptDecryptEncodingAttributesDelegation) {
   auto wrapper = CreateWrapper();
 
   // Encrypt
+  std::map<std::string, std::string> expected_result_metadata = {{"encryption_algorithm_version", "1"},
+                                                                 {"test_kid", "kid_123"}};
+  mock_companion_->SetNextEncryptResultMetadata(expected_result_metadata);
   std::map<std::string, std::string> enc_attrs = {{"format", "plain"}, {"scale", "0"}};
   span<const uint8_t> plaintext_span(
       reinterpret_cast<const uint8_t*>(test_plaintext_.data()),
@@ -612,12 +647,16 @@ TEST_F(DBPALibraryWrapperTest, EncryptDecryptEncodingAttributesDelegation) {
 
   auto enc_result = wrapper->Encrypt(plaintext_span, enc_attrs);
   EXPECT_NE(enc_result, nullptr);
+  EXPECT_EQ(mock_companion_->GetLastEncryptEncodingAttrs(), enc_attrs);
+  ASSERT_TRUE(enc_result->encryption_metadata().has_value());
+  EXPECT_EQ(enc_result->encryption_metadata().value(), expected_result_metadata);
 
   // Decrypt
   auto ct_span = enc_result->ciphertext();
   std::map<std::string, std::string> dec_attrs = {{"format", "plain"}};
   auto dec_result = wrapper->Decrypt(ct_span, dec_attrs);
   EXPECT_NE(dec_result, nullptr);
+  EXPECT_EQ(mock_companion_->GetLastDecryptEncodingAttrs(), dec_attrs);
 }
 
 TEST_F(DBPALibraryWrapperTest, DecryptDelegation) {

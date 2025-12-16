@@ -33,9 +33,11 @@ class TestEncryptionResult : public EncryptionResult {
 public:
     TestEncryptionResult(std::vector<uint8_t> data, bool success = true, 
                         std::string error_msg = "", 
-                        std::map<std::string, std::string> error_fields = {})
+                        std::map<std::string, std::string> error_fields = {},
+                        std::optional<std::map<std::string, std::string>> metadata = std::nullopt)
         : ciphertext_data_(std::move(data)), success_(success), 
-          error_message_(std::move(error_msg)), error_fields_(std::move(error_fields)) {}
+          error_message_(std::move(error_msg)), error_fields_(std::move(error_fields)),
+          metadata_(std::move(metadata)) {}
 
     span<const uint8_t> ciphertext() const override {
         return span<const uint8_t>(ciphertext_data_.data(), ciphertext_data_.size());
@@ -43,6 +45,9 @@ public:
 
     std::size_t size() const override { return ciphertext_data_.size(); }
     bool success() const override { return success_; }
+    const std::optional<std::map<std::string, std::string>> encryption_metadata() const override {
+        return metadata_;
+    }
     const std::string& error_message() const override { return error_message_; }
     const std::map<std::string, std::string>& error_fields() const override { return error_fields_; }
 
@@ -51,6 +56,7 @@ private:
     bool success_;
     std::string error_message_;
     std::map<std::string, std::string> error_fields_;
+    std::optional<std::map<std::string, std::string>> metadata_;
 };
 
 class TestDecryptionResult : public DecryptionResult {
