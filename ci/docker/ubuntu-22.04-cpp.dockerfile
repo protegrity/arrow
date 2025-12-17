@@ -73,6 +73,7 @@ RUN apt-get update -y -q && \
         gdb \
         git \
         libbenchmark-dev \
+        libboost-date-time-dev \
         libboost-filesystem-dev \
         libbrotli-dev \
         libbz2-dev \
