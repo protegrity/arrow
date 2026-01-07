@@ -1999,8 +1999,8 @@ TEST(ExternalDbpaConcurrencyTest, FailsWhenUseThreadsTrue) {
   parquet::ExternalFileEncryptionProperties::Builder fep_builder(footer_key);
   fep_builder.footer_key_metadata("kf")
             ->encrypted_columns(enc_cols)
-            ->algorithm(parquet::ParquetCipher::AES_GCM_V1)
-            ->connection_config({{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
+           ->algorithm(parquet::ParquetCipher::AES_GCM_V1)
+           ->configuration_properties({{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
                                    {{"agent_library_path", lib_path},
                                     {"file_path", "/tmp/test"}}}});
 
@@ -2019,8 +2019,8 @@ TEST(ExternalDbpaConcurrencyTest, FailsWhenUseThreadsTrue) {
 
   parquet::ExternalFileDecryptionProperties::Builder dep_builder;
   dep_builder.key_retriever(kr)
-            ->app_context("{}")
-            ->connection_config({{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
+           ->app_context("{}")
+           ->configuration_properties({{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
                                   {{"agent_library_path", lib_path},
                                     {"file_path", "/tmp/test"}}}});
   parquet::ReaderProperties rp = parquet::default_reader_properties();
