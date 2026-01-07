@@ -430,7 +430,7 @@ class PARQUET_EXPORT ExternalFileDecryptionProperties : public FileDecryptionPro
      return app_context_;
    }
  
-   const std::map<ParquetCipher::type, std::map<std::string, std::string>>& 
+   const std::map<ParquetCipher::type, std::map<std::string, std::string>>&
        configuration_properties() const {
      return configuration_properties_;
    }
@@ -618,7 +618,7 @@ class PARQUET_EXPORT ExternalFileEncryptionProperties : public FileEncryptionPro
  
    const std::map<ParquetCipher::type, std::map<std::string, std::string>>&
       configuration_properties() const {
-     return configuration_properties_;
+    return configuration_properties_;
    }
  
   private:

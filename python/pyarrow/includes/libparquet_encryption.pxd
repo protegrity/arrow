@@ -104,7 +104,7 @@ cdef extern from "parquet/encryption/crypto_factory.h" \
         int32_t data_key_length_bits
         unordered_map[c_string, CColumnEncryptionAttributes] per_column_encryption
         c_string app_context
-        unordered_map[ParquetCipher, unordered_map[c_string, c_string]] connection_config 
+        unordered_map[ParquetCipher, unordered_map[c_string, c_string]] configuration_properties 
 
     cdef cppclass CDecryptionConfiguration\
             " parquet::encryption::DecryptionConfiguration":
@@ -116,7 +116,7 @@ cdef extern from "parquet/encryption/crypto_factory.h" \
         CExternalDecryptionConfiguration() except +
         double cache_lifetime_seconds
         c_string app_context
-        unordered_map[ParquetCipher, unordered_map[c_string, c_string]] connection_config 
+        unordered_map[ParquetCipher, unordered_map[c_string, c_string]] configuration_properties 
 
     cdef cppclass CCryptoFactory" parquet::encryption::CryptoFactory":
         void RegisterKmsClientFactory(

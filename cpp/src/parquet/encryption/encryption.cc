@@ -164,7 +164,7 @@ ExternalFileDecryptionProperties::Builder*
 ExternalFileDecryptionProperties::Builder::configuration_properties(
     std::map<ParquetCipher::type, std::map<std::string, std::string>> config) {
   if (configuration_properties_.size() != 0) {
-    throw ParquetException("Connection config already set");
+    throw ParquetException("Configuration properties already set");
   }
 
   if (config.size() == 0) {
@@ -434,7 +434,7 @@ ExternalFileEncryptionProperties::Builder*
 ExternalFileEncryptionProperties::Builder::configuration_properties(
     std::map<ParquetCipher::type, std::map<std::string, std::string>> config) {
   if (configuration_properties_.size() != 0) {
-    throw ParquetException("Connection config already set");
+    throw ParquetException("Configuration properties already set");
   }
 
   if (config.size() == 0) {
