@@ -40,8 +40,7 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
   static std::unique_ptr<ExternalDBPAEncryptorAdapter> Make(
       ParquetCipher::type algorithm, std::string column_name,
       std::string key_id, Type::type data_type, Compression::type compression_type,
-      Encoding::type encoding_type, std::string app_context,
-      std::map<std::string, std::string> configuration_properties,
+      std::string app_context, std::map<std::string, std::string> configuration_properties,
       std::optional<int> datatype_length);
 
   ~ExternalDBPAEncryptorAdapter() = default;
@@ -87,7 +86,7 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
     ExternalDBPAEncryptorAdapter(
       ParquetCipher::type algorithm, std::string column_name,
       std::string key_id, Type::type data_type, Compression::type compression_type,
-      Encoding::type encoding_type, std::optional<int> datatype_length, std::string app_context,
+      std::optional<int> datatype_length, std::string app_context,
       std::map<std::string, std::string> configuration_properties,
       std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
 
@@ -152,8 +151,7 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
   static std::unique_ptr<ExternalDBPADecryptorAdapter> Make(
       ParquetCipher::type algorithm, std::string column_name,
       std::string key_id, Type::type data_type, Compression::type compression_type,
-      std::vector<Encoding::type> encoding_types, std::string app_context,
-      std::map<std::string, std::string> configuration_properties,
+      std::string app_context, std::map<std::string, std::string> configuration_properties,
       std::optional<int> datatype_length,
       std::shared_ptr<const KeyValueMetadata> key_value_metadata);
 
@@ -196,8 +194,8 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
     ExternalDBPADecryptorAdapter(
       ParquetCipher::type algorithm, std::string column_name,
       std::string key_id, Type::type data_type, Compression::type compression_type,
-      std::vector<Encoding::type> encoding_types, std::optional<int> datatype_length,
-      std::string app_context, std::map<std::string, std::string> configuration_properties,
+      std::optional<int> datatype_length, std::string app_context,
+      std::map<std::string, std::string> configuration_properties,
       std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance,
       std::shared_ptr<const KeyValueMetadata> key_value_metadata);
 
