@@ -100,7 +100,6 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
     std::string key_id_;
     Type::type data_type_;
     Compression::type compression_type_;
-    Encoding::type encoding_type_;
     std::optional<int> datatype_length_;
     std::string app_context_;
     std::map<std::string, std::string> configuration_properties_;
@@ -209,8 +208,6 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
     std::string key_id_;
     Type::type data_type_;
     Compression::type compression_type_;
-    // Set of all encodings used for this column. Comes directly from the column chunk metadata.
-    std::vector<Encoding::type> encoding_types_;
     std::optional<int> datatype_length_;
     std::string app_context_;
     std::map<std::string, std::string> configuration_properties_;
