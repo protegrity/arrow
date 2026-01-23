@@ -178,7 +178,7 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
   /// decryption.
   int32_t DecryptWithManagedBuffer(::arrow::util::span<const uint8_t> ciphertext,
                                    ::arrow::ResizableBuffer* plaintext) override {
-      throw ParquetException(
+    throw ParquetException(
         "DecryptWithManagedBuffer is not supported in AesDecryptor, use Decrypt instead");
   }
 
@@ -194,12 +194,12 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
 
   int32_t GcmDecrypt(::arrow::util::span<const uint8_t> ciphertext,
                      ::arrow::util::span<const uint8_t> key,
-                    ::arrow::util::span<const uint8_t> aad,
-                    ::arrow::util::span<uint8_t> plaintext);
+                     ::arrow::util::span<const uint8_t> aad,
+                     ::arrow::util::span<uint8_t> plaintext);
 
   int32_t CtrDecrypt(::arrow::util::span<const uint8_t> ciphertext,
-                    ::arrow::util::span<const uint8_t> key,
-                    ::arrow::util::span<uint8_t> plaintext);
+                     ::arrow::util::span<const uint8_t> key,
+                     ::arrow::util::span<uint8_t> plaintext);
 };
 
 }  // namespace parquet::encryption

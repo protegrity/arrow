@@ -60,7 +60,7 @@ AesCryptoContext::AesCryptoContext(ParquetCipher::type alg_id, int32_t key_len,
   // Not all encryptors support metadata encryption. When that happens, even if the
   // ParquetCipher is not AES, the metadata is encrypted using AES. This check
   // should pass.
-  bool is_aes_algorithm = 
+  bool is_aes_algorithm =
       ParquetCipher::AES_GCM_V1 == alg_id || ParquetCipher::AES_GCM_CTR_V1 == alg_id;
   if (!is_aes_algorithm && !metadata) {
     std::stringstream ss;
@@ -378,7 +378,7 @@ AesDecryptor::AesDecryptor(ParquetCipher::type alg_id, int32_t key_len, bool met
 std::unique_ptr<AesDecryptor> AesDecryptor::Make(ParquetCipher::type alg_id,
                                                  int32_t key_len, bool metadata) {
   return std::make_unique<AesDecryptor>(alg_id, key_len, metadata);
-}  
+}
 
 int32_t AesDecryptor::PlaintextLength(int32_t ciphertext_len) const {
   if (ciphertext_len < ciphertext_size_delta_) {
@@ -406,8 +406,7 @@ int32_t AesDecryptor::CiphertextLength(int32_t plaintext_len) const {
 }
 
 int32_t AesDecryptor::Decrypt(span<const uint8_t> ciphertext, span<const uint8_t> key,
-                              span<const uint8_t> aad,
-    span<uint8_t> plaintext) {
+                              span<const uint8_t> aad, span<uint8_t> plaintext) {
   if (static_cast<size_t>(key_length_) != key.size()) {
     std::stringstream ss;
     ss << "Wrong key length " << key.size() << ". Should be " << key_length_;

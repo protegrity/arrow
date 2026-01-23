@@ -106,39 +106,39 @@ struct PARQUET_EXPORT ExternalEncryptionConfiguration : public EncryptionConfigu
   explicit ExternalEncryptionConfiguration(const std::string& footer_key)
       : EncryptionConfiguration(footer_key) {}
 
-/// Map of the columns to encrypt to their associated encryption parameters. The id
-/// of the map is the column name, and the value is a ColumnEncryptionAttributes
-/// struct that can be used to construct the ColumnEncryptionProperties in the
-/// CryptoFactory. As with the EncryptionConfiguration, either:
-/// (1) uniform_encryption = true
-/// or
-/// (2) column_keys and/or per_column_encryption is set
-/// If none of (1) and (2) are true, or if both are true, an exception will be thrown.
-/// If a column name appears in the original column_keys list, it will be encrypted
-/// with the algorithm specified in the encryption_algorithm field. 
-/// If a column name appears in the new per_column_encryption map, it will be
-/// encrypted using the per column specific algorithm and key.
-/// If a column name appears in both, an exception will be thrown.
-std::unordered_map<std::string, ColumnEncryptionAttributes> per_column_encryption;
+  /// Map of the columns to encrypt to their associated encryption parameters. The id
+  /// of the map is the column name, and the value is a ColumnEncryptionAttributes
+  /// struct that can be used to construct the ColumnEncryptionProperties in the
+  /// CryptoFactory. As with the EncryptionConfiguration, either:
+  /// (1) uniform_encryption = true
+  /// or
+  /// (2) column_keys and/or per_column_encryption is set
+  /// If none of (1) and (2) are true, or if both are true, an exception will be thrown.
+  /// If a column name appears in the original column_keys list, it will be encrypted
+  /// with the algorithm specified in the encryption_algorithm field.
+  /// If a column name appears in the new per_column_encryption map, it will be
+  /// encrypted using the per column specific algorithm and key.
+  /// If a column name appears in both, an exception will be thrown.
+  std::unordered_map<std::string, ColumnEncryptionAttributes> per_column_encryption;
 
-/// External encryptors may use additional context provided by the application to
-/// enforce robust access control. The values sent to the external encryptor depend
-/// on each implementation. 
-/// This value must be a valid JSON-formatted string.
-/// Validation of the string will be done by the external encryptor, Arrow will only
-/// forward this value.
-/// Format:
-/// "{\"user_id\": \"abc123\", \"location\": {\"lat\": 9.7489, \"lon\": -83.7534}}"
-std::string app_context;
+  /// External encryptors may use additional context provided by the application to
+  /// enforce robust access control. The values sent to the external encryptor depend
+  /// on each implementation.
+  /// This value must be a valid JSON-formatted string.
+  /// Validation of the string will be done by the external encryptor, Arrow will only
+  /// forward this value.
+  /// Format:
+  /// "{\"user_id\": \"abc123\", \"location\": {\"lat\": 9.7489, \"lon\": -83.7534}}"
+  std::string app_context;
 
-/// Map of the encryption algorithms to the key/value map of the location of
-/// configuration files needed by the external encryptors. This may include location
-/// of a dynamically-linked library, or the location of a file where the external
-/// encryptor can find urls, certificates, and parameters needed to make a remote call. 
-/// For security, these values should never be sent in this config, only the locations
-/// of the files that the external encryptor will know how to access.
-std::unordered_map<ParquetCipher::type, std::unordered_map<std::string, std::string>>
-    configuration_properties;
+  /// Map of the encryption algorithms to the key/value map of the location of
+  /// configuration files needed by the external encryptors. This may include location
+  /// of a dynamically-linked library, or the location of a file where the external
+  /// encryptor can find urls, certificates, and parameters needed to make a remote call.
+  /// For security, these values should never be sent in this config, only the locations
+  /// of the files that the external encryptor will know how to access.
+  std::unordered_map<ParquetCipher::type, std::unordered_map<std::string, std::string>>
+      configuration_properties;
 };
 
 struct PARQUET_EXPORT DecryptionConfiguration {
@@ -151,7 +151,7 @@ struct PARQUET_EXPORT DecryptionConfiguration {
 struct PARQUET_EXPORT ExternalDecryptionConfiguration : public DecryptionConfiguration {
   /// External decryptors may use additional context provided by the application to
   /// enforce robust access control. The values sent to the external decryptor depend
-  /// on each implementation. 
+  /// on each implementation.
   /// This value must be a valid JSON-formatted string.
   /// Validation of the string will be done by the external decryptors, Arrow will
   /// only forward this value.
@@ -163,7 +163,7 @@ struct PARQUET_EXPORT ExternalDecryptionConfiguration : public DecryptionConfigu
   /// configuration files needed by the external decryptors. This may include
   /// location of a dynamically-linked library, or the location of a file where the
   /// external decryptor can find urls, certificates, and parameters needed to make a
-  /// remote call. 
+  /// remote call.
   /// For security, these values should never be sent in this config, only the
   /// locations of the files that the external decryptor will know how to access.
   std::unordered_map<ParquetCipher::type, std::unordered_map<std::string, std::string>>

@@ -279,11 +279,10 @@ if(PARQUET_REQUIRE_ENCRYPTION)
   # DBPS interface (header-only)
   fetchcontent_declare(dbps_agent
                        GIT_REPOSITORY https://github.com/protegrity/DataBatchProtectionService.git
-                      #TODO: Change to a specific tag/commit when we have one.
-                      #https://github.com/protegrity/arrow/issues/179
-                      GIT_TAG 4c808b2233ed0bc04529c3b0dbf7c214c4901043
-                      GIT_SHALLOW FALSE
-  )
+                       #TODO: Change to a specific tag/commit when we have one.
+                       #https://github.com/protegrity/arrow/issues/179
+                       GIT_TAG 4c808b2233ed0bc04529c3b0dbf7c214c4901043
+                       GIT_SHALLOW FALSE)
 
   fetchcontent_getproperties(dbps_agent)
   if(NOT dbps_agent_POPULATED)
@@ -306,23 +305,20 @@ if(PARQUET_REQUIRE_ENCRYPTION)
 
     #builds DBPS shared libraries alongside Parquet
     #same OS, same architecture, same compiler, same build type, same CMake args
-    externalproject_add(
-      dbps_external
-      DOWNLOAD_COMMAND "" # disables download, assumes (correctly) that sources are already fetched
-      SOURCE_DIR ${dbps_agent_SOURCE_DIR}
-      BINARY_DIR ${dbps_agent_BINARY_DIR}
-      CMAKE_ARGS
-        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-        -DBUILD_SHARED_LIBS=ON
-        -DBUILD_TESTING=OFF
-
-        # Place DBPS outputs next to Arrow artifacts
-        -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
-        -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
-        -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
-        ${PARQUET_DBPS_CMAKE_ARGS}
-      INSTALL_COMMAND "" #disables install - artifacts already copied to BUILD_OUTPUT_ROOT_DIRECTORY
-    )
+    externalproject_add(dbps_external
+                        DOWNLOAD_COMMAND "" # disables download, assumes (correctly) that sources are already fetched
+                        SOURCE_DIR ${dbps_agent_SOURCE_DIR}
+                        BINARY_DIR ${dbps_agent_BINARY_DIR}
+                        CMAKE_ARGS -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+                                   -DBUILD_SHARED_LIBS=ON
+                                   -DBUILD_TESTING=OFF
+                                   # Place DBPS outputs next to Arrow artifacts
+                                   -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
+                                   -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
+                                   -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
+                                   ${PARQUET_DBPS_CMAKE_ARGS}
+                        INSTALL_COMMAND "" #disables install - artifacts already copied to BUILD_OUTPUT_ROOT_DIRECTORY
+     )
   endif()
 
   list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS magic_enum_header_only tcb_span)

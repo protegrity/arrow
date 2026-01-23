@@ -33,7 +33,7 @@ namespace parquet::encryption {
 class EncodingPropertiesBuilder;
 
 class EncodingProperties {
-public:
+ public:
   static std::unique_ptr<EncodingProperties> MakeFromMetadata(
       const ColumnDescriptor* column_descriptor,
       const WriterProperties* writer_properties, const Page& column_page);
@@ -57,7 +57,7 @@ public:
 
  private:
   // Private constructor for builder
-  EncodingProperties(const EncodingPropertiesBuilder& builder);
+  explicit EncodingProperties(const EncodingPropertiesBuilder& builder);
 
   EncodingProperties(std::optional<std::string> column_path,
                      std::optional<parquet::Type::type> physical_type,
@@ -293,4 +293,4 @@ inline std::string EnumToString(parquet::PageType::type t) {
   }
 }
 
-}  //namespace parquet::encryption
+}  // namespace parquet::encryption

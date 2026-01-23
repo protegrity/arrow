@@ -41,10 +41,10 @@ class CryptoFactoryTest : public ::testing::Test {
         std::make_shared<TestOnlyInMemoryKmsClientFactory>(true, key_list_));
   }
 
-protected:
- std::unordered_map<std::string, ::arrow::util::SecureString> key_list_;
- KmsConnectionConfig kms_config_;
- CryptoFactory crypto_factory_;
+ protected:
+  std::unordered_map<std::string, ::arrow::util::SecureString> key_list_;
+  KmsConnectionConfig kms_config_;
+  CryptoFactory crypto_factory_;
 };
 
 TEST_F(CryptoFactoryTest, UniformEncryptionAndColumnKeysThrowsException) {
@@ -75,13 +75,13 @@ TEST_F(CryptoFactoryTest, UniformEncryptionAndPerColumnEncryptionThrowsException
   config.per_column_encryption = per_column_encryption;
 
   try {
-      auto properties =
-          crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
-      FAIL() << "ParquetException should have been raised";
+    auto properties =
+        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
+    FAIL() << "ParquetException should have been raised";
   } catch (const ParquetException& xcp) {
-      EXPECT_THAT(xcp.what(), HasSubstr("Cannot set both column encryption and uniform"));
+    EXPECT_THAT(xcp.what(), HasSubstr("Cannot set both column encryption and uniform"));
   } catch (...) {
-      FAIL() << "Caught unexpected exception type";
+    FAIL() << "Caught unexpected exception type";
   }
 }
 
@@ -89,14 +89,14 @@ TEST_F(CryptoFactoryTest, NoUniformEncryptionAndNoColumnsThrowsException) {
   ExternalEncryptionConfiguration config("kf");
 
   try {
-      auto properties =
-          crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
-      FAIL() << "ParquetException should have been raised";
+    auto properties =
+        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
+    FAIL() << "ParquetException should have been raised";
   } catch (const ParquetException& xcp) {
-      EXPECT_THAT(xcp.what(), HasSubstr("uniform_encryption must be set or column "
-                                        "encryption must be specified in either"));
+    EXPECT_THAT(xcp.what(), HasSubstr("uniform_encryption must be set or column "
+                                      "encryption must be specified in either"));
   } catch (...) {
-      FAIL() << "Caught unexpected exception type";
+    FAIL() << "Caught unexpected exception type";
   }
 }
 
@@ -170,10 +170,10 @@ TEST_F(CryptoFactoryTest, ExternalEncryptionConfig) {
   auto properties =
       crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
   EXPECT_EQ(16, properties->footer_key().size());
-  EXPECT_TRUE(properties->footer_key_metadata().size() > 0);
+  EXPECT_GT(properties->footer_key_metadata().size(), 0);
   EXPECT_EQ(ParquetCipher::AES_GCM_V1, properties->algorithm().algorithm);
   EXPECT_FALSE(properties->encrypted_footer());
-  EXPECT_TRUE(properties->encrypted_columns().size() == 4);
+  EXPECT_EQ(properties->encrypted_columns().size(), 4);
 
   auto column_properties_1 = properties->column_encryption_properties("col1");
   EXPECT_EQ("col1", column_properties_1->column_path());

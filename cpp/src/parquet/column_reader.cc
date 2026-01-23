@@ -440,7 +440,8 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
 
     builder.PageType(parquet::PageType::type::DICTIONARY_PAGE);
     builder.PageEncoding(ToParquetEncoding(dictionary_page_header.encoding));
-  } else if (page_type_from_header == format::PageType::DATA_PAGE) {  // this is DataPageV1
+  } else if (page_type_from_header ==
+             format::PageType::DATA_PAGE) {  // this is DataPageV1
     format::DataPageHeader data_page_header = page_header.data_page_header;
 
     builder.PageType(parquet::PageType::type::DATA_PAGE);
@@ -482,7 +483,7 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
   }
 
   return builder.Build();
-} // SerializedPageReader::GetEncodingProperties
+}  // SerializedPageReader::GetEncodingProperties
 
 std::shared_ptr<Page> SerializedPageReader::NextPage() {
   ThriftDeserializer deserializer(properties_);

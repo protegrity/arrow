@@ -320,11 +320,11 @@ class SerializedPageWriter : public PageWriter {
       // (parquet/file_writer.cc). The SchemaDescriptor is passed down to
       // RowGroupMetadataBuilder NextColumnChunk() (parquet/metadata.cc)
       // where a ColumnDescriptor is extracted from the SchemaDescriptor, and
-      // passed into ColumnChunkMetaDataBuilder::Make() 
+      // passed into ColumnChunkMetaDataBuilder::Make()
 
-      std::unique_ptr<EncodingProperties> encoding_properties = 
+      std::unique_ptr<EncodingProperties> encoding_properties =
           EncodingProperties::MakeFromMetadata(metadata_->descr(),
-                                               metadata_->properties(), 
+                                               metadata_->properties(),
                                                static_cast<const DictionaryPage&>(page));
       data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
@@ -447,10 +447,10 @@ class SerializedPageWriter : public PageWriter {
       // (parquet/file_writer.cc). The SchemaDescriptor is passed down to
       // RowGroupMetadataBuilder NextColumnChunk() (parquet/metadata.cc) where a
       // ColumnDescriptor is extracted from the SchemaDescriptor, and passed into
-      // ColumnChunkMetaDataBuilder::Make() 
-      std::unique_ptr<EncodingProperties> encoding_properties = 
-          EncodingProperties::MakeFromMetadata(metadata_->descr(), 
-                                               metadata_->properties(), 
+      // ColumnChunkMetaDataBuilder::Make()
+      std::unique_ptr<EncodingProperties> encoding_properties =
+          EncodingProperties::MakeFromMetadata(metadata_->descr(),
+                                               metadata_->properties(),
                                                static_cast<const DataPage&>(page));
       data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
@@ -681,8 +681,8 @@ class SerializedPageWriter : public PageWriter {
         if (it->second != value) {
           std::stringstream ss;
           ss << "Encryptor-provided metadata attempts to override key '" << key
-              << "' with a different value (old='" << it->second
-              << "', new='" << value << "')";
+             << "' with a different value (old='" << it->second << "', new='" << value
+             << "')";
           throw ParquetException(ss.str());
         }
       } else {

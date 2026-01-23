@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 # ###################################################################################
 
 """
@@ -257,7 +274,7 @@ def write_encrypted_parquet_file(parquet_path, use_remote_service, scenario_id):
         case 3:
             # Other parameters that can be specified involve the data page version
             # (which impacts how the data bytes are formatted), and specific
-            # column encodings. 
+            # column encodings.
             pp.write_table(sample_data, parquet_path,
                            encryption_properties=external_file_encryption_properties,
                            data_page_version="2.0")
@@ -318,7 +335,7 @@ See the write_encrypted_parquet_file() function for more details on each scenari
 and its implications.
 """
 def round_trip_parquet_file_encryption():
-    #for use_remote_service in [True, False]:
+    # for use_remote_service in [True, False]:
     for use_remote_service in [False]:
         service_path_prefix = 'remote' if use_remote_service else 'local'
         for scenario_id in [1, 2, 3]:

@@ -2258,8 +2258,7 @@ Result<void*> LoadDynamicLibrary(const char* path) {
   // dlopen(3) man page: "If dlopen() fails for any reason, it returns NULL."
   // There is no null-returning non-error condition.
   auto* error = dlerror();
-  return Status::IOError(
-    "dlopen(", path, ") failed: ", error ? error : "unknown error");
+  return Status::IOError("dlopen(", path, ") failed: ", error ? error : "unknown error");
 #endif
 }
 
@@ -2270,8 +2269,7 @@ Result<void*> LoadDynamicLibrary(const PlatformFilename& path) {
   }
   // win32 api doc: "If the function fails, the return value is NULL."
   // There is no null-returning non-error condition.
-  return IOErrorFromWinError(
-    GetLastError(), "LoadLibrary(", path.ToString(), ") failed");
+  return IOErrorFromWinError(GetLastError(), "LoadLibrary(", path.ToString(), ") failed");
 #else
   return LoadDynamicLibrary(path.ToNative().c_str());
 #endif
@@ -2295,8 +2293,7 @@ Result<void*> GetSymbol(void* handle, const char* name) {
   // dlsym(3) man page: "On failure, they return NULL"
   // There is no null-returning non-error condition.
   auto* error = dlerror();
-  return Status::IOError(
-    "dlsym(", name, ") failed: ", error ? error : "unknown error");
+  return Status::IOError("dlsym(", name, ") failed: ", error ? error : "unknown error");
 #endif
 }
 

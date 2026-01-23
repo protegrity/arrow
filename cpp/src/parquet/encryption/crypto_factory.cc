@@ -75,30 +75,30 @@ int ValidateAndGetKeyLength(int32_t dek_length_bits) {
 
 std::map<ParquetCipher::type, std::map<std::string, std::string>>
 ConvertConfigurationProperties(
-    const std::unordered_map<ParquetCipher::type, 
+    const std::unordered_map<ParquetCipher::type,
                              std::unordered_map<std::string, std::string>>&
         configuration_properties) {
 
   std::map<ParquetCipher::type, std::map<std::string, std::string>> converted_config;
 
   for (const auto& [cipher_type, inner_config] : configuration_properties) {
-      if (!IsParquetCipherSupported(cipher_type)) {
-          throw ParquetException("Invalid ParquetCipher type: " + 
-                                 std::to_string(static_cast<int>(cipher_type)));
-      }
+    if (!IsParquetCipherSupported(cipher_type)) {
+        throw ParquetException("Invalid ParquetCipher type: " + 
+                                std::to_string(static_cast<int>(cipher_type)));
+    }
 
-      std::map<std::string, std::string> converted_inner;
-      for (const auto& [key, value] : inner_config) {
-          if (key.empty()) {
-              throw ParquetException("Empty key in configuration properties");
-          }            
-          if (value.empty()) {
-              throw ParquetException("Empty value for key '" + key + 
-                                     "' in configuration properties");
-          }            
-          converted_inner[key] = value;
-      }          
-      converted_config[cipher_type] = converted_inner;
+    std::map<std::string, std::string> converted_inner;
+    for (const auto& [key, value] : inner_config) {
+        if (key.empty()) {
+            throw ParquetException("Empty key in configuration properties");
+        }            
+        if (value.empty()) {
+            throw ParquetException("Empty value for key '" + key + 
+                                    "' in configuration properties");
+        }            
+        converted_inner[key] = value;
+    }          
+    converted_config[cipher_type] = converted_inner;
   }
 
   return converted_config;      
@@ -163,14 +163,16 @@ std::shared_ptr<ExternalFileEncryptionProperties>
 CryptoFactory::GetExternalFileEncryptionProperties(
     const KmsConnectionConfig& kms_connection_config,
     const ExternalEncryptionConfiguration& external_encryption_config,
-    const std::string& file_path, const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
+    const std::string& file_path,
+    const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
   // Validate the same rules as FileEncryptionProperties but considering
   // per_column_encryption too. If uniform_encryption is not set then either
   // column_keys or per_column_encryption must have values. If uniform_encryption
   // is set, then both column_keys and per_column_encryption must be empty.
-  if (external_encryption_config.encryption_algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
+  if (external_encryption_config.encryption_algorithm ==
+      ParquetCipher::EXTERNAL_DBPA_V1) {
     throw ParquetException(
-      "EXTERNAL_DBPA_V1 algorithm is not supported for file level encryption");
+        "EXTERNAL_DBPA_V1 algorithm is not supported for file level encryption");
   }
   bool no_columns_encrypted = external_encryption_config.column_keys.empty() &&
                               external_encryption_config.per_column_encryption.empty();

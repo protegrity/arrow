@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 """
 base_app.py
 
@@ -17,7 +34,7 @@ class FooKmsClient(ppe.KmsClient):
     def __init__(self, kms_connection_config):
         ppe.KmsClient.__init__(self)
         self.master_keys_map = kms_connection_config.custom_kms_conf
-    
+
     def wrap_key(self, key_bytes, master_key_identifier):
         master_key_bytes = self.master_keys_map[master_key_identifier].encode(
             'utf-8')
@@ -62,25 +79,25 @@ def write_parquet(table, location, encryption_config=None):
             # Case 1: Uncompressed data, using plain data encoding.
             print("\n!! Writing uncompressed data, with plain data encoding. !!\n")
             pp.write_table(table, location, use_dictionary=False,
-                encryption_properties=encryption_properties, 
-                compression="NONE")
+                           encryption_properties=encryption_properties,
+                           compression="NONE")
         case 2:
             # Case 2: Compressed data, using RLE dictionary encoding.
             print(
                 "\n!! Writing compressed data, with RLE dictionary encoding. !!\n")
             pp.write_table(table, location, use_dictionary=True,
-                encryption_properties=encryption_properties, 
-                compression="SNAPPY")
-        case 3:        
+                           encryption_properties=encryption_properties,
+                           compression="SNAPPY")
+        case 3:
             # Case 3: Uncompressed data, using RLE dictionary encoding.
             print(
                 "\n!! Writing uncompressed data, with RLE dictionary encoding. !!\n")
             pp.write_table(table, location, use_dictionary=True,
-                encryption_properties=encryption_properties, 
-                compression="NONE")
+                           encryption_properties=encryption_properties,
+                           compression="NONE")
 
         case 4:
-            # Case 4: Compressed data, using plain data encoding and data 
+            # Case 4: Compressed data, using plain data encoding and data
             # page version 1.0.
             print("\n!! Writing compressed data, "
                   "with plain data encoding and page version 1.0 !!\n")
@@ -95,17 +112,17 @@ def write_parquet(table, location, encryption_config=None):
             print("\n!! Writing compressed data, with plain data encoding "
                   "and page version 2.0. !!\n")
             pp.write_table(table, location, data_page_version="2.0",
-                use_dictionary=False,
-                encryption_properties=encryption_properties, compression="SNAPPY")
+                           use_dictionary=False,
+                           encryption_properties=encryption_properties, compression="SNAPPY")
 
-        case 6:         
+        case 6:
             # Case 6: Compressed data (using unsupported compression), using plain
             # data encoding and data page version 2.0.
             print("\n!! Writing compressed data (using unsupported compression), "
-            "with plain data encoding and page version 2.0. !!\n")
+                  "with plain data encoding and page version 2.0. !!\n")
             pp.write_table(table, location, data_page_version="2.0",
-                use_dictionary=False,
-                encryption_properties=encryption_properties, compression="GZIP")
+                           use_dictionary=False,
+                           encryption_properties=encryption_properties, compression="GZIP")
 
         case _:
             raise ValueError(f"Invalid scenario ID: {scenario_id}")
@@ -155,7 +172,7 @@ def read_and_print_parquet():
 def read_and_print_dbps_metadata():
     """
     Read and print DBPS encryption metadata from a Parquet file.
-    
+
     DBPS metadata is stored in the column chunk's key-value metadata.
     This includes information like:
     - dbps_agent_version: The version of DBPS used for encryption
@@ -163,36 +180,36 @@ def read_and_print_dbps_metadata():
     """
     print("\n-----------------------------\nReading DBPS metadata from parquet file")
     parquet_path = "sample.parquet"
-    
+
     # Read metadata (decryption properties needed if metadata is encrypted)
     decryption_config = get_external_decryption_config()
     crypto_factory = ppe.CryptoFactory(kms_client_factory)
     decryption_properties = crypto_factory.external_file_decryption_properties(
         get_kms_connection_config(), decryption_config)
-    
+
     parquet_file = pp.ParquetFile(
         parquet_path, decryption_properties=decryption_properties)
     metadata = parquet_file.metadata
-    
+
     print(f"\nFile has {metadata.num_row_groups} row group(s)")
     print(f"File has {metadata.num_columns} column(s)\n")
-    
+
     # Iterate through all row groups and columns to find DBPS metadata
     for row_group_idx in range(metadata.num_row_groups):
         row_group = metadata.row_group(row_group_idx)
         print(f"Row Group {row_group_idx}:")
-        
+
         for col_idx in range(row_group.num_columns):
             column_chunk = row_group.column(col_idx)
             column_name = column_chunk.path_in_schema
-            
+
             # Access the key-value metadata (this is where DBPS metadata is stored)
             kv_metadata = column_chunk.metadata
-            
+
             if kv_metadata is not None:
                 print(f"  Column '{column_name}':")
                 print(f"    Has metadata: Yes")
-                
+
                 # Convert bytes keys/values to strings for display
                 metadata_dict = {}
                 for key, value in kv_metadata.items():
@@ -210,7 +227,7 @@ def read_and_print_dbps_metadata():
                         metadata_dict[key_str] = value_str
                     except:
                         metadata_dict[str(key)] = str(value)
-                
+
                 # Print DBPS-specific metadata
                 dbps_keys = [
                     'dbps_agent_version',
@@ -222,7 +239,7 @@ def read_and_print_dbps_metadata():
                     if key in metadata_dict:
                         print(f"    {key}: {metadata_dict[key]}")
                         has_dbps_metadata = True
-                
+
                 # Print all metadata if there are other keys
                 if not has_dbps_metadata and metadata_dict:
                     print(f"    All metadata: {metadata_dict}")
@@ -246,7 +263,7 @@ def read_parquet(location, decryption_config=None, read_metadata=False):
         crypto_factory = ppe.CryptoFactory(kms_client_factory)
         decryption_properties = crypto_factory.external_file_decryption_properties(
             get_kms_connection_config(), decryption_config)
-    
+
     if read_metadata:
         metadata = pp.read_metadata(
             location, decryption_properties=decryption_properties)
@@ -271,21 +288,21 @@ def get_kms_connection_config():
 
 def get_external_encryption_config(plaintext_footer=True):
     return ppe.ExternalEncryptionConfiguration(
-        footer_key = "footer_key",
-        column_keys = {
+        footer_key="footer_key",
+        column_keys={
             "productid_key": ["productId"]
         },
-        encryption_algorithm = "AES_GCM_V1",
+        encryption_algorithm="AES_GCM_V1",
         cache_lifetime=datetime.timedelta(minutes=2.0),
-        data_key_length_bits = 128,
+        data_key_length_bits=128,
         plaintext_footer=plaintext_footer,
-        per_column_encryption = {
+        per_column_encryption={
             "orderId": {
                 "encryption_algorithm": "EXTERNAL_DBPA_V1",
                 "encryption_key": "orderid_key"
             },
             "price": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1", #"AES_GCM_CTR_V1",
+                "encryption_algorithm": "EXTERNAL_DBPA_V1", # "AES_GCM_CTR_V1",
                 "encryption_key": "price_key"
             },
             "customer_name": {
@@ -293,27 +310,27 @@ def get_external_encryption_config(plaintext_footer=True):
                 "encryption_key": "customer_key"
             },
             "has_subscription": {
-               "encryption_algorithm": "EXTERNAL_DBPA_V1",
-               "encryption_key": "has_subscription_key"
+                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_key": "has_subscription_key"
             }
         },
-        app_context = {
+        app_context={
             "user_id": "Picard1701",
             "location": "Presidio"
         },
-        configuration_properties = get_dbpa_configuration_properties()
+        configuration_properties=get_dbpa_configuration_properties()
     )
 
 def get_encryption_config(plaintext_footer=True):
     return ppe.EncryptionConfiguration(
-        footer_key = "footer_key",
-        column_keys = {
+        footer_key="footer_key",
+        column_keys={
             "orderid_key": ["orderId"],
             "productid_key": ["productId"]
         },
-        encryption_algorithm = "AES_GCM_CTR_V1",
+        encryption_algorithm="AES_GCM_CTR_V1",
         cache_lifetime=datetime.timedelta(minutes=2.0),
-        data_key_length_bits = 128,
+        data_key_length_bits=128,
         plaintext_footer=plaintext_footer
     )
 
@@ -324,11 +341,11 @@ def get_decryption_config():
 def get_external_decryption_config():
     return ppe.ExternalDecryptionConfiguration(
         cache_lifetime=datetime.timedelta(minutes=2.0),
-        app_context = {
+        app_context={
             "user_id": "Picard1701",
             "location": "Presidio"
         },
-        configuration_properties = get_dbpa_configuration_properties()
+        configuration_properties=get_dbpa_configuration_properties()
     )
 
 def get_config_file():
@@ -359,7 +376,7 @@ def get_dbpa_configuration_properties():
     # XOR encryption/decryption, and is built as part of the Parquet Arrow tests.
     # It is located in cpp/src/parquet/encryption/external/dbpa_test_agent.cc
     agent_library_path = os.environ.get(
-        'DBPA_LIBRARY_PATH', 
+        'DBPA_LIBRARY_PATH',
         'libDBPATestAgent.so'
         if platform.system() == 'Linux' else 'libDBPATestAgent.dylib')
 
@@ -372,7 +389,7 @@ def get_dbpa_configuration_properties():
         }
     }
 
-    #TODO: need a better way to perform this check
+    # TODO: need a better way to perform this check
     config_file_required = "remote" in agent_library_path.lower()
 
     if (config_file_required):
