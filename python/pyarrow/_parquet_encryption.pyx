@@ -229,8 +229,6 @@ cdef class ExternalEncryptionConfiguration(EncryptionConfiguration):
         if per_column_encryption is not None:
             self.per_column_encryption = per_column_encryption
 
-    """ Forward all attributes get/set methods to the superclass """
-    """ The superclass already converts to/from bytes and does additional processing needed """
     @property
     def column_keys(self):
         return EncryptionConfiguration.column_keys.__get__(self)
@@ -446,8 +444,6 @@ cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
         if configuration_properties is not None:
             self.configuration_properties = configuration_properties
 
-    """ Forward all attributes get/set methods to the superclass """
-    """ The superclass already converts to/from bytes and does additional processing needed """
     @property
     def cache_lifetime(self):
         return DecryptionConfiguration.cache_lifetime.__get__(self)

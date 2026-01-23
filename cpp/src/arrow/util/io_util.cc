@@ -2248,7 +2248,8 @@ Result<void*> LoadDynamicLibrary(const char* path) {
   return LoadDynamicLibrary(platform_path);
 #else
   constexpr int kFlags =
-      // All undefined symbols in the shared object are resolved before dlopen() returns.
+      // All undefined symbols in the shared object are resolved before dlopen()
+      // returns.
       RTLD_NOW
       // Symbols defined in this shared object are not made available to
       // resolve references in subsequently loaded shared objects.
@@ -2257,7 +2258,8 @@ Result<void*> LoadDynamicLibrary(const char* path) {
   // dlopen(3) man page: "If dlopen() fails for any reason, it returns NULL."
   // There is no null-returning non-error condition.
   auto* error = dlerror();
-  return Status::IOError("dlopen(", path, ") failed: ", error ? error : "unknown error");
+  return Status::IOError(
+    "dlopen(", path, ") failed: ", error ? error : "unknown error");
 #endif
 }
 
@@ -2268,7 +2270,8 @@ Result<void*> LoadDynamicLibrary(const PlatformFilename& path) {
   }
   // win32 api doc: "If the function fails, the return value is NULL."
   // There is no null-returning non-error condition.
-  return IOErrorFromWinError(GetLastError(), "LoadLibrary(", path.ToString(), ") failed");
+  return IOErrorFromWinError(
+    GetLastError(), "LoadLibrary(", path.ToString(), ") failed");
 #else
   return LoadDynamicLibrary(path.ToNative().c_str());
 #endif
@@ -2292,7 +2295,8 @@ Result<void*> GetSymbol(void* handle, const char* name) {
   // dlsym(3) man page: "On failure, they return NULL"
   // There is no null-returning non-error condition.
   auto* error = dlerror();
-  return Status::IOError("dlsym(", name, ") failed: ", error ? error : "unknown error");
+  return Status::IOError(
+    "dlsym(", name, ") failed: ", error ? error : "unknown error");
 #endif
 }
 
@@ -2310,7 +2314,8 @@ Status CloseDynamicLibrary(void* handle) {
   if (dlclose(handle) == 0) {
     return Status::OK();
   }
-  // dlclose(3) man page: "On success, dlclose() returns 0; on error, it returns a nonzero value."
+  // dlclose(3) man page: "On success, dlclose() returns 0; on error, it returns a
+  // nonzero value."
   auto* error = dlerror();
   return Status::IOError("dlclose() failed: ", error ? error : "unknown error");
 #endif

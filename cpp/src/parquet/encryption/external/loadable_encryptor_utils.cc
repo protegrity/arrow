@@ -78,9 +78,8 @@ std::unique_ptr<DataBatchProtectionAgentInterface> LoadableEncryptorUtils::LoadF
   auto agent_instance = CreateInstance(library_handle);
 
   //wrap the agent in a DBPALibraryWrapper
-  auto wrapped_agent = std::make_unique<DBPALibraryWrapper>(
-    std::move(agent_instance), 
-    library_handle);
+  auto wrapped_agent = std::make_unique<DBPALibraryWrapper>(std::move(agent_instance),
+                                                            library_handle);
 
   return wrapped_agent;
 }

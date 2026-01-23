@@ -374,7 +374,7 @@ class PARQUET_EXPORT ExternalFileDecryptionProperties : public FileDecryptionPro
   public:
    class PARQUET_EXPORT Builder : public FileDecryptionProperties::Builder {
     public:
-     explicit Builder() : FileDecryptionProperties::Builder() {}
+     Builder() : FileDecryptionProperties::Builder() {}
  
      Builder* app_context(std::string context);
  

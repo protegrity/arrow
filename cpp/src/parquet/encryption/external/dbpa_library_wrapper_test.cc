@@ -150,7 +150,7 @@ class DestructionOrderTracker {
 // Companion object to hold mock state that persists after mock instance destruction
 class MockCompanionDBPA {
  public:
-  MockCompanionDBPA(std::shared_ptr<DestructionOrderTracker> order_tracker = nullptr) 
+  explicit MockCompanionDBPA(std::shared_ptr<DestructionOrderTracker> order_tracker = nullptr) 
       : encrypt_called_(false), 
         decrypt_called_(false),
         init_called_(false),

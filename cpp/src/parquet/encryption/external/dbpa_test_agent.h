@@ -38,7 +38,7 @@ namespace parquet::encryption::external {
 // Will never be used in production.
 class DBPATestAgent : public DataBatchProtectionAgentInterface {
  public:
-  explicit DBPATestAgent();
+  DBPATestAgent();
 
   void init(
       std::string column_name,

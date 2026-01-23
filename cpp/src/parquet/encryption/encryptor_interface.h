@@ -52,7 +52,7 @@ class PARQUET_EXPORT EncryptorInterface {
 
   // Some Encryptors may need to understand the page encoding before the encryption process.
   // This method will be called from ColumnWriter before invoking the Encrypt method.
-  virtual void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {};
+  virtual void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {}
 
   /// After the column_writer writes a dictionary or a data page, this method will be called
   /// so that each encryptor can provide any encryptor-specific column metadata that should be

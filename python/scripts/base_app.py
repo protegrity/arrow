@@ -19,7 +19,8 @@ class FooKmsClient(ppe.KmsClient):
         self.master_keys_map = kms_connection_config.custom_kms_conf
     
     def wrap_key(self, key_bytes, master_key_identifier):
-        master_key_bytes = self.master_keys_map[master_key_identifier].encode('utf-8')
+        master_key_bytes = self.master_keys_map[master_key_identifier].encode(
+            'utf-8')
         joint_key = b"".join([master_key_bytes, key_bytes])
         return base64.b64encode(joint_key)
 
@@ -30,7 +31,8 @@ class FooKmsClient(ppe.KmsClient):
         decrypted_key = decoded_key[16:]
         if (expected_master == master_key_bytes.decode('utf-8')):
             return decrypted_key
-        raise ValueError(f"Bad master key used [{master_key_bytes}] - [{decrypted_key}]")
+        raise ValueError(
+            f"Bad master key used [{master_key_bytes}] - [{decrypted_key}]")
 
 
 def kms_client_factory(kms_connection_config):
@@ -51,45 +53,58 @@ def write_parquet(table, location, encryption_config=None):
     scenario_id_raw = os.getenv("BASE_APP_SCENARIO_ID", "5")
     try:
         scenario_id = int(scenario_id_raw)
-    except ValueError as exc:
-        raise ValueError(f"Invalid SCENARIO_ID: {scenario_id_raw!r} (must be an integer)") from exc
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid SCENARIO_ID: {scenario_id_raw!r} (must be an integer)") from e
 
     match scenario_id:
         case 1:
             # Case 1: Uncompressed data, using plain data encoding.
-            print("\n!!! Writing uncompressed data, using plain data encoding. !!!\n")
+            print("\n!! Writing uncompressed data, with plain data encoding. !!\n")
             pp.write_table(table, location, use_dictionary=False,
                 encryption_properties=encryption_properties, 
                 compression="NONE")
         case 2:
             # Case 2: Compressed data, using RLE dictionary encoding.
-            print("\n!!! Writing compressed data, using RLE dictionary encoding. !!!\n")
+            print(
+                "\n!! Writing compressed data, with RLE dictionary encoding. !!\n")
             pp.write_table(table, location, use_dictionary=True,
                 encryption_properties=encryption_properties, 
                 compression="SNAPPY")
         case 3:        
             # Case 3: Uncompressed data, using RLE dictionary encoding.
-            print("\n!!! Writing uncompressed data, using RLE dictionary encoding. !!!\n")
+            print(
+                "\n!! Writing uncompressed data, with RLE dictionary encoding. !!\n")
             pp.write_table(table, location, use_dictionary=True,
                 encryption_properties=encryption_properties, 
                 compression="NONE")
 
         case 4:
-            # Case 4: Compressed data, using plain data encoding and data page version 1.0.
-            print("\n!!! Writing compressed data, using plain data encoding and page version 1.0. !!!\n")
-            pp.write_table(table, location, data_page_version="1.0", use_dictionary=False,
-                encryption_properties=encryption_properties, compression="SNAPPY")
+            # Case 4: Compressed data, using plain data encoding and data 
+            # page version 1.0.
+            print("\n!! Writing compressed data, "
+                  "with plain data encoding and page version 1.0 !!\n")
+            pp.write_table(table, location, data_page_version="1.0",
+                           use_dictionary=False,
+                           encryption_properties=encryption_properties,
+                           compression="SNAPPY")
 
         case 5:
-            # Case 5: Compressed data, using plain data encoding and data page version 2.0.
-            print("\n!!! Writing compressed data, using plain data encoding and page version 2.0. !!!\n")
-            pp.write_table(table, location, data_page_version="2.0", use_dictionary=False,
+            # Case 5: Compressed data, using plain data encoding and data page
+            # version 2.0.
+            print("\n!! Writing compressed data, with plain data encoding "
+                  "and page version 2.0. !!\n")
+            pp.write_table(table, location, data_page_version="2.0",
+                use_dictionary=False,
                 encryption_properties=encryption_properties, compression="SNAPPY")
 
         case 6:         
-            # Case 6: Compressed data (using unsupported compression), using plain data encoding and data page version 2.0.
-            print("\n!!! Writing compressed data (using unsupported compression), using plain data encoding and page version 2.0. !!!\n")
-            pp.write_table(table, location, data_page_version="2.0", use_dictionary=False,
+            # Case 6: Compressed data (using unsupported compression), using plain
+            # data encoding and data page version 2.0.
+            print("\n!! Writing compressed data (using unsupported compression), "
+            "with plain data encoding and page version 2.0. !!\n")
+            pp.write_table(table, location, data_page_version="2.0",
+                use_dictionary=False,
                 encryption_properties=encryption_properties, compression="GZIP")
 
         case _:
@@ -120,7 +135,7 @@ def create_and_encrypt_parquet():
 
 
 def read_and_print_parquet():
-    print("\n-----------------------------------------------\nNow reading parquet file")
+    print("\n--------------------------------------------\nNow reading parquet file")
     parquet_path = "sample.parquet"
 
     metadata = pp.read_metadata(parquet_path)
@@ -146,7 +161,7 @@ def read_and_print_dbps_metadata():
     - dbps_agent_version: The version of DBPS used for encryption
     - encryption_mode: The encryption mode (e.g., "PER_VALUE", "PER_BLOCK")
     """
-    print("\n-----------------------------------------------\nReading DBPS metadata from parquet file")
+    print("\n-----------------------------\nReading DBPS metadata from parquet file")
     parquet_path = "sample.parquet"
     
     # Read metadata (decryption properties needed if metadata is encrypted)
@@ -155,7 +170,8 @@ def read_and_print_dbps_metadata():
     decryption_properties = crypto_factory.external_file_decryption_properties(
         get_kms_connection_config(), decryption_config)
     
-    parquet_file = pp.ParquetFile(parquet_path, decryption_properties=decryption_properties)
+    parquet_file = pp.ParquetFile(
+        parquet_path, decryption_properties=decryption_properties)
     metadata = parquet_file.metadata
     
     print(f"\nFile has {metadata.num_row_groups} row group(s)")
@@ -181,14 +197,26 @@ def read_and_print_dbps_metadata():
                 metadata_dict = {}
                 for key, value in kv_metadata.items():
                     try:
-                        key_str = key.decode('utf-8') if isinstance(key, bytes) else key
-                        value_str = value.decode('utf-8') if isinstance(value, bytes) else value
+                        key_str = (
+                            key.decode('utf-8')
+                            if isinstance(key, bytes)
+                            else key
+                        )
+                        value_str = (
+                            value.decode('utf-8')
+                            if isinstance(value, bytes)
+                            else value
+                        )
                         metadata_dict[key_str] = value_str
                     except:
                         metadata_dict[str(key)] = str(value)
                 
                 # Print DBPS-specific metadata
-                dbps_keys = ['dbps_agent_version', 'encrypt_mode_dict_page', 'encrypt_mode_data_page']
+                dbps_keys = [
+                    'dbps_agent_version',
+                    'encrypt_mode_dict_page',
+                    'encrypt_mode_data_page'
+                ]
                 has_dbps_metadata = False
                 for key in dbps_keys:
                     if key in metadata_dict:
@@ -200,9 +228,12 @@ def read_and_print_dbps_metadata():
                     print(f"    All metadata: {metadata_dict}")
                 elif metadata_dict:
                     # Print any additional metadata keys
-                    other_keys = [k for k in metadata_dict.keys() if k not in dbps_keys]
+                    other_keys = [
+                        k for k in metadata_dict.keys() if k not in dbps_keys
+                    ]
                     if other_keys:
-                        print(f"    Other metadata: {dict((k, metadata_dict[k]) for k in other_keys)}")
+                        other = {k: metadata_dict[k] for k in other_keys}
+                        print(f"    Other metadata: {other}")
             else:
                 print(f"  Column '{column_name}': No metadata")
         print()
@@ -217,10 +248,12 @@ def read_parquet(location, decryption_config=None, read_metadata=False):
             get_kms_connection_config(), decryption_config)
     
     if read_metadata:
-        metadata = pp.read_metadata(location, decryption_properties=decryption_properties)
+        metadata = pp.read_metadata(
+            location, decryption_properties=decryption_properties)
         return metadata
 
-    data_table = pp.ParquetFile(location, decryption_properties=decryption_properties).read()
+    data_table = pp.ParquetFile(
+        location, decryption_properties=decryption_properties).read()
     return data_table
 
 
@@ -285,7 +318,8 @@ def get_encryption_config(plaintext_footer=True):
     )
 
 def get_decryption_config():
-    return ppe.DecryptionConfiguration(cache_lifetime=datetime.timedelta(minutes=2.0))
+    return ppe.DecryptionConfiguration(
+        cache_lifetime=datetime.timedelta(minutes=2.0))
 
 def get_external_decryption_config():
     return ppe.ExternalDecryptionConfiguration(
@@ -298,32 +332,36 @@ def get_external_decryption_config():
     )
 
 def get_config_file():
-    config_file_name = os.environ.get('DBPA_CONFIG_FILE_NAME', 'test_connection_config_file.json')
+    config_file_name = os.environ.get(
+        'DBPA_CONFIG_FILE_NAME', 'test_connection_config_file.json')
 
-    #verify if the file exists (assuming full path)
+    # Verify if the file exists (assuming full path)
     if os.path.exists(config_file_name):
         return config_file_name
 
-    #did not find the file. check if it exists in the same directory as the script
+    # Did not find the file. check if it exists in the same directory as the script
     script_directory = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(script_directory, config_file_name)
     if os.path.exists(config_path):
         return config_path
 
-    #did not find the file. return None and let the caller handle it.
-    #throw an error
+    # Did not find the file. return None and let the caller handle it.
+    # Throw an error
 
-    raise FileNotFoundError(f"Configuration properties file [{config_file_name}] not found")
+    raise FileNotFoundError(
+        f"Configuration properties file [{config_file_name}] not found")
 
 
 def get_dbpa_configuration_properties():
-    #we read the name of the external DBPA agent library from the environment variable DBPA_LIBRARY_PATH.
-    #if not available, we use the default to 'libDBPATestAgent.so'.
-    #this library performs key-independent, XOR encryption/decryption, and is built as part of the Parquet Arrow tests.
-    #It is located in cpp/src/parquet/encryption/external/dbpa_test_agent.cc
+    # We read the name of the external DBPA agent library from the environment
+    # variable DBPA_LIBRARY_PATH. If not available, we default to
+    # 'libDBPATestAgent.so'. This library performs key-independent,
+    # XOR encryption/decryption, and is built as part of the Parquet Arrow tests.
+    # It is located in cpp/src/parquet/encryption/external/dbpa_test_agent.cc
     agent_library_path = os.environ.get(
         'DBPA_LIBRARY_PATH', 
-        'libDBPATestAgent.so' if platform.system() == 'Linux' else 'libDBPATestAgent.dylib')
+        'libDBPATestAgent.so'
+        if platform.system() == 'Linux' else 'libDBPATestAgent.dylib')
 
     configuration_properties = {
         "EXTERNAL_DBPA_V1": {
@@ -339,7 +377,9 @@ def get_dbpa_configuration_properties():
 
     if (config_file_required):
         config_path = get_config_file()
-        configuration_properties["EXTERNAL_DBPA_V1"]["connection_config_file_path"] = config_path
+        configuration_properties["EXTERNAL_DBPA_V1"][
+            "connection_config_file_path"
+        ] = config_path
 
     return configuration_properties
 

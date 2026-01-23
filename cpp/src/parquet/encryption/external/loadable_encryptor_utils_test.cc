@@ -76,7 +76,6 @@ TEST_F(LoadableEncryptorUtilsTest, MultipleLoads) {
     ASSERT_NE(agent1.get(), agent2.get()) << "First and second agents should be different instances";
     ASSERT_NE(agent1.get(), agent3.get()) << "First and third agents should be different instances";
     ASSERT_NE(agent2.get(), agent3.get()) << "Second and third agents should be different instances";
-
   } catch (const std::runtime_error& e) {
     // Library doesn't exist or failed to load - this is expected in some build environments
     GTEST_SKIP() << "Library not available: " << e.what();
