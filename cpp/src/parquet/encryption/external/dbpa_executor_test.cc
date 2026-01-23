@@ -65,7 +65,6 @@ class TestEncryptionResult : public EncryptionResult {
 };
 
 class TestDecryptionResult : public DecryptionResult {
-public:
  public:
   TestDecryptionResult(std::vector<uint8_t> data, bool success = true,
                        std::string error_msg = "",
