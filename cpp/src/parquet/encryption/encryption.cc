@@ -443,5 +443,4 @@ ExternalFileEncryptionProperties::ExternalFileEncryptionProperties(
       app_context_(app_context),
       configuration_properties_(configuration_properties) {}
 
-
 }  // namespace parquet

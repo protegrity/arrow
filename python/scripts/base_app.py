@@ -302,7 +302,7 @@ def get_external_encryption_config(plaintext_footer=True):
                 "encryption_key": "orderid_key"
             },
             "price": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1", # "AES_GCM_CTR_V1",
+                "encryption_algorithm": "EXTERNAL_DBPA_V1",  # "AES_GCM_CTR_V1",
                 "encryption_key": "price_key"
             },
             "customer_name": {

@@ -39,6 +39,8 @@ this for regular Parquet Arrow encryption.
 Make sure you include the column keys in the custom_kms_conf, even for those
 columms that will be encrypted with the external DBPA agent.
 """
+
+
 class FooKmsClient(ppe.KmsClient):
 
     def __init__(self, kms_connection_config):
@@ -61,6 +63,7 @@ class FooKmsClient(ppe.KmsClient):
         raise ValueError(
             f"Bad master key used [{master_key_bytes}] - [{decrypted_key}]")
 
+
 def get_kms_connection_config():
     return ppe.KmsConnectionConfig(
         custom_kms_conf={
@@ -72,10 +75,12 @@ def get_kms_connection_config():
         }
     )
 
+
 def kms_client_factory(kms_connection_config):
     return FooKmsClient(kms_connection_config)
 
 # ###################################################################################
+
 
 """
 Set up all encryption configuration parameters.
@@ -94,6 +99,8 @@ encryptor, and  where you specify how to connect to the external DBPA encryptor:
 whether via a library file, or via a remote service.
 All other parameters are the same as for regular Parquet Arrow encryption.
 """
+
+
 def get_external_encryption_config(use_remote_service):
     return ppe.ExternalEncryptionConfiguration(
         footer_key="footer_key",
@@ -138,12 +145,14 @@ def get_external_encryption_config(use_remote_service):
             use_remote_service)
     )
 
+
 def get_external_file_encryption_properties(external_encryption_config):
     crypto_factory = ppe.CryptoFactory(kms_client_factory)
     return crypto_factory.external_file_encryption_properties(
         get_kms_connection_config(), external_encryption_config)
 
 # ###################################################################################
+
 
 """
 Set up all decryption configuration parameters.
@@ -153,6 +162,8 @@ application specific context for the external decryptor, and how to instantiate 
 external DBPA decryptor: whether via a local instance, or via a remote one.
 All other parameters are the same as for regular Parquet Arrow decryption.
 """
+
+
 def get_external_decryption_config(use_remote_service):
     return ppe.ExternalDecryptionConfiguration(
         cache_lifetime=datetime.timedelta(minutes=2.0),
@@ -163,6 +174,7 @@ def get_external_decryption_config(use_remote_service):
             use_remote_service)
     )
 
+
 def get_external_file_decryption_properties(external_decryption_config):
     crypto_factory = ppe.CryptoFactory(kms_client_factory)
     return crypto_factory.external_file_decryption_properties(
@@ -170,11 +182,14 @@ def get_external_file_decryption_properties(external_decryption_config):
 
 # ###################################################################################
 
+
 """
 Set up the application specific context for the external DBPA service. This is a
 contract exclusively between the application and the external DBPA service. Arrow
 makes no use of this.
 """
+
+
 def get_app_context():
     return {
         "user_id": "Picard1701",
@@ -182,6 +197,7 @@ def get_app_context():
     }
 
 # ###################################################################################
+
 
 """
 Set up the configuration properties for the external DBPA encryptor.
@@ -198,6 +214,8 @@ config file, which must be a valid JSON that contains all the information needed
 connect to the external DBPA service. This includes the server URL and the
 authentication credentials, which the application must procure on its own.
 """
+
+
 def get_dbpa_configuration_properties(use_remote_service):
     configuration_properties = {
         "EXTERNAL_DBPA_V1": {
@@ -232,6 +250,7 @@ def get_dbpa_configuration_properties(use_remote_service):
 
 # ###################################################################################
 
+
 """
 Write an encrypted Parquet file using the external DBPA encryption library.
 The current implementation of the external DBPA library can support a per-value
@@ -243,6 +262,8 @@ conditions are met:
 If any of these conditions are not met, the external DBPA library will perform
 traditional per-page (as opposed to per-value) encryption.
 """
+
+
 def write_encrypted_parquet_file(parquet_path, use_remote_service, scenario_id):
     print("\n------------------------------------------------------------")
     print(f"Writing encrypted parquet file to {parquet_path}")
@@ -283,6 +304,7 @@ def write_encrypted_parquet_file(parquet_path, use_remote_service, scenario_id):
     print(f"Encrypted parquet file written to {parquet_path}")
     print("------------------------------------------------------------\n")
 
+
 def get_sample_data():
     # Creating a simple table for encryption. Use your real data, or load data
     # file as needed.
@@ -296,12 +318,14 @@ def get_sample_data():
 
 # ###################################################################################
 
+
 """
 Read an encrypted parquet file and print the metadata and data table.
-Use external file decryption properties to decrypt the parquet file. As with regular 
+Use external file decryption properties to decrypt the parquet file. As with regular
 Parquet Arrow decryption, there is no need to configure much, since the encryption
 details are in the Parquet file metadata.
 """
+
 
 def read_encrypted_parquet_file(parquet_path, use_remote_service):
     print("\n------------------------------------------------------------")
@@ -325,6 +349,7 @@ def read_encrypted_parquet_file(parquet_path, use_remote_service):
 
 # ###################################################################################
 
+
 """
 Perform round trip encryption and decryption of example Parquet files.
 We exercise the following cases for using the external DBPA encryptor services:
@@ -334,6 +359,8 @@ We exercise the following cases for using the external DBPA encryptor services:
 See the write_encrypted_parquet_file() function for more details on each scenario
 and its implications.
 """
+
+
 def round_trip_parquet_file_encryption():
     # for use_remote_service in [True, False]:
     for use_remote_service in [False]:
@@ -346,6 +373,7 @@ def round_trip_parquet_file_encryption():
             read_encrypted_parquet_file(parquet_path, use_remote_service)
 
 # ###################################################################################
+
 
 """
 In order for the script to work, you must ensure that LD_LIBRARY_PATH (or its

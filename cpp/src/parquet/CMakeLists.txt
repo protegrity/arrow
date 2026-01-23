@@ -318,7 +318,7 @@ if(PARQUET_REQUIRE_ENCRYPTION)
                                    -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
                                    ${PARQUET_DBPS_CMAKE_ARGS}
                         INSTALL_COMMAND "" #disables install - artifacts already copied to BUILD_OUTPUT_ROOT_DIRECTORY
-     )
+    )
   endif()
 
   list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS magic_enum_header_only tcb_span)

@@ -37,7 +37,7 @@ static void CheckPageOrdinal(int32_t page_ordinal) {
     throw ParquetException("Encrypted Parquet files can't have more than " +
                            std::to_string(std::numeric_limits<int16_t>::max()) +
                            " pages per chunk: got " + std::to_string(page_ordinal));
-    }
+  }
 }
 
 std::string CreateModuleAad(const std::string& file_aad, int8_t module_type,

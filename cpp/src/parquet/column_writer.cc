@@ -339,7 +339,6 @@ class SerializedPageWriter : public PageWriter {
             compressed_data->span_as<uint8_t>(), encryption_buffer_.get());
       }
 
-
       output_data_buffer = encryption_buffer_->data();
 
       // after the call to encrypt(), add the column encryption metadata to the
@@ -675,7 +674,6 @@ class SerializedPageWriter : public PageWriter {
       const auto& value = values[i];
       auto it = encryptor_seen_kvmetadata_.find(key);
       if (it != encryptor_seen_kvmetadata_.end()) {
-
         // If we're here, the key already exists in the encryptor_seen_kvmetadata_ map
         // we need to check if the value is the same. If it is not, throw an exception.
         if (it->second != value) {

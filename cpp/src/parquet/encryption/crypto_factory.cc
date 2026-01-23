@@ -78,30 +78,29 @@ ConvertConfigurationProperties(
     const std::unordered_map<ParquetCipher::type,
                              std::unordered_map<std::string, std::string>>&
         configuration_properties) {
-
   std::map<ParquetCipher::type, std::map<std::string, std::string>> converted_config;
 
   for (const auto& [cipher_type, inner_config] : configuration_properties) {
     if (!IsParquetCipherSupported(cipher_type)) {
-        throw ParquetException("Invalid ParquetCipher type: " + 
-                                std::to_string(static_cast<int>(cipher_type)));
+      throw ParquetException("Invalid ParquetCipher type: " +
+                              std::to_string(static_cast<int>(cipher_type)));
     }
 
     std::map<std::string, std::string> converted_inner;
     for (const auto& [key, value] : inner_config) {
-        if (key.empty()) {
-            throw ParquetException("Empty key in configuration properties");
-        }            
-        if (value.empty()) {
-            throw ParquetException("Empty value for key '" + key + 
-                                    "' in configuration properties");
-        }            
-        converted_inner[key] = value;
-    }          
+      if (key.empty()) {
+        throw ParquetException("Empty key in configuration properties");
+      }
+      if (value.empty()) {
+        throw ParquetException("Empty value for key '" + key +
+                                "' in configuration properties");
+      }
+      converted_inner[key] = value;
+    }
     converted_config[cipher_type] = converted_inner;
   }
 
-  return converted_config;      
+  return converted_config;
 }
 
 }  // Anonymous namespace

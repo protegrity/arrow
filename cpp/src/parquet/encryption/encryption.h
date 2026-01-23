@@ -618,7 +618,7 @@ class PARQUET_EXPORT ExternalFileEncryptionProperties : public FileEncryptionPro
   configuration_properties() const {
     return configuration_properties_;
   }
- 
+
  private:
   std::string app_context_;
   std::map<ParquetCipher::type, std::map<std::string, std::string>>

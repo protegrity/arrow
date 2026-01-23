@@ -67,7 +67,7 @@ def get_agent_library_path():
     # TODO: move this code to a common library
     # See https://github.com/protegrity/arrow/issues/191
     return os.environ.get(
-        'DBPA_LIBRARY_PATH', 
+        'DBPA_LIBRARY_PATH',
         'libDBPATestAgent.so'
         if platform.system() == 'Linux' else 'libDBPATestAgent.dylib')
 
@@ -192,7 +192,7 @@ def read_parquet(location, decryption_properties):
 
 
 def round_trip_encryption_and_decryption(
-    tmp_path, encryption_properties, decryption_properties):
+        tmp_path, encryption_properties, decryption_properties):
     data_table = get_data_table()
     parquet_path = tmp_path / "test.parquet"
     write_parquet(data_table, parquet_path, encryption_properties)
@@ -359,7 +359,7 @@ def test_external_encryption_rejects_none_values():
 
     # configuration_properties: expect ValueError due to None not being iterable
     with pytest.raises(
-        ValueError, match="Configuration properties value cannot be None"):
+            ValueError, match="Configuration properties value cannot be None"):
         config.configuration_properties = None
 
 
@@ -496,7 +496,7 @@ def test_read_and_write_external_encryption(tmp_path):
 
 
 def get_custom_external_encryption_properties(
-    encryption_algorithm, per_column_encryption, plaintext_footer):
+        encryption_algorithm, per_column_encryption, plaintext_footer):
     encryption_config = ppe.ExternalEncryptionConfiguration(
         footer_key="footer_key",
         column_keys={
@@ -526,7 +526,7 @@ def get_custom_external_encryption_properties(
 
 def test_encrypt_aes_gcm_file_all_algorithms_in_columns_plaintext_footer(tmp_path):
     encryption_properties = get_custom_external_encryption_properties(
-        "AES_GCM_V1", # encryption_algorithm
+        "AES_GCM_V1",  # encryption_algorithm
         {
             "orderId": {
                 "encryption_algorithm": "AES_GCM_CTR_V1",
@@ -540,8 +540,8 @@ def test_encrypt_aes_gcm_file_all_algorithms_in_columns_plaintext_footer(tmp_pat
                 "encryption_algorithm": "AES_GCM_V1",
                 "encryption_key": "vat_key"
             },
-        }, # per_column_encryption
-        True # plaintext_footer
+        },  # per_column_encryption
+        True  # plaintext_footer
     )
     round_trip_encryption_and_decryption(tmp_path, encryption_properties,
                                          get_external_decryption_properties())
@@ -549,7 +549,7 @@ def test_encrypt_aes_gcm_file_all_algorithms_in_columns_plaintext_footer(tmp_pat
 
 def test_encrypt_aes_gcm_file_all_algorithms_in_columns_encrypted_footer(tmp_path):
     encryption_properties = get_custom_external_encryption_properties(
-        "AES_GCM_V1", # encryption_algorithm
+        "AES_GCM_V1",  # encryption_algorithm
         {
             "orderId": {
                 "encryption_algorithm": "AES_GCM_CTR_V1",
@@ -563,17 +563,17 @@ def test_encrypt_aes_gcm_file_all_algorithms_in_columns_encrypted_footer(tmp_pat
                 "encryption_algorithm": "AES_GCM_V1",
                 "encryption_key": "vat_key"
             },
-        }, # per_column_encryption
-        False # plaintext_footer
+        },  # per_column_encryption
+        False  # plaintext_footer
     )
     round_trip_encryption_and_decryption(tmp_path, encryption_properties,
                                          get_external_decryption_properties())
 
 
 def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_plaintext_footer(
-    tmp_path):
+        tmp_path):
     encryption_properties = get_custom_external_encryption_properties(
-        "AES_GCM_CTR_V1", # encryption_algorithm
+        "AES_GCM_CTR_V1",  # encryption_algorithm
         {
             "orderId": {
                 "encryption_algorithm": "AES_GCM_CTR_V1",
@@ -587,17 +587,17 @@ def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_plaintext_footer(
                 "encryption_algorithm": "AES_GCM_V1",
                 "encryption_key": "vat_key"
             },
-        }, # per_column_encryption
-        True # plaintext_footer
+        },  # per_column_encryption
+        True  # plaintext_footer
     )
     round_trip_encryption_and_decryption(tmp_path, encryption_properties,
                                          get_external_decryption_properties())
 
 
 def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_encrypted_footer(
-    tmp_path):
+        tmp_path):
     encryption_properties = get_custom_external_encryption_properties(
-        "AES_GCM_CTR_V1", # encryption_algorithm
+        "AES_GCM_CTR_V1",  # encryption_algorithm
         {
             "orderId": {
                 "encryption_algorithm": "AES_GCM_CTR_V1",
@@ -611,8 +611,8 @@ def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_encrypted_footer(
                 "encryption_algorithm": "AES_GCM_V1",
                 "encryption_key": "vat_key"
             },
-        }, # per_column_encryption
-        False # plaintext_footer
+        },  # per_column_encryption
+        False  # plaintext_footer
     )
     round_trip_encryption_and_decryption(tmp_path, encryption_properties,
                                          get_external_decryption_properties())
@@ -620,16 +620,16 @@ def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_encrypted_footer(
 
 def test_encrypt_external_dbpa_file_raises_error(tmp_path):
     encryption_properties = get_custom_external_encryption_properties(
-        "EXTERNAL_DBPA_V1", # encryption_algorithm
+        "EXTERNAL_DBPA_V1",  # encryption_algorithm
         {
             "orderId": {
                 "encryption_algorithm": "AES_GCM_CTR_V1",
                 "encryption_key": "orderid_key"
             },
-        }, # per_column_encryption
-        True # plaintext_footer
+        },  # per_column_encryption
+        True  # plaintext_footer
     )
     with pytest.raises(
-        ValueError, match="Parquet crypto signature verification failed"):
+            ValueError, match="Parquet crypto signature verification failed"):
         round_trip_encryption_and_decryption(tmp_path, encryption_properties,
-                                            get_external_decryption_properties())
+                                             get_external_decryption_properties())

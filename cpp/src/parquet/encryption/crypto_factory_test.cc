@@ -33,7 +33,6 @@ using ::testing::StrEq;
 namespace parquet::encryption::test {
 
 class CryptoFactoryTest : public ::testing::Test {
-
   void SetUp() {
     key_list_ = BuildKeyMap(kColumnMasterKeyIds, kColumnMasterKeys, kFooterMasterKeyId,
                             kFooterMasterKey);

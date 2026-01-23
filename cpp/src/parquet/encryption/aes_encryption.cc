@@ -53,7 +53,7 @@ constexpr int32_t kBufferSizeLength = 4;
 AesCryptoContext::AesCryptoContext(ParquetCipher::type alg_id, int32_t key_len,
                                    bool metadata, bool include_length) {
   openssl::EnsureInitialized();
-  
+
   length_buffer_length_ = include_length ? kBufferSizeLength : 0;
   ciphertext_size_delta_ = length_buffer_length_ + kNonceLength;
 
