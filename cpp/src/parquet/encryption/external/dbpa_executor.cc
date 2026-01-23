@@ -115,7 +115,6 @@ DBPAExecutor::DBPAExecutor(std::unique_ptr<DataBatchProtectionAgentInterface> ag
       init_timeout_milliseconds_(init_timeout),
       encrypt_timeout_milliseconds_(encrypt_timeout),
       decrypt_timeout_milliseconds_(decrypt_timeout) {
-
   // Ensure the wrapped agent is not null
   if (!wrapped_agent_) {
     ARROW_LOG(ERROR) << "[DBPAExecutor] ERROR: Cannot create executor with null agent";
@@ -144,7 +143,6 @@ void DBPAExecutor::init(
     std::string app_context, std::string column_key_id, Type::type data_type,
     std::optional<int> datatype_length, CompressionCodec::type compression_type,
     std::optional<std::map<std::string, std::string>> column_encryption_metadata) {
-
   ARROW_LOG(DEBUG) << "[DBPAExecutor] init() called for column: " << column_name
                    << ", key_id: " << column_key_id;
 
