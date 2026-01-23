@@ -229,7 +229,7 @@ def read_and_print_dbps_metadata():
                             else value
                         )
                         metadata_dict[key_str] = value_str
-                    except Exception as e:
+                    except Exception:
                         metadata_dict[str(key)] = str(value)
 
                 # Print DBPS-specific metadata
