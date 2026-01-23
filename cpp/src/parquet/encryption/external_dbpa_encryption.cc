@@ -53,7 +53,6 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
     const std::string& app_context, const std::string& key_id, Type::type data_type,
     Compression::type compression_type, std::optional<int> datatype_length,
     std::shared_ptr<const KeyValueMetadata> key_value_metadata) {
-
   // Load a new DataBatchProtectionAgentInterface instance from the shared library
   const std::string SHARED_LIBRARY_PATH_KEY = "agent_library_path";
   const std::string INIT_TIMEOUT_KEY = "agent_init_timeout_ms";
@@ -63,7 +62,7 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   // Step 1: Get path to the shared library
   auto it = configuration_properties.find(SHARED_LIBRARY_PATH_KEY);
   if (it == configuration_properties.end()) {
-    auto const msg = "Required configuration key '" + SHARED_LIBRARY_PATH_KEY +
+    const auto msg = "Required configuration key '" + SHARED_LIBRARY_PATH_KEY +
                      "' not found in configuration_properties";
     ARROW_LOG(ERROR) << msg;
     throw ParquetException(msg);
@@ -116,7 +115,7 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   auto executor_wrapped_agent = std::make_unique<DBPAExecutor>(
       /*agent*/ std::move(agent_instance),
       /*init_timeout_ms*/ init_timeout_ms,
-      /*encrypt_timeout_ms*/  encrypt_timeout_ms,
+      /*encrypt_timeout_ms*/ encrypt_timeout_ms,
       /*decrypt_timeout_ms*/ decrypt_timeout_ms);
 
   // Step 4: Initialize the agent.
@@ -140,7 +139,7 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   ARROW_LOG(DEBUG) << "Successfully initialized agent instance";
 
   return executor_wrapped_agent;
-}  //LoadAndInitializeAgent()
+}  // LoadAndInitializeAgent()
 
 // Local helper to map encoding properties' page_type to encryption module type
 // Returns std::nullopt if page_type is unsupported
@@ -155,7 +154,7 @@ std::optional<int8_t> GetModuleTypeFromEncodingProperties(
     return encryption::kDataPage;
   }
   return std::nullopt;
-}  //GetModuleTypeFromEncodingProperties()
+}  // GetModuleTypeFromEncodingProperties()
 
 }  // namespace
 
@@ -182,7 +181,7 @@ void UpdateEncryptorMetadata(
   } catch (const std::exception& e) {
     throw ParquetException("UpdateEncryptorMetadata failed: " + std::string(e.what()));
   }
-}  //UpdateEncryptorMetadata()
+}  // UpdateEncryptorMetadata()
 
 std::optional<std::map<std::string, std::string>>
 ExternalDBPAUtils::KeyValueMetadataToStringMap(
@@ -201,14 +200,15 @@ ExternalDBPAUtils::KeyValueMetadataToStringMap(
     return std::nullopt;
   }
   return metadata_map;
- }
+}
 
 // This is a private constructor, invoked from Make()
 // At this point, the agent_instance is assumed to be initialized.
 ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
-    Type::type data_type, Compression::type compression_type, std::optional<int> datatype_length,
-    std::string app_context, std::map<std::string, std::string> configuration_properties,
+    Type::type data_type, Compression::type compression_type,
+    std::optional<int> datatype_length, std::string app_context,
+    std::map<std::string, std::string> configuration_properties,
     std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance)
     : algorithm_(algorithm),
       column_name_(column_name),
@@ -220,10 +220,10 @@ ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
       configuration_properties_(configuration_properties),
       agent_instance_(std::move(agent_instance)) {
 
-    if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
-      throw ParquetException(
-          "ExternalDBPAEncryptorAdapter -- Only algorithm ExternalDBPA_V1 is supported");
-    }
+  if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+    throw ParquetException(
+        "ExternalDBPAEncryptorAdapter -- Only algorithm ExternalDBPA_V1 is supported");
+  }
 }
 
 std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make(
@@ -231,7 +231,6 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
     Type::type data_type, Compression::type compression_type, std::string app_context,
     std::map<std::string, std::string> configuration_properties,
     std::optional<int> datatype_length) {
-
   // Ensure DBPA logging threshold is configured before any logs here
   EnsureDbpaLoggingConfigured();
 
@@ -254,7 +253,7 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
     throw ParquetException(
         "ExternalDBPAEncryptorAdapter::Make() -- Only algorithm ExternalDBPA_V1 is "
         "supported");
-   }
+  }
 
   ARROW_LOG(DEBUG) << "ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter() -- "
                       "loading and initializing agent";
@@ -320,7 +319,6 @@ std::shared_ptr<KeyValueMetadata> ExternalDBPAEncryptorAdapter::GetKeyValueMetad
 
 int32_t ExternalDBPAEncryptorAdapter::EncryptWithManagedBuffer(
     ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext) {
-
   if (!encoding_properties_updated_) {
     ARROW_LOG(ERROR) << "ExternalDBPAEncryptorAdapter:: EncryptionParams not updated";
     throw ParquetException("ExternalDBPAEncryptorAdapter:: EncryptionParams not updated");
@@ -343,7 +341,6 @@ int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
 int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
     ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
     std::map<std::string, std::string> encoding_attrs) {
-
   if (::arrow::util::ArrowLog::IsLevelEnabled(
           ::arrow::util::ArrowLogLevel::ARROW_DEBUG)) {
     ARROW_LOG(DEBUG) << "*-*-*- START: ExternalDBPAEncryptor::Encrypt *-*-*-";
@@ -366,7 +363,7 @@ int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
   if (!result->success()) {
     ARROW_LOG(ERROR) << "Encryption failed: " << result->error_message();
     throw ParquetException(result->error_message());
-   }
+  }
 
   ARROW_LOG(DEBUG) << "Encryption successful";
   ARROW_LOG(DEBUG) << "  result size: " << result->size() << " bytes";
@@ -482,7 +479,7 @@ ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(
   if (key_value_metadata != nullptr) {
     key_value_metadata_ = key_value_metadata->Copy();
   }
- }
+}
 
 std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make(
     ParquetCipher::type algorithm, std::string column_name, std::string key_id,
@@ -515,7 +512,7 @@ std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make
     ARROW_LOG(DEBUG) << "  key_value_metadata: not provided";
   } else {
     ARROW_LOG(DEBUG) << "  key_value_metadata: " << key_value_metadata->ToString();
-   }
+  }
 
   ARROW_LOG(DEBUG) << "ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter() -- "
                       "loading and initializing agent";
@@ -571,7 +568,6 @@ void ExternalDBPADecryptorAdapter::UpdateEncodingProperties(
 
 int32_t ExternalDBPADecryptorAdapter::DecryptWithManagedBuffer(
     ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext) {
-
   if (!encoding_properties_updated_) {
     ARROW_LOG(ERROR) << "ExternalDBPADecryptorAdapter:: DecryptionParams not updated";
     throw ParquetException("ExternalDBPADecryptorAdapter:: DecryptionParams not updated");
@@ -608,7 +604,7 @@ int32_t ExternalDBPADecryptorAdapter::InvokeExternalDecrypt(
   if (!result->success()) {
     ARROW_LOG(ERROR) << "Decryption failed: " << result->error_message();
     throw ParquetException(result->error_message());
-   }
+  }
 
   ARROW_LOG(DEBUG) << "Decryption successful";
   ARROW_LOG(DEBUG) << "  result size: " << result->size() << " bytes";
@@ -676,8 +672,8 @@ std::unique_ptr<DecryptorInterface> ExternalDBPADecryptorAdapterFactory::GetDecr
   }
 
   return ExternalDBPADecryptorAdapter::Make(
-    algorithm, column_path->ToDotString(), key_id, data_type, compression_type,
-    app_context, connection_config_for_algorithm, datatype_length, key_value_metadata);
+      algorithm, column_path->ToDotString(), key_id, data_type, compression_type,
+      app_context, connection_config_for_algorithm, datatype_length, key_value_metadata);
 }
 
 }  // namespace parquet::encryption

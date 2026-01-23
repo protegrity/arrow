@@ -1006,17 +1006,14 @@ struct CapturedEncodingProps {
 class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
  public:
   CapturingTestDecryptor(std::shared_ptr<CapturedEncodingProps> sink,
-                         std::string column_path,
-                         parquet::Type::type physical_type,
+                         std::string column_path, parquet::Type::type physical_type,
                          ::arrow::Compression::type compression_codec)
       : sink_(std::move(sink)),
         column_path_(std::move(column_path)),
         physical_type_(physical_type),
         compression_codec_(compression_codec) {}
 
-  [[nodiscard]] bool CanCalculateLengths() const override {
-    return true;
-  }
+  [[nodiscard]] bool CanCalculateLengths() const override { return true; }
 
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override {
     return ciphertext_len;
@@ -1035,12 +1032,12 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
   }
 
   int32_t DecryptWithManagedBuffer(::arrow::util::span<const uint8_t> ciphertext,
-                                  ::arrow::ResizableBuffer* plaintext) override {
+                                   ::arrow::ResizableBuffer* plaintext) override {
     throw ParquetException("DecryptWithManagedBuffer not supported");
   }
 
   void UpdateEncodingProperties(std::unique_ptr<parquet::encryption::EncodingProperties>
-                                encoding_properties) override {
+                                    encoding_properties) override {
     // Fill column-level properties so validate() succeeds
     encoding_properties->set_column_path(column_path_);
     encoding_properties->set_physical_type(physical_type_);
@@ -1065,8 +1062,8 @@ static std::shared_ptr<::parquet::SchemaDescriptor> MakeSingleInt32Schema(
   using ::parquet::schema::PrimitiveNode;
 
   NodeVector fields;
-  fields.push_back(
-      PrimitiveNode::Make(col_name, ::parquet::Repetition::REQUIRED, ::parquet::Type::INT32));
+  fields.push_back(PrimitiveNode::Make(col_name, ::parquet::Repetition::REQUIRED,
+                                       ::parquet::Type::INT32));
   NodePtr schema = GroupNode::Make("schema", ::parquet::Repetition::REQUIRED, fields);
 
   auto descr = std::make_shared<::parquet::SchemaDescriptor>();
@@ -1098,10 +1095,12 @@ MakeNestedOptionalRepeatedIntSchema() {
   NodePtr list = GroupNode::Make("list", ::parquet::Repetition::REPEATED, list_children);
   NodeVector optgrp_children;
   optgrp_children.push_back(list);
-  NodePtr optgrp = GroupNode::Make("optgrp", ::parquet::Repetition::OPTIONAL, optgrp_children);
+  NodePtr optgrp =
+      GroupNode::Make("optgrp", ::parquet::Repetition::OPTIONAL, optgrp_children);
   NodeVector root_fields;
   root_fields.push_back(optgrp);
-  NodePtr schema = GroupNode::Make("schema", ::parquet::Repetition::REQUIRED, root_fields);
+  NodePtr schema =
+      GroupNode::Make("schema", ::parquet::Repetition::REQUIRED, root_fields);
 
   auto descr = std::make_shared<::parquet::SchemaDescriptor>();
   descr->Init(schema);
@@ -1113,8 +1112,8 @@ MakeNestedOptionalRepeatedIntSchema() {
 class EncodingPropertiesSerdeTest : public TestPageSerde {
  protected:
   void OpenWithCryptoContext(int64_t num_rows, Compression::type codec,
-                              const ReaderProperties& properties,
-                              const CryptoContext& crypto_ctx) {
+                             const ReaderProperties& properties,
+                             const CryptoContext& crypto_ctx) {
     EndStream();
     auto stream = std::make_shared<::arrow::io::BufferReader>(out_buffer_);
     page_reader_ = PageReader::Open(stream, num_rows, codec, properties,
@@ -1198,7 +1197,8 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV1EncodingProperties) {
   };
 
   ReaderProperties reader_props;
-  OpenWithCryptoContext(/*num_rows=*/num_values, Compression::UNCOMPRESSED, reader_props, ctx);
+  OpenWithCryptoContext(/*num_rows=*/num_values, Compression::UNCOMPRESSED, reader_props,
+                        ctx);
 
   std::shared_ptr<Page> page = page_reader_->NextPage();
   ASSERT_NE(page, nullptr);
@@ -1273,9 +1273,9 @@ TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
   using schema::NodePtr;
   using schema::PrimitiveNode;
 
-  NodePtr root = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make("col", Repetition::REQUIRED, Type::INT32)});
+  NodePtr root =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make("col", Repetition::REQUIRED, Type::INT32)});
   auto schema = std::static_pointer_cast<GroupNode>(root);
 
   std::vector<int32_t> values = {1, 2, 3, 4, 5};
@@ -1291,7 +1291,8 @@ TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
 
   std::map<std::string, std::shared_ptr<parquet::ColumnEncryptionProperties>> enc_cols;
   auto col_enc_builder = parquet::ColumnEncryptionProperties::Builder(column_name);
-  col_enc_builder.key(column_key_id)->key_id(std::string(column_key_id.as_view()))
+  col_enc_builder.key(column_key_id)
+      ->key_id(std::string(column_key_id.as_view()))
       ->parquet_cipher(parquet::ParquetCipher::EXTERNAL_DBPA_V1);
   enc_cols[column_name] = col_enc_builder.build();
 
@@ -1302,7 +1303,7 @@ TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
       ->encrypted_columns(enc_cols)
       ->app_context(app_context)
       ->configuration_properties({{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
-                            {{"agent_library_path", library_path}}}});
+                                   {{"agent_library_path", library_path}}}});
   auto file_enc_props = fep_builder.build_external();
 
   auto sink = CreateOutputStream();
@@ -1328,7 +1329,7 @@ TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
       ->column_keys(dec_cols)
       ->app_context(app_context)
       ->configuration_properties({{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
-                            {{"agent_library_path", library_path}}}});
+                                   {{"agent_library_path", library_path}}}});
   reader_props.file_decryption_properties(dep_builder.build_external());
 
   auto file_reader = parquet::ParquetFileReader::Open(
@@ -1358,4 +1359,4 @@ TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
   ASSERT_EQ(values, out);
 }
 
-  }  // namespace parquet
+}  // namespace parquet

@@ -29,6 +29,7 @@ import pyarrow.parquet as pp
 import pyarrow.parquet.encryption as ppe
 import platform
 
+
 class FooKmsClient(ppe.KmsClient):
 
     def __init__(self, kms_connection_config):
@@ -126,6 +127,7 @@ def write_parquet(table, location, encryption_config=None):
 
         case _:
             raise ValueError(f"Invalid scenario ID: {scenario_id}")
+
 
 def encrypted_data_and_footer_sample(data_table):
     parquet_path = "sample.parquet"
@@ -286,6 +288,7 @@ def get_kms_connection_config():
         }
     )
 
+
 def get_external_encryption_config(plaintext_footer=True):
     return ppe.ExternalEncryptionConfiguration(
         footer_key="footer_key",
@@ -321,6 +324,7 @@ def get_external_encryption_config(plaintext_footer=True):
         configuration_properties=get_dbpa_configuration_properties()
     )
 
+
 def get_encryption_config(plaintext_footer=True):
     return ppe.EncryptionConfiguration(
         footer_key="footer_key",
@@ -334,9 +338,11 @@ def get_encryption_config(plaintext_footer=True):
         plaintext_footer=plaintext_footer
     )
 
+
 def get_decryption_config():
     return ppe.DecryptionConfiguration(
         cache_lifetime=datetime.timedelta(minutes=2.0))
+
 
 def get_external_decryption_config():
     return ppe.ExternalDecryptionConfiguration(
@@ -347,6 +353,7 @@ def get_external_decryption_config():
         },
         configuration_properties=get_dbpa_configuration_properties()
     )
+
 
 def get_config_file():
     config_file_name = os.environ.get(

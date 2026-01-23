@@ -83,7 +83,7 @@ ConvertConfigurationProperties(
   for (const auto& [cipher_type, inner_config] : configuration_properties) {
     if (!IsParquetCipherSupported(cipher_type)) {
       throw ParquetException("Invalid ParquetCipher type: " +
-                              std::to_string(static_cast<int>(cipher_type)));
+                             std::to_string(static_cast<int>(cipher_type)));
     }
 
     std::map<std::string, std::string> converted_inner;
@@ -93,7 +93,7 @@ ConvertConfigurationProperties(
       }
       if (value.empty()) {
         throw ParquetException("Empty value for key '" + key +
-                                "' in configuration properties");
+                               "' in configuration properties");
       }
       converted_inner[key] = value;
     }

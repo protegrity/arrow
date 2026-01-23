@@ -546,6 +546,7 @@ class PARQUET_EXPORT FileEncryptionProperties {
                            std::string footer_key_metadata, bool encrypted_footer,
                            std::string aad_prefix, bool store_aad_prefix_in_file,
                            ColumnPathToEncryptionPropertiesMap encrypted_columns);
+
  public:
   virtual ~FileEncryptionProperties() = default;
 };

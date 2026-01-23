@@ -188,15 +188,15 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
             "External DBPA decryption requires ExternalFileDecryptionProperties");
       }
       decryptor_instance = external_dbpa_decryptor_factory_.GetDecryptor(
-        algorithm, crypto_metadata, column_chunk_metadata,
-        dynamic_cast<ExternalFileDecryptionProperties*>(properties_.get()));
+          algorithm, crypto_metadata, column_chunk_metadata,
+          dynamic_cast<ExternalFileDecryptionProperties*>(properties_.get()));
     } else {
       decryptor_instance = encryption::AesDecryptor::Make(algorithm, key_len, metadata);
     }
     return std::make_unique<Decryptor>(std::move(decryptor_instance), column_key,
-                                       file_aad_,aad, pool_);
-    };
-  }
+                                       file_aad_, aad, pool_);
+  };
+}
 
 std::function<std::unique_ptr<Decryptor>()>
 InternalFileDecryptor::GetColumnMetaDecryptorFactory(

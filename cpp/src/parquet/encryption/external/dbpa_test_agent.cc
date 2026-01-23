@@ -61,17 +61,17 @@ class TestEncryptionResult : public EncryptionResult {
       const override {
     if (metadata_.has_value()) {
       return metadata_;
-     }
+    }
     return std::map<std::string, std::string>{{"test_key1", "test_value1"},
                                               {"test_key2", "test_value2"}};
   }
 
-private:
-    std::vector<uint8_t> ciphertext_data_;
-    bool success_;
-    std::string error_message_;
-    std::map<std::string, std::string> error_fields_;
-    std::optional<std::map<std::string, std::string>> metadata_;
+ private:
+  std::vector<uint8_t> ciphertext_data_;
+  bool success_;
+  std::string error_message_;
+  std::map<std::string, std::string> error_fields_;
+  std::optional<std::map<std::string, std::string>> metadata_;
 };
 
 // Concrete implementation of DecryptionResult for testing
@@ -107,7 +107,6 @@ DBPATestAgent::DBPATestAgent() {}
 
 std::unique_ptr<EncryptionResult> DBPATestAgent::Encrypt(
     span<const uint8_t> plaintext, std::map<std::string, std::string>) {
-
   // Simple XOR encryption for testing purposes
   // In a real implementation, this would use proper encryption
   std::vector<uint8_t> ciphertext_data(plaintext.size());
@@ -134,7 +133,6 @@ std::unique_ptr<EncryptionResult> DBPATestAgent::Encrypt(
 
 std::unique_ptr<DecryptionResult> DBPATestAgent::Decrypt(
     span<const uint8_t> ciphertext, std::map<std::string, std::string>) {
-
   // Simple XOR decryption for testing purposes
   // In a real implementation, this would perform actual decryption
   std::vector<uint8_t> plaintext_data(ciphertext.size());

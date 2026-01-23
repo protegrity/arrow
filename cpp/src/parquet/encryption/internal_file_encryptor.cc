@@ -102,7 +102,8 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetColumnMetaEncryptor(
 }
 
 std::shared_ptr<Encryptor> InternalFileEncryptor::GetColumnDataEncryptor(
-    const std::string& column_path, const ColumnChunkMetaDataBuilder* column_chunk_metadata) {
+    const std::string& column_path,
+    const ColumnChunkMetaDataBuilder* column_chunk_metadata) {
   return GetColumnEncryptor(column_path, false, column_chunk_metadata);
 }
 

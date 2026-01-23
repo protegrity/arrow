@@ -115,8 +115,9 @@ TEST_F(LoadableEncryptorUtilsTest, EmptyLibraryPath) {
 }
 
 TEST_F(LoadableEncryptorUtilsTest, NonexistentLibrary) {
-  EXPECT_THROW({ LoadableEncryptorUtils::LoadFromLibrary("./nonexistent_library.so");,
-               std::runtime_error);
+  EXPECT_THROW(
+      { LoadableEncryptorUtils::LoadFromLibrary("./nonexistent_library.so"); },
+      std::runtime_error);
 }
 
 TEST_F(LoadableEncryptorUtilsTest, InvalidLibraryPath) {

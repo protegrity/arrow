@@ -119,8 +119,7 @@ void EncodingProperties::validate() {
     if (!page_v2_is_compressed_.has_value()) {
       throw std::invalid_argument("PageV2IsCompressed is required");
     }
-  }
-  else if (page_type_ == parquet::PageType::DICTIONARY_PAGE) {
+  } else if (page_type_ == parquet::PageType::DICTIONARY_PAGE) {
     // no validations required for DICTIONARY_PAGE
     // (the requirement for 'encoding' is satisfied by the page_encoding check above)
   }
@@ -129,7 +128,6 @@ void EncodingProperties::validate() {
 std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
     const ColumnDescriptor* column_descriptor, const WriterProperties* writer_properties,
     const Page& column_page) {
-
   EncodingPropertiesBuilder builder;
 
   builder.ColumnPath(column_descriptor->path()->ToDotString());

@@ -69,7 +69,7 @@ std::string TestUtils::GetTestLibraryPath() {
   }
 
   std::vector<std::string> possible_filenames = {
-    "libDBPATestAgent.so", "libDBPATestAgent.dylib", "DBPATestAgent.dll"};
+      "libDBPATestAgent.so", "libDBPATestAgent.dylib", "DBPATestAgent.dll"};
 
   std::vector<std::string> possible_directories = {GetExecutableDirectory() + "/",
                                                    base_path + "/", "./", ""};

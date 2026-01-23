@@ -49,7 +49,7 @@ std::unique_ptr<DataBatchProtectionAgentInterface> LoadableEncryptorUtils::Creat
                              symbol_result.status().message());
   }
 
-  //create_instance_fn is a function pointer to the create_new_instance function in
+  // Create_instance_fn is a function pointer to the create_new_instance function in
   // the shared library.
   create_encryptor_t create_instance_fn =
       reinterpret_cast<create_encryptor_t>(symbol_result.ValueOrDie());

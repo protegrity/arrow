@@ -130,8 +130,8 @@ TEST_F(PerColumnEncryption, PerColumnExternal_WriteRead) {
                                         ->configuration_properties(
                                             {{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
                                               {{"agent_library_path", library_path},
-                                              {"file_path", "/tmp/test"},
-                                              {"other_config", "value"}}}})
+                                               {"file_path", "/tmp/test"},
+                                               {"other_config", "value"}}}})
                                         ->build_external());
 
   // Decrypt using external configuration (decryption config 5 equivalent).
@@ -153,5 +153,3 @@ TEST_F(PerColumnEncryption, PerColumnExternal_WriteRead) {
 }
 
 }  // namespace parquet::encryption::test
-
-

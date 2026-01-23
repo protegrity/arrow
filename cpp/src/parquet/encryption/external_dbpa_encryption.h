@@ -57,10 +57,10 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
                   ::arrow::util::span<const uint8_t> key,
                   ::arrow::util::span<const uint8_t> aad,
                   ::arrow::util::span<uint8_t> ciphertext) override {
-   std::stringstream ss;
-   ss << "Encrypt is not supported in ExternalDBPAEncryptorAdapter, ";
-   ss << "use EncryptWithManagedBuffer instead";
-   throw ParquetException(ss.str());
+    std::stringstream ss;
+    ss << "Encrypt is not supported in ExternalDBPAEncryptorAdapter, ";
+    ss << "use EncryptWithManagedBuffer instead";
+    throw ParquetException(ss.str());
   }
 
   /// Encrypt the plaintext and leave the results in the ciphertext buffer.
@@ -81,20 +81,19 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
   std::shared_ptr<KeyValueMetadata> GetKeyValueMetadata(int8_t module_type) override;
 
  private:
-// agent_instance is assumed to be initialized at the time of construction.
-// No initialization nor checks to verify that it is initialized are performed.
+  // agent_instance is assumed to be initialized at the time of construction.
+  // No initialization nor checks to verify that it is initialized are performed.
 
   ExternalDBPAEncryptorAdapter(
-      ParquetCipher::type algorithm, std::string column_name,
-      std::string key_id, Type::type data_type, Compression::type compression_type,
+      ParquetCipher::type algorithm, std::string column_name, std::string key_id,
+      Type::type data_type, Compression::type compression_type,
       std::optional<int> datatype_length, std::string app_context,
       std::map<std::string, std::string> configuration_properties,
       std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
 
-  int32_t InvokeExternalEncrypt(
-      ::arrow::util::span<const uint8_t> plaintext,
-      ::arrow::ResizableBuffer* ciphertext,
-      std::map<std::string, std::string> encoding_attrs);
+  int32_t InvokeExternalEncrypt(::arrow::util::span<const uint8_t> plaintext,
+                                ::arrow::ResizableBuffer* ciphertext,
+                                std::map<std::string, std::string> encoding_attrs);
 
   ParquetCipher::type algorithm_;
   std::string column_name_;
@@ -193,20 +192,19 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
       std::unique_ptr<EncodingProperties> encoding_properties) override;
 
  private:
-   // agent_instance is assumed to be initialized at the time of construction.
-   // No initialization nor checks to verify that it is initialized are performed.
+  // agent_instance is assumed to be initialized at the time of construction.
+  // No initialization nor checks to verify that it is initialized are performed.
   ExternalDBPADecryptorAdapter(
-      ParquetCipher::type algorithm, std::string column_name,
-      std::string key_id, Type::type data_type, Compression::type compression_type,
+      ParquetCipher::type algorithm, std::string column_name, std::string key_id,
+      Type::type data_type, Compression::type compression_type,
       std::optional<int> datatype_length, std::string app_context,
       std::map<std::string, std::string> configuration_properties,
       std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance,
       std::shared_ptr<const KeyValueMetadata> key_value_metadata);
 
-  int32_t InvokeExternalDecrypt(
-      ::arrow::util::span<const uint8_t> ciphertext,
-      ::arrow::ResizableBuffer* plaintext,
-      std::map<std::string, std::string> encoding_attrs);
+  int32_t InvokeExternalDecrypt(::arrow::util::span<const uint8_t> ciphertext,
+                                ::arrow::ResizableBuffer* plaintext,
+                                std::map<std::string, std::string> encoding_attrs);
 
   ParquetCipher::type algorithm_;
   std::string column_name_;
