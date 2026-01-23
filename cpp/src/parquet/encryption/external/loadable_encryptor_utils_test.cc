@@ -26,7 +26,6 @@
 #include "parquet/encryption/external/loadable_encryptor_utils.h"
 #include "parquet/encryption/external/test_utils.h"
 
-
 namespace parquet::encryption::external::test {
 
 // Test fixture for LoadableEncryptorUtils tests
@@ -115,9 +114,8 @@ TEST_F(LoadableEncryptorUtilsTest, EmptyLibraryPath) {
 }
 
 TEST_F(LoadableEncryptorUtilsTest, NonexistentLibrary) {
-  EXPECT_THROW(
-      { LoadableEncryptorUtils::LoadFromLibrary("./nonexistent_library.so"); },
-      std::runtime_error);
+  EXPECT_THROW({ LoadableEncryptorUtils::LoadFromLibrary("./nonexistent_library.so"); },
+               std::runtime_error);
 }
 
 TEST_F(LoadableEncryptorUtilsTest, InvalidLibraryPath) {

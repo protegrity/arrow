@@ -72,7 +72,6 @@ std::unique_ptr<DataBatchProtectionAgentInterface> LoadableEncryptorUtils::Creat
 
 std::unique_ptr<DataBatchProtectionAgentInterface>
 LoadableEncryptorUtils::LoadFromLibrary(const std::string& library_path) {
-
   if (library_path.empty()) {
     throw std::invalid_argument(
         "LoadableEncryptorUtils::LoadFromLibrary: No library path provided");

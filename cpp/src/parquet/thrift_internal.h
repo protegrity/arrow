@@ -265,7 +265,7 @@ static inline AadMetadata FromThrift(format::AesGcmCtrV1 aesGcmCtrV1) {
 static inline AadMetadata FromThrift(format::ExternalDBPAV1 externalDBPAV1) {
   // Set default values for AAD, which is not supported by ExternalDBPAV1
   return AadMetadata{/*aad_prefix*/ "", /*aad_file_unique*/ "",
-                     /*supply_aad_prefix*/false};
+                     /*supply_aad_prefix*/ false};
 }
 
 static inline EncodedStatistics FromThrift(const format::Statistics& stats) {

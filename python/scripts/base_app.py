@@ -114,7 +114,8 @@ def write_parquet(table, location, encryption_config=None):
                   "and page version 2.0. !!\n")
             pp.write_table(table, location, data_page_version="2.0",
                            use_dictionary=False,
-                           encryption_properties=encryption_properties, compression="SNAPPY")
+                           encryption_properties=encryption_properties,
+                           compression="SNAPPY")
 
         case 6:
             # Case 6: Compressed data (using unsupported compression), using plain
@@ -123,7 +124,8 @@ def write_parquet(table, location, encryption_config=None):
                   "with plain data encoding and page version 2.0. !!\n")
             pp.write_table(table, location, data_page_version="2.0",
                            use_dictionary=False,
-                           encryption_properties=encryption_properties, compression="GZIP")
+                           encryption_properties=encryption_properties,
+                           compression="GZIP")
 
         case _:
             raise ValueError(f"Invalid scenario ID: {scenario_id}")
@@ -210,7 +212,7 @@ def read_and_print_dbps_metadata():
 
             if kv_metadata is not None:
                 print(f"  Column '{column_name}':")
-                print(f"    Has metadata: Yes")
+                print("    Has metadata: Yes")
 
                 # Convert bytes keys/values to strings for display
                 metadata_dict = {}
@@ -227,7 +229,7 @@ def read_and_print_dbps_metadata():
                             else value
                         )
                         metadata_dict[key_str] = value_str
-                    except:
+                    except Exception as e:
                         metadata_dict[str(key)] = str(value)
 
                 # Print DBPS-specific metadata
