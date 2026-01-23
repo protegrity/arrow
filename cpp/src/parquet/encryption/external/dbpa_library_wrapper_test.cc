@@ -153,7 +153,7 @@ class DestructionOrderTracker {
  private:
   std::vector<std::pair<std::string, int>> events_;
   int sequence_counter_;
-};  //DestructionOrderTracker
+};  // DestructionOrderTracker
 
 // Companion object to hold mock state that persists after mock instance destruction
 class MockCompanionDBPA {
@@ -245,10 +245,8 @@ class MockCompanionDBPA {
   // Init parameter tracking
   void SetInitParameters(std::string column_name,
                          std::map<std::string, std::string> configuration_properties,
-                         std::string app_context,
-                         std::string column_key_id,
-                         Type::type data_type,
-                         CompressionCodec::type compression_type,
+                         std::string app_context, std::string column_key_id,
+                         Type::type data_type, CompressionCodec::type compression_type,
                          std::optional<int> datatype_length = std::nullopt,
                          std::optional<std::map<std::string, std::string>>
                              column_encryption_metadata = std::nullopt) {
@@ -493,9 +491,9 @@ TEST_F(DBPALibraryWrapperTest, ConstructorNullLibraryHandle) {
   void* dummy_handle = reinterpret_cast<void*>(0x12345678);
 
   // Test with custom function
-  EXPECT_THROW({
-    DBPALibraryWrapper wrapper(std::move(mock_agent), dummy_handle, nullptr);
-  }, std::invalid_argument);
+  EXPECT_THROW(
+      { DBPALibraryWrapper wrapper(std::move(mock_agent), dummy_handle, nullptr); },
+      std::invalid_argument);
 }
 
 // ============================================================================
@@ -556,8 +554,7 @@ TEST_F(DBPALibraryWrapperTest, InitDelegation) {
   // Test data for init parameters
   std::string column_name = "test_column";
   std::map<std::string, std::string> connection_config = {
-      {"host", "localhost"}, {"port", "5432"}, {"database", "testdb"}
-  };
+      {"host", "localhost"}, {"port", "5432"}, {"database", "testdb"}};
   std::string app_context = "test_app_context";
   std::string column_key_id = "test_key_id";
   Type::type data_type = Type::INT32;

@@ -55,8 +55,7 @@ class DBPAExecutor : public DataBatchProtectionAgentInterface {
    * (default: 30000)
    */
   explicit DBPAExecutor(std::unique_ptr<DataBatchProtectionAgentInterface> agent,
-                        int64_t init_timeout = 10000,
-                        int64_t encrypt_timeout = 30000,
+                        int64_t init_timeout = 10000, int64_t encrypt_timeout = 30000,
                         int64_t decrypt_timeout = 30000);
 
   /**

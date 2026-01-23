@@ -209,9 +209,9 @@ class DBPAExecutorTest : public ::testing::Test {
 
     // Create the executor that wraps the mock agent with custom timeouts
     executor_ = std::make_unique<DBPAExecutor>(std::move(mock_agent_),
-                                               1000,  // init timeout: 1 second
-                                               2000,  // encrypt timeout: 2 seconds
-                                               2000); // decrypt timeout: 2 seconds
+                                               1000,   // init timeout: 1 second
+                                               2000,   // encrypt timeout: 2 seconds
+                                               2000);  // decrypt timeout: 2 seconds
   }
 
   std::unique_ptr<DBPAExecutor> executor_;
@@ -228,7 +228,7 @@ TEST_F(DBPAExecutorTest, ConstructorWithInvalidTimeoutsThrows) {
 
   // Test negative timeout
   EXPECT_THROW(DBPAExecutor(std::move(test_agent), -1, 1000, 1000),
-                            std::invalid_argument);
+               std::invalid_argument);
 
   // Test zero timeout
   test_agent = std::make_unique<MockDBPAAgent>();
@@ -325,8 +325,7 @@ TEST_F(DBPAExecutorTest, DecryptForwardsToWrappedAgent) {
 
 TEST_F(DBPAExecutorTest, InitForwardsDatatypeLength) {
   mock_agent_ptr_->ResetCallCounts();
-  EXPECT_NO_THROW(executor_->init("col", {}, "ctx", "kid",
-                                  Type::type::INT32, 16,
+  EXPECT_NO_THROW(executor_->init("col", {}, "ctx", "kid", Type::type::INT32, 16,
                                   CompressionCodec::type::UNCOMPRESSED, std::nullopt));
   EXPECT_EQ(mock_agent_ptr_->init_call_count_, 1);
   ASSERT_TRUE(mock_agent_ptr_->last_init_datatype_length_.has_value());

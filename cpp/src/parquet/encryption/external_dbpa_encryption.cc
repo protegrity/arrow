@@ -219,7 +219,6 @@ ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
       app_context_(app_context),
       configuration_properties_(configuration_properties),
       agent_instance_(std::move(agent_instance)) {
-
   if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
     throw ParquetException(
         "ExternalDBPAEncryptorAdapter -- Only algorithm ExternalDBPA_V1 is supported");

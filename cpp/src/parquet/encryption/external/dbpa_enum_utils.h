@@ -22,7 +22,7 @@
 
 #include <dbpa_interface.h>
 
-#include "arrow/type_fwd.h" // For arrow::Compression
+#include "arrow/type_fwd.h"  // For arrow::Compression
 #include "parquet/types.h"
 
 namespace parquet::encryption::external {

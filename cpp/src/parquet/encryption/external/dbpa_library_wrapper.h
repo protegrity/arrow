@@ -78,8 +78,8 @@ class DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
                    std::optional<std::map<std::string, std::string>>
                        column_encryption_metadata) override {
     wrapped_agent_->init(std::move(column_name), std::move(configuration_properties),
-                         std::move(app_context), std::move(column_key_id),
-                         data_type, datatype_length, compression_type,
+                         std::move(app_context), std::move(column_key_id), data_type,
+                         datatype_length, compression_type,
                          std::move(column_encryption_metadata));
   }
 

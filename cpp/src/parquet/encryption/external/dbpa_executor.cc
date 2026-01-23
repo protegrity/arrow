@@ -81,8 +81,8 @@ auto ExecuteWithTimeout(const std::string& operation_name, int64_t timeout_milli
     throw DBPAExecutorTimeoutException(operation_name, timeout_milliseconds);
   }
 
-  ARROW_LOG(DEBUG) << "[DBPAExecutor] Future completed for " << operation_name
-                   << " in " << duration.count() << "ms, retrieving result...";
+  ARROW_LOG(DEBUG) << "[DBPAExecutor] Future completed for " << operation_name << " in "
+                   << duration.count() << "ms, retrieving result...";
 
   try {
     // If any exceptions are thrown in the body of the function,
@@ -97,16 +97,14 @@ auto ExecuteWithTimeout(const std::string& operation_name, int64_t timeout_milli
       ARROW_LOG(DEBUG) << "[DBPAExecutor] COMPLETED: " << operation_name << " operation.";
       return result;
     }
-  }
-  catch (const std::exception& e) {
+  } catch (const std::exception& e) {
     ARROW_LOG(ERROR) << "[DBPAExecutor] EXCEPTION: " << operation_name
                      << " failed with: " << e.what();
-    throw; // Re-throw original exception
-  }
-  catch (...) {
+    throw;  // Re-throw original exception
+  } catch (...) {
     ARROW_LOG(ERROR) << "[DBPAExecutor] UNKNOWN EXCEPTION: " << operation_name
                      << " failed with unknown exception";
-    throw; // Re-throw original exception
+    throw;  // Re-throw original exception
   }
 }
 

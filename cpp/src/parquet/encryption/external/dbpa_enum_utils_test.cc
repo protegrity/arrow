@@ -143,10 +143,9 @@ TEST_F(DBPAUtilsTest, MapSizeAssertions) {
   EXPECT_EQ(DBPAEnumUtils::arrow_to_external_compression_map.size(), 10)
       << "Expected 10 arrow compression mappings";
 
-  EXPECT_EQ(arrow_compression_enum_size_, 10)
-       << "Expected 10 arrow compression mappings";
+  EXPECT_EQ(arrow_compression_enum_size_, 10) << "Expected 10 arrow compression mappings";
 
   EXPECT_EQ(arrow_compression_enum_size_, DBPAEnumUtils::arrow_to_external_compression_map.size())
-     << "Expected 10 arrow compression mappings";
+      << "Expected 10 arrow compression mappings";
 }
 }  // namespace parquet::encryption::external
