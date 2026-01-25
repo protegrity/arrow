@@ -125,8 +125,8 @@ jobs:
           ARCHERY_DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           archery docker run --no-pull --no-build \
-            -e LD_LIBRARY_PATH="/opt/conda/envs/arrow/lib:/usr/local/lib:/build/cpp/debug" \
-            -e DBPA_LIBRARY_PATH="/build/cpp/src/parquet/encryption/external/libdbpsLocalAgent.so" \
+            -e LD_LIBRARY_PATH="/opt/conda/envs/arrow/lib:/usr/local/lib:build/cpp/debug" \
+            -e DBPA_LIBRARY_PATH="libdbpsLocalAgent.so" \
             ${{ matrix.image }} "bash -c 'env | grep -E \"(LD_LIBRARY_PATH|DBPA_LIBRARY_PATH)\"'"
       - name: Execute Docker Build
         env:
@@ -136,7 +136,7 @@ jobs:
           source ci/scripts/util_enable_core_dumps.sh
           archery --debug docker run \
             -e LD_LIBRARY_PATH="/opt/conda/envs/arrow/lib:/usr/local/lib:/build/cpp/debug" \
-            -e DBPA_LIBRARY_PATH="/build/cpp/src/parquet/encryption/external/libdbpsLocalAgent.so" \
+            -e DBPA_LIBRARY_PATH="ibdbpsLocalAgent.so" \
             ${{ matrix.image }}
       - name: Docker Push
         if: >-
