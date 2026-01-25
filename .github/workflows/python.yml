@@ -119,13 +119,23 @@ jobs:
           python-version: 3.12
       - name: Setup Archery
         run: pip install -e dev/archery[docker]
+      - name: Debug - Check Environment Variables
+        env:
+          ARCHERY_DOCKER_USER: ${{ secrets.DOCKERHUB_USER }}
+          ARCHERY_DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          archery docker run --no-pull --no-build \
+            -e LD_LIBRARY_PATH="/opt/conda/envs/arrow/lib:/usr/local/lib:/build/cpp/debug" \
+            -e DBPA_LIBRARY_PATH="/build/cpp/src/parquet/encryption/external/libdbpsLocalAgent.so" \
+            ${{ matrix.image }} \
+            bash -c "echo 'LD_LIBRARY_PATH='\$LD_LIBRARY_PATH && echo 'DBPA_LIBRARY_PATH='\$DBPA_LIBRARY_PATH && env | grep -E '(LD_LIBRARY_PATH|DBPA_LIBRARY_PATH)'"
       - name: Execute Docker Build
         env:
           ARCHERY_DOCKER_USER: ${{ secrets.DOCKERHUB_USER }}
           ARCHERY_DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           source ci/scripts/util_enable_core_dumps.sh
-          archery docker run \
+          archery --debug docker run \
             -e LD_LIBRARY_PATH="/opt/conda/envs/arrow/lib:/usr/local/lib:/build/cpp/debug" \
             -e DBPA_LIBRARY_PATH="/build/cpp/src/parquet/encryption/external/libdbpsLocalAgent.so" \
             ${{ matrix.image }}
