@@ -101,7 +101,7 @@ jobs:
       UBUNTU: ${{ matrix.ubuntu || 22.04 }}
       PANDAS: ${{ matrix.pandas || 'latest' }}
       NUMPY: ${{ matrix.numpy || 'latest' }}
-      LD_LIBRARY_PATH: cpp/build/debug
+      LD_LIBRARY_PATH: ${{ LD_LIBRARY_PATH }}:cpp/build/debug
       DBPA_LIBRARY_PATH: libdbpsLocalAgent.so
     steps:
       - name: Checkout Arrow
@@ -125,6 +125,8 @@ jobs:
         env:
           ARCHERY_DOCKER_USER: ${{ secrets.DOCKERHUB_USER }}
           ARCHERY_DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+          LD_LIBRARY_PATH: ${{ LD_LIBRARY_PATH }}
+          DBPA_LIBRARY_PATH: ${{ DBPA_LIBRARY_PATH }}
         run: |
           source ci/scripts/util_enable_core_dumps.sh
           archery docker run ${{ matrix.image }}
