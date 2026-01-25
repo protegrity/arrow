@@ -126,8 +126,8 @@ jobs:
         run: |
           source ci/scripts/util_enable_core_dumps.sh
           archery docker run \
-            -e LD_LIBRARY_PATH=${{ env.LD_LIBRARY_PATH }}:cpp/build/debug \
-            -e DBPA_LIBRARY_PATH=libdbpsLocalAgent.so \
+            -e LD_LIBRARY_PATH="/opt/conda/envs/arrow/lib:/usr/local/lib:/build/cpp/debug" \
+            -e DBPA_LIBRARY_PATH="/build/cpp/src/parquet/encryption/external/libdbpsLocalAgent.so" \
             ${{ matrix.image }}
       - name: Docker Push
         if: >-
