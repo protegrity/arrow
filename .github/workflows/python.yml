@@ -101,6 +101,8 @@ jobs:
       UBUNTU: ${{ matrix.ubuntu || 22.04 }}
       PANDAS: ${{ matrix.pandas || 'latest' }}
       NUMPY: ${{ matrix.numpy || 'latest' }}
+      LD_LIBRARY_PATH: cpp/build/debug
+      DBPA_LIBRARY_PATH: libdbpsLocalAgent.so
     steps:
       - name: Checkout Arrow
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
