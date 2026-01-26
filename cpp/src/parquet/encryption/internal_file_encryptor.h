@@ -38,8 +38,9 @@ class ColumnEncryptionProperties;
 
 class PARQUET_EXPORT Encryptor {
  public:
-  Encryptor(encryption::EncryptorInterface* encryptor_interface, ::arrow::util::SecureString key,
-            std::string file_aad, std::string aad, ::arrow::MemoryPool* pool);
+  Encryptor(encryption::EncryptorInterface* encryptor_interface,
+            ::arrow::util::SecureString key, std::string file_aad, std::string aad,
+            ::arrow::MemoryPool* pool);
   const std::string& file_aad() { return file_aad_; }
   void UpdateAad(const std::string& aad) { aad_ = aad; }
   ::arrow::MemoryPool* pool() { return pool_; }
@@ -54,11 +55,11 @@ class PARQUET_EXPORT Encryptor {
 
   void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties);
 
-  /// After the column_writer writes a dictionary or a data page, this method will be called
-  /// so that each encryptor can provide any encryptor-specific column metadata that should be
-  /// stored in the Parquet file. The keys and values are added to the column metadata, any
-  /// conflicting key and value pairs are overwritten. There is no need to clear the metadata
-  /// after the call.
+  /// After the column_writer writes a dictionary or a data page, this method will
+  /// be called so that each encryptor can provide any encryptor-specific column
+  /// metadata that should be stored in the Parquet file. The keys and values are
+  /// added to the column metadata, any conflicting key and value pairs are
+  /// overwritten. There is no need to clear the metadata after the call.
   std::shared_ptr<KeyValueMetadata> GetKeyValueMetadata(int8_t module_type);
 
   bool EncryptColumnMetaData(
@@ -110,7 +111,8 @@ class InternalFileEncryptor {
       const std::string& column_path, bool metadata,
       const ColumnChunkMetaDataBuilder* column_chunk_metadata = nullptr);
 
-  encryption::EncryptorInterface* GetMetaEncryptor(ParquetCipher::type algorithm, size_t key_len);
+  encryption::EncryptorInterface* GetMetaEncryptor(ParquetCipher::type algorithm,
+                                                   size_t key_len);
 
   encryption::EncryptorInterface* GetDataEncryptor(
       ParquetCipher::type algorithm, size_t key_len,

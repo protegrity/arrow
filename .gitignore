@@ -94,3 +94,5 @@ rat.txt
 
 # for ODBC DLL
 *.rc
+python/sample.parquet
+Dockerfile
