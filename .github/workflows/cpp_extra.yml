@@ -279,6 +279,7 @@ jobs:
             --preset=ninja-release-jni-macos \
             -DARROW_BUILD_TESTS=ON \
             -DPARQUET_REQUIRE_ENCRYPTION=ON \
+            -DPARQUET_BUILD_DBPS_LIBS=OFF \
             -DCMAKE_INSTALL_PREFIX=$PWD/cpp.install
       - name: Build
         run: |
