@@ -99,8 +99,15 @@ if openssl_dep.found()
     parquet_deps += openssl_dep
 
     parquet_srcs += files(
+        'encryption/aes_encryption.cc',
         'encryption/crypto_factory.cc',
-        'encryption/encryption_internal.cc',
+        'encryption/encoding_properties.cc',
+        'encryption/encryption_utils.cc',
+        'encryption/external/dbpa_enum_utils.cc',
+        'encryption/external/dbpa_executor.cc',
+        'encryption/external/dbpa_library_wrapper.cc',
+        'encryption/external/loadable_encryptor_utils.cc',
+        'encryption/external_dbpa_encryption.cc',
         'encryption/file_key_unwrapper.cc',
         'encryption/file_key_wrapper.cc',
         'encryption/file_system_key_material_store.cc',
@@ -113,7 +120,65 @@ if openssl_dep.found()
         'encryption/openssl_internal.cc',
     )
 else
-    parquet_srcs += files('encryption/encryption_internal_nossl.cc')
+    parquet_srcs += files('encryption/aes_encryption_nossl.cc')
+endif
+
+if needs_parquet_encryption or get_option('parquet_require_encryption').auto()
+    tcb_span_dep = dependency('tcb_span', fallback: ['tcb-span', 'tcb_span_dep'])
+    magic_enum_dep = dependency(
+        'magic_enum_header_only',
+        fallback: ['magic-enum', 'magic_enum_dep'],
+    )
+
+    cmake = import('cmake')
+    dbps_opts = cmake.subproject_options()
+
+    build_type = get_option('buildtype')
+    if build_type == 'plain'
+        build_type = 'Release'
+    elif build_type == 'debug'
+        build_type = 'Debug'
+    endif
+
+    build_output_dir = meson.current_build_dir()
+
+    dbps_opts.add_cmake_defines(
+        {
+            'CMAKE_BUILD_TYPE': build_type,
+            'BUILD_SHARED_LIBS': 'ON',
+            'BUILD_TESTS': 'OFF',
+            'BUILD_BENCHMARKS': 'OFF',
+            'GTEST_BUILD_TESTS': 'OFF',
+            'GTEST_BUILD_SAMPLES': 'OFF',
+            'BENCHMARK_ENABLE_TESTING': 'OFF',
+            'BENCHMARK_ENABLE_INSTALL': 'OFF',
+            # 'CMAKE_LIBRARY_OUTPUT_DIRECTORY': build_output_dir,
+            #'CMAKE_RUNTIME_OUTPUT_DIRECTORY': build_output_dir,
+            #'CMAKE_ARCHIVE_OUTPUT_DIRECTORY': build_output_dir,
+            #'CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG': build_output_dir,
+            #'CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE': build_output_dir,
+            #'CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG': build_output_dir,
+            #'CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE': build_output_dir,
+            #'CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG': build_output_dir,
+            #'CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE': build_output_dir,
+            #'CMAKE_BUILD_WITH_INSTALL_RPATH': 'ON',
+            #'CMAKE_INSTALL_RPATH': build_output_dir,
+            #'CMAKE_INSTALL_RPATH_USE_LINK_PATH': 'ON',
+            #'CMAKE_BUILD_RPATH_USE_ORIGIN': 'ON',
+            'CMAKE_BUILD_WITH_INSTALL_RPATH': 'ON',
+            'CMAKE_INSTALL_RPATH_USE_LINK_PATH': 'ON',
+            'CMAKE_BUILD_RPATH_USE_ORIGIN': 'ON',
+        },
+    )
+
+    dbps_proj = cmake.subproject('dbps_agent', options: dbps_opts)
+    dbps_interface_dep = declare_dependency(
+        include_directories: include_directories(
+            '../../subprojects/DataBatchProtectionService-6206fb0e27556a0df9160364caa3819e4af3fe0f/src/common',
+        ),
+    )
+
+    parquet_deps += [dbps_interface_dep, tcb_span_dep, magic_enum_dep]
 endif
 
 parquet_lib = library(
@@ -123,7 +188,10 @@ parquet_lib = library(
     gnu_symbol_visibility: 'inlineshidden',
 )
 
-parquet_dep = declare_dependency(link_with: parquet_lib)
+parquet_dep = declare_dependency(
+    link_with: parquet_lib,
+    dependencies: parquet_deps,
+)
 
 subdir('api')
 subdir('arrow')
@@ -216,6 +284,7 @@ parquet_tests = {
     'writer-test': {
         'sources': files(
             'column_writer_test.cc',
+            'encryption/external/test_utils.cc',
             'file_serialize_test.cc',
             'stream_writer_test.cc',
         ),
@@ -248,7 +317,12 @@ if needs_parquet_encryption
     parquet_tests += {
         'encryption-test': {
             'sources': files(
-                'encryption/encryption_internal_test.cc',
+                'encryption/aes_encryption_test.cc',
+                'encryption/crypto_factory_test.cc',
+                'encryption/encoding_properties_test.cc',
+                'encryption/external/test_utils.cc',
+                'encryption/external_dbpa_encryption_test.cc',
+                'encryption/per_column_encryption_test.cc',
                 'encryption/properties_test.cc',
                 'encryption/read_configurations_test.cc',
                 'encryption/test_encryption_util.cc',
