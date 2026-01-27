@@ -25,9 +25,7 @@
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryptor_interface.h"
-#ifdef PARQUET_REQUIRE_ENCRYPTION
 #include "parquet/encryption/external_dbpa_encryption.h"
-#endif
 #include "parquet/metadata.h"
 
 namespace parquet {
@@ -107,9 +105,7 @@ class InternalFileEncryptor {
 
   ::arrow::MemoryPool* pool_;
   encryption::AesEncryptorFactory aes_encryptor_factory_;
-#ifdef PARQUET_REQUIRE_ENCRYPTION
   encryption::ExternalDBPAEncryptorAdapterFactory external_dbpa_encryptor_factory_;
-#endif
 
   std::shared_ptr<Encryptor> GetColumnEncryptor(
       const std::string& column_path, bool metadata,

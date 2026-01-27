@@ -23,9 +23,7 @@
 
 #include "arrow/util/secure_string.h"
 #include "parquet/encryption/decryptor_interface.h"
-#ifdef PARQUET_REQUIRE_ENCRYPTION
 #include "parquet/encryption/external_dbpa_encryption.h"
-#endif
 #include "parquet/metadata.h"
 
 namespace parquet {
