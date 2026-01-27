@@ -162,6 +162,7 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
     ParquetCipher::type algorithm, size_t key_size,
     const ColumnChunkMetaDataBuilder* column_chunk_metadata) {
   if (algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
+#ifdef PARQUET_REQUIRE_ENCRYPTION
     if (dynamic_cast<ExternalFileEncryptionProperties*>(properties_) == nullptr) {
       throw ParquetException(
           "External DBPA encryption requires ExternalFileEncryptionProperties.");
@@ -170,6 +171,11 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
     return external_dbpa_encryptor_factory_.GetEncryptor(
         algorithm, column_chunk_metadata,
         dynamic_cast<ExternalFileEncryptionProperties*>(properties_));
+#else
+    throw ParquetException(
+        "External DBPA encryption is not supported. Rebuild with "
+        "PARQUET_REQUIRE_ENCRYPTION=ON to enable external encryption support.");
+#endif
   }
   return aes_encryptor_factory_.GetDataAesEncryptor(algorithm, key_size);
 }

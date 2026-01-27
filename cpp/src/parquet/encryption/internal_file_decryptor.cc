@@ -183,6 +183,7 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
     std::unique_ptr<encryption::DecryptorInterface> decryptor_instance;
 
     if (algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
+#ifdef PARQUET_REQUIRE_ENCRYPTION
       if (dynamic_cast<ExternalFileDecryptionProperties*>(properties_.get()) == nullptr) {
         throw ParquetException(
             "External DBPA decryption requires ExternalFileDecryptionProperties");
@@ -190,6 +191,11 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
       decryptor_instance = external_dbpa_decryptor_factory_.GetDecryptor(
           algorithm, crypto_metadata, column_chunk_metadata,
           dynamic_cast<ExternalFileDecryptionProperties*>(properties_.get()));
+#else
+      throw ParquetException(
+          "External DBPA decryption is not supported. Rebuild with "
+          "PARQUET_REQUIRE_ENCRYPTION=ON to enable external encryption support.");
+#endif
     } else {
       decryptor_instance = encryption::AesDecryptor::Make(algorithm, key_len, metadata);
     }
