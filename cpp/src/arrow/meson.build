@@ -385,12 +385,14 @@ if needs_filesystem
                 {'BUILD_PERFORMANCE_TESTS': 'FALSE'},
                 {'BUILD_SAMPLES': 'FALSE'},
                 {'BUILD_TESTING': 'FALSE'},
-                {'BUILD_WINDOWS_UWP': 'TRUE'},
                 {'CMAKE_UNITY_BUILD': 'FALSE'},
                 {'DISABLE_AZURE_CORE_OPENTELEMETRY': 'TRUE'},
                 {'ENV{AZURE_SDK_DISABLE_AUTO_VCPKG}': 'TRUE'},
                 {'WARNINGS_AS_ERRORS': 'FALSE'},
             )
+            if host_machine.system() == 'windows'
+                azure_opt.add_cmake_defines({'BUILD_WINDOWS_UWP': 'TRUE'})
+            endif
             if host_machine.system() != 'windows'
                 azure_opt.append_compile_args('cpp', '-fPIC')
             endif
@@ -623,6 +625,10 @@ if needs_testing
         boost_opt = cmake.subproject_options()
         boost_opt.add_cmake_defines(
             {'BOOST_INCLUDE_LIBRARIES': 'filesystem;system'},
+            # Keep Boost's CMake graph minimal for Meson's CMake introspection.
+            {'BUILD_TESTING': 'OFF'},
+            {'BOOST_ENABLE_TESTING': 'OFF'},
+            {'CMAKE_UNITY_BUILD': 'OFF'},
         )
         boost_proj = cmake.subproject('boost', options: boost_opt)
         filesystem_dep = boost_proj.dependency('boost_filesystem')

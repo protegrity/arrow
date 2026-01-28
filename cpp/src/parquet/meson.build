@@ -65,6 +65,8 @@ if not thrift_dep.found()
         {
             'BUILD_COMPILER': 'OFF',
             'BUILD_EXAMPLES': 'OFF',
+            'BUILD_TESTING': 'OFF',
+            'BUILD_TESTS': 'OFF',
             'BUILD_TUTORIALS': 'OFF',
             'CMAKE_UNITY_BUILD': 'OFF',
             'WITH_AS3': 'OFF',
@@ -157,11 +159,22 @@ else
 endif
 
 
+# Parquet's CMake build uses explicit export macros and (on ELF) a version script
+# to control symbol visibility. Meson doesn't currently replicate that machinery.
+# With Meson's default hidden visibility, some non-exported-but-test-used symbols
+# (e.g. EncodingProperties, IsParquetCipherSupported) are not linkable from test
+# executables. When building tests/benchmarks, relax visibility to avoid link
+# failures in Meson CI.
+parquet_symbol_visibility = 'inlineshidden'
+if needs_testing
+    parquet_symbol_visibility = 'default'
+endif
+
 parquet_lib = library(
     'arrow-parquet',
     sources: parquet_srcs,
     dependencies: parquet_deps,
-    gnu_symbol_visibility: 'inlineshidden',
+    gnu_symbol_visibility: parquet_symbol_visibility,
 )
 
 parquet_dep = declare_dependency(
@@ -271,6 +284,7 @@ parquet_tests = {
             'arrow/arrow_reader_writer_test.cc',
             'arrow/arrow_statistics_test.cc',
             'arrow/variant_test.cc',
+            'encryption/external/test_utils.cc',
         ),
     },
     'arrow-internals-test': {
@@ -285,7 +299,9 @@ parquet_tests = {
             'arrow/arrow_schema_test.cc',
         ),
     },
-    'file_deserialize_test': {'sources': files('file_deserialize_test.cc')},
+    'file_deserialize_test': {
+        'sources': files('file_deserialize_test.cc', 'encryption/external/test_utils.cc'),
+    },
     'schema_test': {'sources': files('schema_test.cc')},
 }
 
@@ -302,6 +318,7 @@ if needs_parquet_encryption
                 'encryption/properties_test.cc',
                 'encryption/read_configurations_test.cc',
                 'encryption/test_encryption_util.cc',
+                'encryption/test_in_memory_kms.cc',
                 'encryption/write_configurations_test.cc',
             ),
         },
