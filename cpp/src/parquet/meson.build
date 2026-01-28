@@ -153,6 +153,24 @@ if openssl_dep.found()
                 'or build DBPS via its CMake build separately.',
             )
         endif
+
+        # Build the in-tree DBPA test agent shared library used by external encryption tests.
+        # CMake builds this as `DBPATestAgent` when ARROW_TESTING is enabled; Meson needs an
+        # equivalent target so tests can dlopen() `libDBPATestAgent.so`.
+        #
+        # Keep it Meson-native (no CMake), and place the output next to parquet test
+        # executables so `TestUtils::GetTestLibraryPath()` can find it via the executable dir.
+        dbpa_test_agent_lib = disabler()
+        if needs_testing
+            dbpa_test_agent_lib = shared_library(
+                'DBPATestAgent',
+                sources: files('encryption/external/dbpa_test_agent.cc'),
+                include_directories: include_directories('..'),
+                dependencies: [arrow_dep, magic_enum_dep, tcb_span_dep, dbps_interface_dep],
+                install: false,
+                gnu_symbol_visibility: 'default',
+            )
+        endif
     endif
 else
     parquet_srcs += files('encryption/aes_encryption_nossl.cc')
@@ -364,7 +382,9 @@ foreach key, val : parquet_tests
         sources: val['sources'] + files('test_util.cc'),
         dependencies: parquet_test_dep,
     )
-    test(test_name, exc)
+    # Ensure the DBPA test agent is built before running any tests that may load it.
+    # (No-op when dbpa_test_agent_lib is disabled/unset.)
+    test(test_name, exc, depends: dbpa_test_agent_lib)
 endforeach
 
 parquet_benchmarks = {
