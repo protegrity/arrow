@@ -212,6 +212,7 @@ jobs:
       ARROW_WITH_SNAPPY: ON
       ARROW_WITH_ZLIB: ON
       ARROW_WITH_ZSTD: ON
+      PARQUET_BUILD_DBPS_LIBS: OFF
     steps:
       - name: CPU Info
         run: |
