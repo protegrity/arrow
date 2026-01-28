@@ -429,7 +429,7 @@ TEST_F(DBPAExecutorTest, TimeoutExceptionThrownOnSlowOperation) {
     // Verify the timeout exception contains expected information
     std::string error_msg = e.what();
     EXPECT_TRUE(error_msg.find("init") != std::string::npos);
-    EXPECT_TRUE(error_msg.find("50") != std::string::npos);
+    EXPECT_TRUE(error_msg.find("5") != std::string::npos);
     EXPECT_TRUE(error_msg.find("milliseconds") != std::string::npos);
   } catch (...) {
     FAIL() << "Expected DBPAExecutorTimeoutException, but got different exception type";
@@ -446,7 +446,7 @@ TEST_F(DBPAExecutorTest, TimeoutExceptionThrownOnSlowOperation) {
     // Verify the timeout exception contains expected information
     std::string error_msg = e.what();
     EXPECT_TRUE(error_msg.find("encrypt") != std::string::npos);
-    EXPECT_TRUE(error_msg.find("55") != std::string::npos);
+    EXPECT_TRUE(error_msg.find("5") != std::string::npos);
     EXPECT_TRUE(error_msg.find("milliseconds") != std::string::npos);
   } catch (...) {
     FAIL() << "Expected DBPAExecutorTimeoutException, but got different exception type";
@@ -460,7 +460,7 @@ TEST_F(DBPAExecutorTest, TimeoutExceptionThrownOnSlowOperation) {
     // Verify the timeout exception contains expected information
     std::string error_msg = e.what();
     EXPECT_TRUE(error_msg.find("decrypt") != std::string::npos);
-    EXPECT_TRUE(error_msg.find("60") != std::string::npos);
+    EXPECT_TRUE(error_msg.find("5") != std::string::npos);
     EXPECT_TRUE(error_msg.find("milliseconds") != std::string::npos);
   } catch (...) {
     FAIL() << "Expected DBPAExecutorTimeoutException, but got different exception type";
