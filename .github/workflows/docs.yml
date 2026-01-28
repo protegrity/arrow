@@ -62,7 +62,7 @@ jobs:
           ARCHERY_DOCKER_USER: ${{ secrets.DOCKERHUB_USER }}
           ARCHERY_DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
           JDK: 17
-        run: archery docker run -e ARROW_CMAKE_ARGS=-DPARQUET_BUILD_DBPS_LIBS=OFF debian-docs
+        run: archery docker run debian-docs
       - name: Docker Push
         if: >-
           success() &&
