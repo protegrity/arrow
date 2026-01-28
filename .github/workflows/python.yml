@@ -244,7 +244,7 @@ jobs:
         shell: bash
         env:
             # Boost problems in this env prevent the DBPS library from being built.
-            PYTEST_ARGS: --ignore-glob=\*test_external_encryption.py
+            PYTEST_ARGS: -k not\ test_external_encryption
         run: ci/scripts/python_test.sh $(pwd) $(pwd)/build
 
   windows:
