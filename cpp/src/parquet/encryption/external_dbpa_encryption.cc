@@ -62,8 +62,17 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   // Step 1: Get path to the shared library
   auto it = configuration_properties.find(SHARED_LIBRARY_PATH_KEY);
   if (it == configuration_properties.end()) {
-    const auto msg = "Required configuration key '" + SHARED_LIBRARY_PATH_KEY +
-                     "' not found in configuration_properties";
+    std::string msg = "Required configuration key '" + SHARED_LIBRARY_PATH_KEY +
+                      "' not found in configuration_properties. Present keys: ";
+    bool first = true;
+    for (const auto& kv : configuration_properties) {
+      if (!first) msg += ", ";
+      first = false;
+      msg += kv.first;
+    }
+    if (first) {
+      msg += "<none>";
+    }
     ARROW_LOG(ERROR) << msg;
     throw ParquetException(msg);
   }

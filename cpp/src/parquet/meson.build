@@ -91,6 +91,10 @@ endif
 
 parquet_deps = [arrow_dep, rapidjson_dep, thrift_dep]
 
+# Default to no DBPA test-agent library (only built when encryption+testing are enabled).
+dbpa_test_agent_lib = disabler()
+dbpa_test_agent_path = ''
+
 if needs_parquet_encryption or get_option('parquet_require_encryption').auto()
     openssl_dep = dependency('openssl', required: needs_parquet_encryption)
 else
@@ -160,16 +164,19 @@ if openssl_dep.found()
         #
         # Keep it Meson-native (no CMake), and place the output next to parquet test
         # executables so `TestUtils::GetTestLibraryPath()` can find it via the executable dir.
-        dbpa_test_agent_lib = disabler()
         if needs_testing
             dbpa_test_agent_lib = shared_library(
                 'DBPATestAgent',
                 sources: files('encryption/external/dbpa_test_agent.cc'),
                 include_directories: include_directories('..'),
-                dependencies: [arrow_dep, magic_enum_dep, tcb_span_dep, dbps_interface_dep],
+                # Keep this test agent as self-contained as possible. It is dlopen()'d
+                # by tests, so avoid unnecessary runtime dependencies (e.g., libarrow.so)
+                # which can differ between Meson/CMake CI environments.
+                dependencies: [magic_enum_dep, tcb_span_dep, dbps_interface_dep],
                 install: false,
                 gnu_symbol_visibility: 'default',
             )
+            dbpa_test_agent_path = dbpa_test_agent_lib.full_path()
         endif
     endif
 else
@@ -384,7 +391,22 @@ foreach key, val : parquet_tests
     )
     # Ensure the DBPA test agent is built before running any tests that may load it.
     # (No-op when dbpa_test_agent_lib is disabled/unset.)
-    test(test_name, exc, depends: dbpa_test_agent_lib)
+    test(
+        test_name,
+        exc,
+        depends: dbpa_test_agent_lib,
+        env: {
+            # Make DBPATestAgent lookup deterministic under Meson. Some CI setups may
+            # not allow /proc/self/exe resolution or run tests with unexpected cwd.
+            'PARQUET_TEST_LIBRARY_CWD': meson.current_build_dir(),
+            # Reuse the standard env var used by Python tooling (`base_app.py`).
+            # Prefer this in C++ as well.
+            'DBPA_LIBRARY_PATH': dbpa_test_agent_path,
+            # Make DBPA-related code emit useful logs in CI (opt-in via env).
+            # This helps debug why Meson runs see unexpected configuration_properties.
+            'PARQUET_DBPA_LOG_LEVEL': 'DEBUG',
+        },
+    )
 endforeach
 
 parquet_benchmarks = {
