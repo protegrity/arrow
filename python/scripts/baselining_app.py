@@ -26,7 +26,10 @@ Creates a synthetic dataset with a single string column (default: 10k rows,
 ~50 chars per value), writes an encrypted parquet to an in-memory buffer,
 and reports avg time + top-10 slowest runs.
 
-Optionally, use a data file (single column) as input instead of synthetic data.
+Optionally, use an input CSV file instead of synthetic data.
+Assumptions for CSV input:
+- The CSV has exactly 1 column
+- There is no header row
 """
 
 from __future__ import annotations
@@ -152,214 +155,81 @@ def _build_synthetic_table(rows: int, str_len: int, seed: int) -> pa.Table:
     return pa.Table.from_pydict({"payload": pa.array(values, type=pa.string())})
 
 
-def _build_table_from_input_file(
-    input_file: str,
-    input_format: str,
-    input_column: Optional[str],
-    input_column_index: int,
-    max_rows: Optional[int],
-) -> pa.Table:
-    if max_rows is not None and max_rows < 0:
-        raise ValueError("--max-rows must be >= 0")
-
-    fmt = input_format.lower()
-    if fmt == "auto":
-        lower = input_file.lower()
-        if lower.endswith(".parquet"):
-            fmt = "parquet"
-        elif lower.endswith(".csv"):
-            fmt = "csv"
-        else:
-            # Default to one value per line.
-            fmt = "txt"
-
-    if max_rows == 0:
-        return pa.Table.from_arrays([pa.array([], type=pa.string())], names=["payload"])
-
-    def _select_column_name(column_names: List[str]) -> str:
-        if "payload" in column_names:
-            return "payload"
-        if input_column is not None:
-            if input_column not in column_names:
-                raise ValueError(
-                    f"--input-column={input_column!r} not found in input columns: {column_names}"
-                )
-            return input_column
-        if input_column_index < 0 or input_column_index >= len(column_names):
-            raise ValueError(
-                f"--input-column-index={input_column_index} out of range for input columns: {column_names}"
-            )
-        return column_names[input_column_index]
-
-    # Load only what we need.
-    if fmt == "parquet":
-        pf = pq.ParquetFile(input_file)
-        col_name = _select_column_name(pf.schema.names)
-        arrays: List[pa.Array] = []
-        seen = 0
-        for rg in range(pf.num_row_groups):
-            rg_table = pf.read_row_group(rg, columns=[col_name])
-            arr = pa.chunked_array(rg_table.column(0)).combine_chunks()
-            arrays.append(arr)
-            seen += arr.length()
-            if max_rows is not None and seen >= max_rows:
-                break
-        if not arrays:
-            t = pa.Table.from_arrays([pa.array([], type=pa.string())], names=["payload"])
-        else:
-            combined = pa.chunked_array(arrays).combine_chunks()
-            if max_rows is not None:
-                combined = combined.slice(0, max_rows)
-            if not pa.types.is_string(combined.type):
-                combined = combined.cast(pa.string())
-            t = pa.Table.from_arrays([combined], names=["payload"])
-
-    elif fmt == "csv":
-        reader = pacsv.open_csv(input_file)
-        col_name = _select_column_name(reader.schema.names)
-        arrays = []
-        seen = 0
-        while True:
-            try:
-                batch = reader.read_next_batch()
-            except StopIteration:
-                break
-            t_batch = pa.Table.from_batches([batch])
-            arr = pa.chunked_array(t_batch.column(col_name)).combine_chunks()
-            if max_rows is not None and seen + arr.length() > max_rows:
-                arr = arr.slice(0, max_rows - seen)
-            arrays.append(arr)
-            seen += arr.length()
-            if max_rows is not None and seen >= max_rows:
-                break
-        combined = pa.chunked_array(arrays).combine_chunks() if arrays else pa.array([], type=pa.string())
-        if not pa.types.is_string(combined.type):
-            combined = combined.cast(pa.string())
-        t = pa.Table.from_arrays([combined], names=["payload"])
-
-    elif fmt == "txt":
-        values: List[str] = []
-        limit = max_rows if max_rows is not None else None
-        with open(input_file, "r", encoding="utf-8") as f:
-            for line in f:
-                values.append(line.rstrip("\n"))
-                if limit is not None and len(values) >= limit:
-                    break
-        t = pa.Table.from_arrays([pa.array(values, type=pa.string())], names=["payload"])
-
-    else:
-        raise ValueError(f"Unsupported --input-format: {input_format!r}")
-
-    return t
-
-
 def _iter_payload_batches_from_input_file(
     *,
     input_file: str,
-    input_format: str,
-    input_column: Optional[str],
-    input_column_index: int,
     max_rows: Optional[int],
-    txt_batch_rows: int = 1_000_000,
 ) -> Iterable[pa.RecordBatch]:
     """
-    Stream an input file as RecordBatches with a single string column named 'payload'.
+    Stream a CSV input file as RecordBatches with a single string column named 'payload'.
 
     This is designed to avoid materializing huge inputs (e.g. 100M strings) in memory.
     """
     if max_rows is not None and max_rows < 0:
         raise ValueError("--max-rows must be >= 0")
 
-    fmt = input_format.lower()
-    if fmt == "auto":
-        lower = input_file.lower()
-        if lower.endswith(".parquet"):
-            fmt = "parquet"
-        elif lower.endswith(".csv"):
-            fmt = "csv"
-        else:
-            fmt = "txt"
-
     if max_rows == 0:
         return iter(())
 
-    def _select_column_name(column_names: List[str]) -> str:
-        if "payload" in column_names:
-            return "payload"
-        if input_column is not None:
-            if input_column not in column_names:
-                raise ValueError(
-                    f"--input-column={input_column!r} not found in input columns: {column_names}"
-                )
-            return input_column
-        if input_column_index < 0 or input_column_index >= len(column_names):
-            raise ValueError(
-                f"--input-column-index={input_column_index} out of range for input columns: {column_names}"
-            )
-        return column_names[input_column_index]
-
     remaining = max_rows
 
-    if fmt == "parquet":
-        pf = pq.ParquetFile(input_file)
-        col_name = _select_column_name(pf.schema.names)
-        for batch in pf.iter_batches(columns=[col_name]):
-            arr = batch.column(0)
-            if not pa.types.is_string(arr.type):
-                arr = arr.cast(pa.string())
-            if remaining is not None and batch.num_rows > remaining:
-                arr = arr.slice(0, remaining)
-            yield pa.RecordBatch.from_arrays([arr], names=["payload"])
-            if remaining is not None:
-                remaining -= min(batch.num_rows, remaining)
-                if remaining <= 0:
-                    break
-        return
-
-    if fmt == "csv":
-        reader = pacsv.open_csv(input_file)
-        col_name = _select_column_name(reader.schema.names)
-        col_idx = reader.schema.get_field_index(col_name)
-        while True:
-            try:
-                batch = reader.read_next_batch()
-            except StopIteration:
+    # Configure as "no header, single column" by providing a column name explicitly.
+    # This ensures the first row is treated as data.
+    reader = pacsv.open_csv(
+        input_file,
+        read_options=pacsv.ReadOptions(column_names=["payload"])
+    )
+    while True:
+        try:
+            batch = reader.read_next_batch()
+        except StopIteration:
+            break
+        arr = batch.column(0)
+        if not pa.types.is_string(arr.type):
+            arr = arr.cast(pa.string())
+        if remaining is not None and batch.num_rows > remaining:
+            arr = arr.slice(0, remaining)
+        yield pa.RecordBatch.from_arrays([arr], names=["payload"])
+        if remaining is not None:
+            remaining -= min(batch.num_rows, remaining)
+            if remaining <= 0:
                 break
-            arr = batch.column(col_idx)
-            if not pa.types.is_string(arr.type):
-                arr = arr.cast(pa.string())
-            if remaining is not None and batch.num_rows > remaining:
-                arr = arr.slice(0, remaining)
-            yield pa.RecordBatch.from_arrays([arr], names=["payload"])
-            if remaining is not None:
-                remaining -= min(batch.num_rows, remaining)
-                if remaining <= 0:
-                    break
-        return
+    return
 
-    if fmt == "txt":
-        if txt_batch_rows <= 0:
-            raise ValueError("txt_batch_rows must be > 0")
-        with open(input_file, "r", encoding="utf-8") as f:
-            buf: List[str] = []
-            for line in f:
-                if remaining is not None and remaining <= 0:
-                    break
-                buf.append(line.rstrip("\n"))
-                if remaining is not None:
-                    remaining -= 1
-                if len(buf) >= txt_batch_rows:
-                    yield pa.RecordBatch.from_arrays(
-                        [pa.array(buf, type=pa.string())], names=["payload"]
-                    )
-                    buf = []
-            if buf:
-                yield pa.RecordBatch.from_arrays(
-                    [pa.array(buf, type=pa.string())], names=["payload"]
-                )
-        return
 
-    raise ValueError(f"Unsupported --input-format: {input_format!r}")
+def _read_payload_table_from_input_file(
+    *,
+    input_file: str,
+    max_rows: Optional[int],
+) -> pa.Table:
+    """
+    Read a CSV input file as a fully materialized Table with a single string column named
+    'payload'.
+
+    This uses `pyarrow.csv.read_csv(...)` (eager), matching the approach used in
+    `protegrity_benchmark_app.py`. This is useful when you want your benchmark timing to
+    focus on Parquet write+encrypt rather than CSV streaming/parsing per-iteration.
+    """
+    if max_rows is not None and max_rows < 0:
+        raise ValueError("--max-rows must be >= 0")
+
+    if max_rows == 0:
+        return pa.Table.from_pydict({"payload": pa.array([], type=pa.string())})
+
+    tbl = pacsv.read_csv(
+        input_file,
+        read_options=pacsv.ReadOptions(column_names=["payload"]),
+    )
+
+    # Normalize (defensive) to a single string column named "payload".
+    if tbl.num_columns != 1:
+        raise ValueError(f"Expected 1 column, got {tbl.num_columns}: {tbl.schema.names}")
+    if not pa.types.is_string(tbl.column(0).type):
+        tbl = tbl.set_column(0, "payload", tbl.column(0).cast(pa.string()))
+
+    if max_rows is not None and tbl.num_rows > max_rows:
+        tbl = tbl.slice(0, max_rows)
+    return tbl
 
 
 def _write_once_to_memory(
@@ -378,6 +248,22 @@ def _write_once_to_memory(
     pq.write_table(table, sink, **kwargs)
     # Ensure everything is materialized.
     sink.getvalue()
+
+
+def _write_once_to_file(
+    table: pa.Table,
+    encryption_properties: Any,
+    scenario: Scenario,
+    output_file: str,
+) -> None:
+    kwargs: Dict[str, Any] = {
+        "encryption_properties": encryption_properties,
+        "use_dictionary": scenario.use_dictionary,
+        "compression": scenario.compression,
+    }
+    if scenario.data_page_version is not None:
+        kwargs["data_page_version"] = scenario.data_page_version
+    pq.write_table(table, output_file, **kwargs)
 
 
 def _write_once_to_memory_from_payload_batches(
@@ -551,26 +437,29 @@ def main() -> None:
         "--input-file",
         default=None,
         help=(
-            "Optional data file path to use as input instead of generating synthetic data. "
-            "Supported formats: parquet, csv, txt (one value per line)."
+            "Optional CSV file path (1 column, no header) to use as input instead of generating synthetic data."
         ),
     )
     parser.add_argument(
-        "--input-format",
-        choices=["auto", "parquet", "csv", "txt"],
-        default="auto",
-        help="Input file format when using --input-file (default: auto by extension).",
+        "--output-mode",
+        choices=("file", "memory"),
+        default="file",
+        help=(
+            "Where to write the Parquet output. "
+            "'file' writes to disk (matches protegrity_benchmark_app.py). "
+            "'memory' writes to an in-memory buffer (original behavior)."
+        ),
     )
     parser.add_argument(
-        "--input-column",
-        default=None,
-        help="Column name to read from the input file (default: use first column).",
+        "--output-file",
+        default="baselining.parquet",
+        help="Output Parquet path when --output-mode=file.",
     )
     parser.add_argument(
-        "--input-column-index",
-        type=int,
-        default=0,
-        help="0-based column index to read from the input file when --input-column is not set.",
+        "--skip-dbpa",
+        action="store_true",
+        default=False,
+        help="Skip EXTERNAL_DBPA_V1 (DBPA) benchmark and only run AES.",
     )
     parser.add_argument(
         "--max-rows",
@@ -620,6 +509,13 @@ def main() -> None:
     table: Optional[pa.Table] = None
     if args.input_file is None:
         table = _build_synthetic_table(args.rows, args.str_len, args.seed)
+    else:
+        # We always benchmark Parquet writing via `write_table(table, ...)` for consistency,
+        # and we read the CSV eagerly (matching protegrity_benchmark_app.py).
+        table = _read_payload_table_from_input_file(
+            input_file=args.input_file,
+            max_rows=args.max_rows,
+        )
     scenario = _scenario_from_id(args.scenario_id)
 
     footer_key_name = "footer_key"
@@ -633,10 +529,10 @@ def main() -> None:
         print(
             "input_file="
             + args.input_file
-            + f" input_format={args.input_format} input_column={args.input_column} "
-            + f"input_column_index={args.input_column_index} max_rows={args.max_rows}"
+            + f" max_rows={args.max_rows}"
         )
-        print(f"rows=(streamed) iterations={args.iterations} warmup={args.warmup}")
+        assert table is not None
+        print(f"csv_read_mode=eager rows={table.num_rows} iterations={args.iterations} warmup={args.warmup}")
     else:
         print(f"rows={args.rows} str_len={args.str_len} iterations={args.iterations} warmup={args.warmup}")
     print(f"include_warmup_in_results={args.include_warmup_in_results}")
@@ -645,6 +541,8 @@ def main() -> None:
     print(f"AES algorithm={args.aes_algorithm}")
     print("EXTERNAL DBPA algorithm=EXTERNAL_DBPA_V1 (local agent only)")
     print("DBPA_LIBRARY_PATH=" + os.environ.get("DBPA_LIBRARY_PATH", "(not set)"))
+    print(f"output_mode={args.output_mode}" + (f" output_file={args.output_file}" if args.output_mode == "file" else ""))
+    print(f"skip_dbpa={args.skip_dbpa}")
     print("------------------------------------------------------------")
 
     aes_props = _build_aes_encryption_properties(
@@ -657,52 +555,26 @@ def main() -> None:
         data_key_length_bits=args.data_key_length_bits,
     )
 
-    dbpa_props = _build_external_dbpa_encryption_properties(
-        footer_key_name=footer_key_name,
-        col_key_name=col_key_name,
-        col_name=col_name,
-        plaintext_footer=args.plaintext_footer,
-        file_level_encryption_algorithm=args.file_level_algorithm,
-        cache_lifetime_minutes=args.cache_lifetime_min,
-        data_key_length_bits=args.data_key_length_bits,
-    )
+    dbpa_props = None
+    if not args.skip_dbpa:
+        dbpa_props = _build_external_dbpa_encryption_properties(
+            footer_key_name=footer_key_name,
+            col_key_name=col_key_name,
+            col_name=col_name,
+            plaintext_footer=args.plaintext_footer,
+            file_level_encryption_algorithm=args.file_level_algorithm,
+            cache_lifetime_minutes=args.cache_lifetime_min,
+            data_key_length_bits=args.data_key_length_bits,
+        )
 
-    if args.input_file:
-        def write_once_aes() -> int:
-            return _write_once_to_memory_from_payload_batches(
-                _iter_payload_batches_from_input_file(
-                    input_file=args.input_file,
-                    input_format=args.input_format,
-                    input_column=args.input_column,
-                    input_column_index=args.input_column_index,
-                    max_rows=args.max_rows,
-                ),
-                aes_props,
-                scenario,
-            )
+    assert table is not None
 
-        def write_once_dbpa() -> int:
-            return _write_once_to_memory_from_payload_batches(
-                _iter_payload_batches_from_input_file(
-                    input_file=args.input_file,
-                    input_format=args.input_format,
-                    input_column=args.input_column,
-                    input_column_index=args.input_column_index,
-                    max_rows=args.max_rows,
-                ),
-                dbpa_props,
-                scenario,
-            )
-    else:
-        assert table is not None
-
-        def write_once_aes() -> int:
+    def write_once_aes() -> int:
+        if args.output_mode == "file":
+            _write_once_to_file(table, aes_props, scenario, args.output_file)
+        else:
             _write_once_to_memory(table, aes_props, scenario)
-            return table.num_rows
-
-        def write_once_dbpa() -> int:
-            _write_once_to_memory(table, dbpa_props, scenario)
-            return table.num_rows
+        return table.num_rows
 
     aes_avg_ms, aes_top10_ms, aes_rows_used = _benchmark_write_encrypt(
         label=f"AES ({args.aes_algorithm})",
@@ -714,15 +586,28 @@ def main() -> None:
         include_warmup_in_results=args.include_warmup_in_results,
     )
 
-    dbpa_avg_ms, dbpa_top10_ms, dbpa_rows_used = _benchmark_write_encrypt(
-        label="EXTERNAL_DBPA_V1 (local agent)",
-        write_once=write_once_dbpa,
-        encryption_properties=dbpa_props,
-        scenario=scenario,
-        iterations=args.iterations,
-        warmup=args.warmup,
-        include_warmup_in_results=args.include_warmup_in_results,
-    )
+    dbpa_avg_ms = 0.0
+    dbpa_top10_ms: List[float] = []
+    dbpa_rows_used = 0
+    if not args.skip_dbpa:
+        assert dbpa_props is not None
+
+        def write_once_dbpa() -> int:
+            if args.output_mode == "file":
+                _write_once_to_file(table, dbpa_props, scenario, args.output_file)
+            else:
+                _write_once_to_memory(table, dbpa_props, scenario)
+            return table.num_rows
+
+        dbpa_avg_ms, dbpa_top10_ms, dbpa_rows_used = _benchmark_write_encrypt(
+            label="EXTERNAL_DBPA_V1 (local agent)",
+            write_once=write_once_dbpa,
+            encryption_properties=dbpa_props,
+            scenario=scenario,
+            iterations=args.iterations,
+            warmup=args.warmup,
+            include_warmup_in_results=args.include_warmup_in_results,
+        )
 
     runs_measured = args.iterations + (args.warmup if args.include_warmup_in_results else 0)
     print("\n------------------------------------------------------------")
@@ -734,11 +619,12 @@ def main() -> None:
     print(f"  runs_measured: {runs_measured} (warmup: {args.warmup}, included: {args.include_warmup_in_results})")
     print(f"  avg_ms: {aes_avg_ms:.3f}")
     print("  top10_slowest_ms: " + ", ".join(f"{x:.3f}" for x in aes_top10_ms))
-    print()
-    print("EXTERNAL_DBPA_V1 (local agent)")
-    print(f"  runs_measured: {runs_measured} (warmup: {args.warmup}, included: {args.include_warmup_in_results})")
-    print(f"  avg_ms: {dbpa_avg_ms:.3f}")
-    print("  top10_slowest_ms: " + ", ".join(f"{x:.3f}" for x in dbpa_top10_ms))
+    if not args.skip_dbpa:
+        print()
+        print("EXTERNAL_DBPA_V1 (local agent)")
+        print(f"  runs_measured: {runs_measured} (warmup: {args.warmup}, included: {args.include_warmup_in_results})")
+        print(f"  avg_ms: {dbpa_avg_ms:.3f}")
+        print("  top10_slowest_ms: " + ", ".join(f"{x:.3f}" for x in dbpa_top10_ms))
     print("------------------------------------------------------------")
 
 
