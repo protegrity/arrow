@@ -522,27 +522,40 @@ def main() -> None:
     col_key_name = "col_key"
     col_name = "payload"
 
+    setup_lines: List[str] = []
+    if args.input_file:
+        setup_lines.append(f"input_file={args.input_file} max_rows={args.max_rows}")
+        assert table is not None
+        setup_lines.append(
+            f"csv_read_mode=eager rows={table.num_rows} iterations={args.iterations} warmup={args.warmup}"
+        )
+    else:
+        setup_lines.append(
+            f"rows={args.rows} str_len={args.str_len} iterations={args.iterations} warmup={args.warmup}"
+        )
+    setup_lines.append(f"include_warmup_in_results={args.include_warmup_in_results}")
+    setup_lines.append(
+        f"scenario_id={args.scenario_id} use_dictionary={scenario.use_dictionary} "
+        f"compression={scenario.compression} data_page_version={scenario.data_page_version}"
+    )
+    setup_lines.append(
+        f"plaintext_footer={args.plaintext_footer} cache_lifetime_min={args.cache_lifetime_min} "
+        f"data_key_length_bits={args.data_key_length_bits}"
+    )
+    setup_lines.append(f"AES algorithm={args.aes_algorithm}")
+    setup_lines.append("EXTERNAL DBPA algorithm=EXTERNAL_DBPA_V1 (local agent only)")
+    setup_lines.append("DBPA_LIBRARY_PATH=" + os.environ.get("DBPA_LIBRARY_PATH", "(not set)"))
+    setup_lines.append(
+        f"output_mode={args.output_mode}"
+        + (f" output_file={args.output_file}" if args.output_mode == "file" else "")
+    )
+    setup_lines.append(f"skip_dbpa={args.skip_dbpa}")
+
     print("\n------------------------------------------------------------")
     print("Parquet encryption baselining")
     print("------------------------------------------------------------")
-    if args.input_file:
-        print(
-            "input_file="
-            + args.input_file
-            + f" max_rows={args.max_rows}"
-        )
-        assert table is not None
-        print(f"csv_read_mode=eager rows={table.num_rows} iterations={args.iterations} warmup={args.warmup}")
-    else:
-        print(f"rows={args.rows} str_len={args.str_len} iterations={args.iterations} warmup={args.warmup}")
-    print(f"include_warmup_in_results={args.include_warmup_in_results}")
-    print(f"scenario_id={args.scenario_id} use_dictionary={scenario.use_dictionary} compression={scenario.compression} data_page_version={scenario.data_page_version}")
-    print(f"plaintext_footer={args.plaintext_footer} cache_lifetime_min={args.cache_lifetime_min} data_key_length_bits={args.data_key_length_bits}")
-    print(f"AES algorithm={args.aes_algorithm}")
-    print("EXTERNAL DBPA algorithm=EXTERNAL_DBPA_V1 (local agent only)")
-    print("DBPA_LIBRARY_PATH=" + os.environ.get("DBPA_LIBRARY_PATH", "(not set)"))
-    print(f"output_mode={args.output_mode}" + (f" output_file={args.output_file}" if args.output_mode == "file" else ""))
-    print(f"skip_dbpa={args.skip_dbpa}")
+    for line in setup_lines:
+        print(line)
     print("------------------------------------------------------------")
 
     aes_props = _build_aes_encryption_properties(
@@ -611,6 +624,12 @@ def main() -> None:
 
     runs_measured = args.iterations + (args.warmup if args.include_warmup_in_results else 0)
     print("\n------------------------------------------------------------")
+    print("Run configuration")
+    print("------------------------------------------------------------")
+    for line in setup_lines:
+        print(line)
+    print("------------------------------------------------------------")
+    print("\n------------------------------------------------------------")
     print("Benchmark results (write + encrypt, ms)")
     print("------------------------------------------------------------")
     rows_used = aes_rows_used or dbpa_rows_used
@@ -625,6 +644,16 @@ def main() -> None:
         print(f"  runs_measured: {runs_measured} (warmup: {args.warmup}, included: {args.include_warmup_in_results})")
         print(f"  avg_ms: {dbpa_avg_ms:.3f}")
         print("  top10_slowest_ms: " + ", ".join(f"{x:.3f}" for x in dbpa_top10_ms))
+        if aes_avg_ms > 0.0:
+            delta_pct = ((dbpa_avg_ms - aes_avg_ms) / aes_avg_ms) * 100.0
+            relation = "slower" if delta_pct > 0 else "faster" if delta_pct < 0 else "the same"
+            print()
+            print(
+                f"DBPA vs AES (avg_ms): {delta_pct:+.2f}% ({relation}; AES is baseline)"
+            )
+        else:
+            print()
+            print("DBPA vs AES (avg_ms): N/A (AES avg_ms is 0)")
     print("------------------------------------------------------------")
 
 
