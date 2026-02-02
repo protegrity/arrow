@@ -655,6 +655,16 @@ def main() -> None:
             print()
             print("DBPA vs AES (avg_ms): N/A (AES avg_ms is 0)")
     print("------------------------------------------------------------")
+    print()
+    dbpa_avg_ms_csv = "" if args.skip_dbpa else f"{dbpa_avg_ms:.3f}"
+    print("[STATS]",
+        f"{args.scenario_id},"
+        f"{rows_used},"
+        f"{args.iterations},"
+        f"{args.warmup},"
+        f"{aes_avg_ms:.3f},"
+        f"{dbpa_avg_ms_csv}"
+    )
 
 
 if __name__ == "__main__":
