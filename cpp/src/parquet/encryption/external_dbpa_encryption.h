@@ -127,6 +127,7 @@ class PARQUET_EXPORT ExternalDBPAUtils {
 // Update encryptor-level metadata accumulator based on encoding attributes and
 // EncryptionResult-provided metadata. If no metadata is available or page_type is
 // unsupported/absent, function performs no-op.
+PARQUET_EXPORT
 void UpdateEncryptorMetadata(
     std::map<int8_t, std::map<std::string, std::string>>& metadata_by_module,
     const EncodingProperties& encoding_properties,
