@@ -39,7 +39,8 @@ typedef DataBatchProtectionAgentInterface* (*create_encryptor_t)();
 
 std::unique_ptr<DataBatchProtectionAgentInterface> LoadableEncryptorUtils::CreateInstance(
     void* library_handle) {
-  auto symbol_result = ::arrow::internal::GetSymbol(library_handle, "create_new_instance");
+  auto symbol_result =
+      ::arrow::internal::GetSymbol(library_handle, "create_new_instance");
   if (!symbol_result.ok()) {
     ARROW_LOG(ERROR) << "Cannot load symbol 'create_new_instance()': "
                      << symbol_result.status().message();
@@ -77,7 +78,8 @@ LoadableEncryptorUtils::LoadFromLibrary(const std::string& library_path) {
         "LoadableEncryptorUtils::LoadFromLibrary: No library path provided");
   }
 
-  auto library_handle_result = ::arrow::internal::LoadDynamicLibrary(library_path.c_str());
+  auto library_handle_result =
+      ::arrow::internal::LoadDynamicLibrary(library_path.c_str());
   if (!library_handle_result.ok()) {
     throw std::runtime_error("Failed to load library: " +
                              library_handle_result.status().message());
