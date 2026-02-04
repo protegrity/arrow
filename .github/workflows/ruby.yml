@@ -269,7 +269,6 @@ jobs:
           restore-keys: ruby-ccache-ucrt${{ matrix.mingw-n-bits }}-
       - name: Build C++
         run: |
-          Write-Output "ARROW_CMAKE_ARGS=$Env:ARROW_CMAKE_ARGS"
           $Env:CMAKE_BUILD_PARALLEL_LEVEL = $Env:NUMBER_OF_PROCESSORS
           $source_dir = "$(ridk exec cygpath --unix "$(Get-Location)")"
           $build_dir = "$(ridk exec cygpath --unix "$(Get-Location)\build")"
@@ -352,6 +351,9 @@ jobs:
       ARROW_WITH_SNAPPY: ON
       ARROW_WITH_ZLIB: ON
       ARROW_WITH_ZSTD: ON
+      ARROW_CMAKE_ARGS: >-
+        -DARROW_BUILD_SHARED=ON
+        -DPARQUET_BUILD_DBPS_LIBS=OFF
       CMAKE_CXX_STANDARD: "17"
       CMAKE_GENERATOR: Ninja
       CMAKE_INSTALL_PREFIX: "${{ github.workspace }}/dist"
