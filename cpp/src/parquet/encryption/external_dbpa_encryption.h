@@ -28,6 +28,7 @@
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/encryption/encryptor_interface.h"
 #include "parquet/metadata.h"
+#include "parquet/platform.h"
 #include "parquet/types.h"
 
 using dbps::external::DataBatchProtectionAgentInterface;
@@ -35,7 +36,7 @@ using dbps::external::DataBatchProtectionAgentInterface;
 namespace parquet::encryption {
 
 /// Call an external Data Batch Protection Agent (DBPA) to encrypt data.
-class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
+class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
  public:
   static std::unique_ptr<ExternalDBPAEncryptorAdapter> Make(
       ParquetCipher::type algorithm, std::string column_name, std::string key_id,
@@ -115,7 +116,7 @@ class ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 };
 
 // Utilities for External DBPA adapters
-class ExternalDBPAUtils {
+class PARQUET_EXPORT ExternalDBPAUtils {
  public:
   // Convert Arrow KeyValueMetadata to a std::map<string, string>.
   // Returns std::nullopt if the input is null or contains no pairs.
@@ -133,7 +134,7 @@ void UpdateEncryptorMetadata(
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
 /// operation is open, and is used to guarantee the lifetime of the encryptor.
-class ExternalDBPAEncryptorAdapterFactory {
+class PARQUET_EXPORT ExternalDBPAEncryptorAdapterFactory {
  public:
   ExternalDBPAEncryptorAdapter* GetEncryptor(
       ParquetCipher::type algorithm,
@@ -146,7 +147,7 @@ class ExternalDBPAEncryptorAdapterFactory {
 
 /// Call an external Data Batch Protection Agent (DBPA) to decrypt data.
 /// connection configuration provided.
-class ExternalDBPADecryptorAdapter : public DecryptorInterface {
+class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
  public:
   static std::unique_ptr<ExternalDBPADecryptorAdapter> Make(
       ParquetCipher::type algorithm, std::string column_name, std::string key_id,
@@ -225,7 +226,7 @@ class ExternalDBPADecryptorAdapter : public DecryptorInterface {
 };
 
 /// Factory for ExternalDBPADecryptorAdapter instances. No cache exists for decryptors.
-class ExternalDBPADecryptorAdapterFactory {
+class PARQUET_EXPORT ExternalDBPADecryptorAdapterFactory {
  public:
   std::unique_ptr<DecryptorInterface> GetDecryptor(
       ParquetCipher::type algorithm, const ColumnCryptoMetaData* crypto_metadata,
