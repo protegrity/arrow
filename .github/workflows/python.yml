@@ -160,6 +160,7 @@ jobs:
       ARROW_CMAKE_ARGS: >-
         -DARROW_BUILD_SHARED=ON
         -DPARQUET_BUILD_DBPS_LIBS=ON
+        -DPARQUET_DBPS_CMAKE_ARGS=-DBoost_NO_BOOST_CMAKE=ON
       ARROW_DATASET: ON
       ARROW_FLIGHT: ON
       ARROW_GANDIVA: ON
@@ -304,5 +305,4 @@ jobs:
       - name: Test PyArrow
         shell: cmd
         run: |
-          set "ARROW_CMAKE_ARGS=-DPARQUET_BUILD_DBPS_LIBS=OFF -DARROW_BUILD_SHARED=ON"
-          call "ci\scripts\python_build.bat" %cd% "${{ steps.path-info.outputs.usr-windows-dir }}"
+          call "ci\scripts\python_test.bat" %cd%
