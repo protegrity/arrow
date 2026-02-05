@@ -241,6 +241,10 @@ jobs:
           fi
 
           python -m pip install wheel
+          BOOST_PREFIX="$(brew --prefix boost)"
+          ARROW_CMAKE_ARGS="${ARROW_CMAKE_ARGS} \
+          -DPARQUET_DBPS_CMAKE_ARGS=-DBoost_NO_BOOST_CMAKE=ON\;-DBoost_USE_STATIC_LIBS=OFF\;-DBoost_ROOT=${BOOST_PREFIX}"
+
           ci/scripts/cpp_build.sh $(pwd) $(pwd)/build
           ci/scripts/python_build.sh $(pwd) $(pwd)/build
       - name: Test
