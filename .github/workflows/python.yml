@@ -157,7 +157,9 @@ jobs:
     env:
       ARROW_HOME: /tmp/local
       ARROW_AZURE: ON
-      ARROW_CMAKE_ARGS: -DPARQUET_BUILD_DBPS_LIBS=OFF
+      ARROW_CMAKE_ARGS: >-
+        -DARROW_BUILD_SHARED=ON
+        -DPARQUET_BUILD_DBPS_LIBS=ON
       ARROW_DATASET: ON
       ARROW_FLIGHT: ON
       ARROW_GANDIVA: ON
@@ -242,7 +244,10 @@ jobs:
           ci/scripts/python_build.sh $(pwd) $(pwd)/build
       - name: Test
         shell: bash
-        run: ci/scripts/python_test.sh $(pwd) $(pwd)/build
+        run: |
+          DBPA_LIBRARY_PATH="$(pwd)/build/cpp/debug/libdbpsLocalAgent.dylib" \
+          DYLD_LIBRARY_PATH="$(pwd)/build/cpp/debug${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \
+          ci/scripts/python_test.sh "$(pwd)" "$(pwd)/build"
 
   windows:
     name: AMD64 Windows 2022 Python 3.13
@@ -299,4 +304,5 @@ jobs:
       - name: Test PyArrow
         shell: cmd
         run: |
-          call "ci\scripts\python_test.bat" %cd%
+          set "ARROW_CMAKE_ARGS=-DPARQUET_BUILD_DBPS_LIBS=OFF -DARROW_BUILD_SHARED=ON"
+          call "ci\scripts\python_build.bat" %cd% "${{ steps.path-info.outputs.usr-windows-dir }}"
