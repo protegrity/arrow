@@ -159,7 +159,7 @@ jobs:
       ARROW_AZURE: ON
       ARROW_CMAKE_ARGS: >-
         -DARROW_BUILD_SHARED=ON
-        -DPARQUET_BUILD_DBPS_LIBS=ON
+        -DPARQUET_BUILD_DBPS_LIBS=OFF
         -DPARQUET_DBPS_CMAKE_ARGS=-DBoost_NO_BOOST_CMAKE=ON
       ARROW_DATASET: ON
       ARROW_FLIGHT: ON
@@ -241,17 +241,11 @@ jobs:
           fi
 
           python -m pip install wheel
-          BOOST_PREFIX="$(brew --prefix boost)"
-          ARROW_CMAKE_ARGS="${ARROW_CMAKE_ARGS} \
-          -DPARQUET_DBPS_CMAKE_ARGS=-DBoost_NO_BOOST_CMAKE=ON\;-DBoost_USE_STATIC_LIBS=OFF\;-DBoost_ROOT=${BOOST_PREFIX}"
-
           ci/scripts/cpp_build.sh $(pwd) $(pwd)/build
           ci/scripts/python_build.sh $(pwd) $(pwd)/build
       - name: Test
         shell: bash
-        run: |
-          DBPA_LIBRARY_PATH="$(pwd)/build/cpp/debug/libdbpsLocalAgent.dylib" \
-          DYLD_LIBRARY_PATH="$(pwd)/build/cpp/debug${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \
+        run:
           ci/scripts/python_test.sh "$(pwd)" "$(pwd)/build"
 
   windows:
