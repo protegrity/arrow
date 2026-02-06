@@ -138,13 +138,13 @@ void UpdateEncryptorMetadata(
 class PARQUET_EXPORT ExternalDBPAEncryptorAdapterFactory {
  public:
   ExternalDBPAEncryptorAdapterFactory() = default;
-  ExternalDBPAEncryptorAdapterFactory(
-      const ExternalDBPAEncryptorAdapterFactory&) = delete;
+  ExternalDBPAEncryptorAdapterFactory(const ExternalDBPAEncryptorAdapterFactory&) =
+      delete;
   ExternalDBPAEncryptorAdapterFactory& operator=(
       const ExternalDBPAEncryptorAdapterFactory&) = delete;
   ExternalDBPAEncryptorAdapterFactory(ExternalDBPAEncryptorAdapterFactory&&) = default;
-  ExternalDBPAEncryptorAdapterFactory& operator=(
-      ExternalDBPAEncryptorAdapterFactory&&) = default;
+  ExternalDBPAEncryptorAdapterFactory& operator=(ExternalDBPAEncryptorAdapterFactory&&) =
+      default;
 
   ExternalDBPAEncryptorAdapter* GetEncryptor(
       ParquetCipher::type algorithm,

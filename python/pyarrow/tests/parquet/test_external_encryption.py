@@ -39,7 +39,7 @@ def get_agent_library_path():
 def _skip_if_external_dbpa_agent_missing():
     path = get_agent_library_path()
     if os.path.isabs(path) and not os.path.exists(path):
-      pytest.skip(f"External DBPA agent library not found in path [{path}]")
+        pytest.skip(f"External DBPA agent library not found in path [{path}]")
 
 
 class FooKmsClient(ppe.KmsClient):
