@@ -62,8 +62,17 @@ std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> LoadAndInitia
   // Step 1: Get path to the shared library
   auto it = configuration_properties.find(SHARED_LIBRARY_PATH_KEY);
   if (it == configuration_properties.end()) {
-    const auto msg = "Required configuration key '" + SHARED_LIBRARY_PATH_KEY +
-                     "' not found in configuration_properties";
+    std::string msg = "Required configuration key '" + SHARED_LIBRARY_PATH_KEY +
+                      "' not found in configuration_properties. Present keys: ";
+    bool first = true;
+    for (const auto& kv : configuration_properties) {
+      if (!first) msg += ", ";
+      first = false;
+      msg += kv.first;
+    }
+    if (first) {
+      msg += "<none>";
+    }
     ARROW_LOG(ERROR) << msg;
     throw ParquetException(msg);
   }
@@ -430,6 +439,19 @@ ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
     auto app_context = external_file_encryption_properties->app_context();
     auto connection_config_for_algorithm = configuration_properties.at(algorithm);
 
+    if (::arrow::util::ArrowLog::IsLevelEnabled(
+            ::arrow::util::ArrowLogLevel::ARROW_DEBUG)) {
+      ARROW_LOG(DEBUG) << "ExternalDBPAEncryptorAdapterFactory::GetEncryptor - "
+                          "selected configuration_properties for EXTERNAL_DBPA_V1:";
+      if (connection_config_for_algorithm.empty()) {
+        ARROW_LOG(DEBUG) << "  <empty map>";
+      } else {
+        for (const auto& [k, v] : connection_config_for_algorithm) {
+          ARROW_LOG(DEBUG) << "  [" << k << "]: [" << v << "]";
+        }
+      }
+    }
+
     std::string key_id;
     try {
       auto key_metadata =
@@ -658,6 +680,19 @@ std::unique_ptr<DecryptorInterface> ExternalDBPADecryptorAdapterFactory::GetDecr
   auto app_context = external_file_decryption_properties->app_context();
   auto connection_config_for_algorithm = configuration_properties.at(algorithm);
   auto key_value_metadata = column_chunk_metadata->key_value_metadata();
+
+  if (::arrow::util::ArrowLog::IsLevelEnabled(
+          ::arrow::util::ArrowLogLevel::ARROW_DEBUG)) {
+    ARROW_LOG(DEBUG) << "ExternalDBPADecryptorAdapterFactory::GetDecryptor - "
+                        "selected configuration_properties for EXTERNAL_DBPA_V1:";
+    if (connection_config_for_algorithm.empty()) {
+      ARROW_LOG(DEBUG) << "  <empty map>";
+    } else {
+      for (const auto& [k, v] : connection_config_for_algorithm) {
+        ARROW_LOG(DEBUG) << "  [" << k << "]: [" << v << "]";
+      }
+    }
+  }
 
   std::string key_id;
   try {
