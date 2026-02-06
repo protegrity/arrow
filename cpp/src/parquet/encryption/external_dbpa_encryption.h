@@ -137,6 +137,9 @@ void UpdateEncryptorMetadata(
 /// operation is open, and is used to guarantee the lifetime of the encryptor.
 class PARQUET_EXPORT ExternalDBPAEncryptorAdapterFactory {
  public:
+  // Windows DLL construction tries to instantiate a copy constructor for this class,
+  // and runs into problem as it tries to copy a deleted pointer. Explicitly delete
+  // copy operations so MSVC doesn't try to instantiate a copy constructor.ßßß
   ExternalDBPAEncryptorAdapterFactory() = default;
   ExternalDBPAEncryptorAdapterFactory(const ExternalDBPAEncryptorAdapterFactory&) =
       delete;
