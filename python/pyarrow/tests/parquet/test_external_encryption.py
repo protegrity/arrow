@@ -38,7 +38,7 @@ def get_agent_library_path():
 @pytest.fixture(scope="module", autouse=True)
 def _skip_if_external_dbpa_agent_missing():
     path = get_agent_library_path()
-    if os.path.isabs(path) and not os.path.exists(path):
+    if not os.path.exists(path):
         pytest.skip(f"External DBPA agent library not found in path [{path}]")
 
 
