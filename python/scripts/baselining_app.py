@@ -105,12 +105,9 @@ def _default_local_agent_library_name() -> str:
 
 
 def _get_dbpa_configuration_properties() -> Dict[str, Dict[str, str]]:
-    # Local agent only for now (remote support can be added later).
-    agent_library_path = os.environ.get("DBPA_LIBRARY_PATH")
-    if not agent_library_path:
-        agent_library_path = _default_local_agent_library_name()
+    agent_library_path = os.environ.get("DBPA_LIBRARY_PATH") or _default_local_agent_library_name()
 
-    return {
+    props: Dict[str, Dict[str, str]] = {
         "EXTERNAL_DBPA_V1": {
             "agent_library_path": agent_library_path,
             "agent_init_timeout_ms": "15000",
@@ -118,6 +115,8 @@ def _get_dbpa_configuration_properties() -> Dict[str, Dict[str, str]]:
             "agent_decrypt_timeout_ms": "35000",
         }
     }
+
+    return props
 
 
 # --------------------------------------------------------------------------------------
@@ -308,6 +307,7 @@ def _benchmark_write_encrypt(
     *,
     label: str,
     write_once: Callable[[], int],
+    validate_once: Optional[Callable[[], None]] = None,
     encryption_properties: Any,
     scenario: Scenario,
     iterations: int,
@@ -334,19 +334,24 @@ def _benchmark_write_encrypt(
                 heapq.heapreplace(top10_slowest_heap, sample_ms)
 
     if include_warmup_in_results:
-        for _ in range(warmup):
+        for i in range(warmup):
             t0 = time.perf_counter_ns()
             rows = write_once()
             t1 = time.perf_counter_ns()
             _record_sample((t1 - t0) / 1_000_000.0)
             if rows_used is None:
                 rows_used = rows
+            # Validation is explicitly excluded from the benchmark timings.
+            if i == 0 and validate_once is not None:
+                validate_once()
     else:
         # Warmup runs (not recorded).
-        for _ in range(warmup):
+        for i in range(warmup):
             rows = write_once()
             if rows_used is None:
                 rows_used = rows
+            if i == 0 and validate_once is not None:
+                validate_once()
 
     for _ in range(iterations):
         t0 = time.perf_counter_ns()
@@ -360,6 +365,60 @@ def _benchmark_write_encrypt(
     top10_slowest_ms = sorted(top10_slowest_heap, reverse=True)
 
     return avg_ms, top10_slowest_ms, (rows_used or 0)
+
+
+def _validate_encrypted_payload_can_be_decrypted(
+    *,
+    label: str,
+    original_table: pa.Table,
+    encrypted_source: Any,
+    decryption_properties: Any,
+    compare_first_rows: int = 50,
+) -> None:
+    """
+    Validate that the encrypted output can be decrypted back to the original payload.
+
+    Checks:
+    - total row count
+    - first N rows (default: 50) of the first column ("payload" in this benchmark)
+    """
+    if isinstance(encrypted_source, pa.Buffer):
+        src = pa.BufferReader(encrypted_source)
+    else:
+        src = encrypted_source
+
+    decrypted = pq.ParquetFile(src, decryption_properties=decryption_properties).read()
+
+    if decrypted.num_rows != original_table.num_rows:
+        raise ValueError(
+            f"[{label}] decrypt validation failed: row count mismatch "
+            f"(expected {original_table.num_rows}, got {decrypted.num_rows})"
+        )
+
+    if original_table.num_columns != 1 or decrypted.num_columns != 1:
+        raise ValueError(
+            f"[{label}] decrypt validation failed: expected exactly 1 column, "
+            f"got original={original_table.num_columns} decrypted={decrypted.num_columns}"
+        )
+
+    n = min(compare_first_rows, original_table.num_rows)
+    orig_vals = original_table.column(0).slice(0, n).to_pylist()
+    dec_vals = decrypted.column(0).slice(0, n).to_pylist()
+    if orig_vals != dec_vals:
+        first_bad = 0
+        for idx, (a, b) in enumerate(zip(orig_vals, dec_vals)):
+            if a != b:
+                first_bad = idx
+                break
+        raise ValueError(
+            f"[{label}] decrypt validation failed: first {n} rows mismatch; "
+            f"first_diff_index={first_bad} expected={orig_vals[first_bad]!r} got={dec_vals[first_bad]!r}"
+        )
+
+    print(
+        f"[{label}] decrypt validation successful "
+        f"(rows={original_table.num_rows}, checked_first_rows={n})"
+    )
 
 
 # --------------------------------------------------------------------------------------
@@ -387,6 +446,19 @@ def _build_aes_encryption_properties(
     )
     crypto_factory = pe.CryptoFactory(_kms_client_factory)
     return crypto_factory.file_encryption_properties(kms_connection_config, encryption_config)
+
+def _build_aes_decryption_properties(
+    *,
+    footer_key_name: str,
+    col_key_name: str,
+    cache_lifetime_minutes: float,
+) -> Any:
+    kms_connection_config = _get_kms_connection_config(footer_key_name, col_key_name)
+    decryption_config = pe.DecryptionConfiguration(
+        cache_lifetime=_dt.timedelta(minutes=cache_lifetime_minutes)
+    )
+    crypto_factory = pe.CryptoFactory(_kms_client_factory)
+    return crypto_factory.file_decryption_properties(kms_connection_config, decryption_config)
 
 
 def _build_external_dbpa_encryption_properties(
@@ -428,6 +500,110 @@ def _build_external_dbpa_encryption_properties(
         kms_connection_config, external_encryption_config
     )
 
+def _build_external_dbpa_decryption_properties(
+    *,
+    footer_key_name: str,
+    col_key_name: str,
+    cache_lifetime_minutes: float,
+) -> Any:
+    # Note: even for external DBPA, Arrow still uses KMS for (footer / key wrapping).
+    kms_connection_config = _get_kms_connection_config(footer_key_name, col_key_name)
+    external_decryption_config = pe.ExternalDecryptionConfiguration(
+        cache_lifetime=_dt.timedelta(minutes=cache_lifetime_minutes),
+        app_context={
+            "app": "base_app_baselining",
+            "user_id": "benchmark",
+            "location": "local",
+        },
+        configuration_properties=_get_dbpa_configuration_properties(),
+    )
+    crypto_factory = pe.CryptoFactory(_kms_client_factory)
+    return crypto_factory.external_file_decryption_properties(
+        kms_connection_config, external_decryption_config
+    )
+
+
+def _encrypt_once_to_memory_buffer(
+    table: pa.Table,
+    encryption_properties: Any,
+    scenario: Scenario,
+) -> pa.Buffer:
+    sink = pa.BufferOutputStream()
+    kwargs: Dict[str, Any] = {
+        "encryption_properties": encryption_properties,
+        "use_dictionary": scenario.use_dictionary,
+        "compression": scenario.compression,
+    }
+    if scenario.data_page_version is not None:
+        kwargs["data_page_version"] = scenario.data_page_version
+    pq.write_table(table, sink, **kwargs)
+    return sink.getvalue()
+
+
+def _benchmark_read_decrypt(
+    *,
+    label: str,
+    read_once: Callable[[], int],
+    decryption_properties: Any,
+    iterations: int,
+    warmup: int,
+    include_warmup_in_results: bool,
+) -> Tuple[float, List[float], int]:
+    # Keep stats in O(1) memory:
+    # - running sum/count for avg
+    # - min-heap of size 10 for top-10 slowest
+    total_ms = 0.0
+    count = 0
+    top10_slowest_heap: List[float] = []
+    rows_used: Optional[int] = None
+
+    def _record_sample(sample_ms: float) -> None:
+        nonlocal total_ms, count, top10_slowest_heap
+        total_ms += sample_ms
+        count += 1
+        if len(top10_slowest_heap) < 10:
+            heapq.heappush(top10_slowest_heap, sample_ms)
+        else:
+            # Keep only the 10 largest values.
+            if sample_ms > top10_slowest_heap[0]:
+                heapq.heapreplace(top10_slowest_heap, sample_ms)
+
+    # Label + decryption_properties are kept for symmetry with write benchmark and future logging.
+    _ = (label, decryption_properties)
+
+    if include_warmup_in_results:
+        for _ in range(warmup):
+            t0 = time.perf_counter_ns()
+            rows = read_once()
+            t1 = time.perf_counter_ns()
+            _record_sample((t1 - t0) / 1_000_000.0)
+            if rows_used is None:
+                rows_used = rows
+    else:
+        for _ in range(warmup):
+            rows = read_once()
+            if rows_used is None:
+                rows_used = rows
+
+    for _ in range(iterations):
+        t0 = time.perf_counter_ns()
+        rows = read_once()
+        t1 = time.perf_counter_ns()
+        _record_sample((t1 - t0) / 1_000_000.0)
+        if rows_used is None:
+            rows_used = rows
+
+    avg_ms = (total_ms / count) if count else 0.0
+    top10_slowest_ms = sorted(top10_slowest_heap, reverse=True)
+    return avg_ms, top10_slowest_ms, (rows_used or 0)
+
+def _derive_output_path(base_path: str, suffix: str) -> str:
+    # Insert suffix before extension if present: "x.parquet" -> "x.<suffix>.parquet"
+    root, ext = os.path.splitext(base_path)
+    if not ext:
+        return f"{base_path}.{suffix}"
+    return f"{root}.{suffix}{ext}"
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -462,6 +638,16 @@ def main() -> None:
         help="Skip EXTERNAL_DBPA_V1 (DBPA) benchmark and only run AES.",
     )
     parser.add_argument(
+        "--measure-decrypt",
+        action="store_true",
+        default=False,
+        help=(
+            "Also benchmark decrypt (read) performance. "
+            "This encrypts the payload once (same params as encrypt), then runs "
+            "repeated decrypt-only reads for warmup/iterations."
+        ),
+    )
+    parser.add_argument(
         "--max-rows",
         type=int,
         default=None,
@@ -479,7 +665,7 @@ def main() -> None:
         help="Include warmup rounds in timing statistics (default: excluded).",
     )
     parser.add_argument(
-        "--scenario-id",
+        "--scenario",
         type=int,
         default=int(os.getenv("BASE_APP_SCENARIO_ID", "5")),
         help="Matches base_app.py scenarios (default: env BASE_APP_SCENARIO_ID or 5).",
@@ -516,7 +702,7 @@ def main() -> None:
             input_file=args.input_file,
             max_rows=args.max_rows,
         )
-    scenario = _scenario_from_id(args.scenario_id)
+    scenario = _scenario_from_id(args.scenario)
 
     footer_key_name = "footer_key"
     col_key_name = "col_key"
@@ -535,7 +721,7 @@ def main() -> None:
         )
     setup_lines.append(f"include_warmup_in_results={args.include_warmup_in_results}")
     setup_lines.append(
-        f"scenario_id={args.scenario_id} use_dictionary={scenario.use_dictionary} "
+        f"scenario={args.scenario} use_dictionary={scenario.use_dictionary} "
         f"compression={scenario.compression} data_page_version={scenario.data_page_version}"
     )
     setup_lines.append(
@@ -550,6 +736,7 @@ def main() -> None:
         + (f" output_file={args.output_file}" if args.output_mode == "file" else "")
     )
     setup_lines.append(f"skip_dbpa={args.skip_dbpa}")
+    setup_lines.append(f"measure_decrypt={args.measure_decrypt}")
 
     print("\n------------------------------------------------------------")
     print("Parquet encryption baselining")
@@ -567,8 +754,14 @@ def main() -> None:
         cache_lifetime_minutes=args.cache_lifetime_min,
         data_key_length_bits=args.data_key_length_bits,
     )
+    aes_dec_props_for_validation = _build_aes_decryption_properties(
+        footer_key_name=footer_key_name,
+        col_key_name=col_key_name,
+        cache_lifetime_minutes=args.cache_lifetime_min,
+    )
 
     dbpa_props = None
+    dbpa_dec_props_for_validation = None
     if not args.skip_dbpa:
         dbpa_props = _build_external_dbpa_encryption_properties(
             footer_key_name=footer_key_name,
@@ -579,19 +772,47 @@ def main() -> None:
             cache_lifetime_minutes=args.cache_lifetime_min,
             data_key_length_bits=args.data_key_length_bits,
         )
+        dbpa_dec_props_for_validation = _build_external_dbpa_decryption_properties(
+            footer_key_name=footer_key_name,
+            col_key_name=col_key_name,
+            cache_lifetime_minutes=args.cache_lifetime_min,
+        )
 
     assert table is not None
 
+    should_validate_roundtrip = args.warmup > 0
+
+    aes_last_buf: Optional[pa.Buffer] = None
     def write_once_aes() -> int:
+        nonlocal aes_last_buf
         if args.output_mode == "file":
             _write_once_to_file(table, aes_props, scenario, args.output_file)
+            aes_last_buf = None
         else:
-            _write_once_to_memory(table, aes_props, scenario)
+            aes_last_buf = _encrypt_once_to_memory_buffer(table, aes_props, scenario)
         return table.num_rows
+
+    def validate_once_aes() -> None:
+        if args.output_mode == "file":
+            src: Any = args.output_file
+        else:
+            if aes_last_buf is None:
+                raise RuntimeError(
+                    "AES validation expected an in-memory encrypted buffer, but none was produced"
+                )
+            src = aes_last_buf
+        _validate_encrypted_payload_can_be_decrypted(
+            label=f"AES ({args.aes_algorithm})",
+            original_table=table,
+            encrypted_source=src,
+            decryption_properties=aes_dec_props_for_validation,
+            compare_first_rows=50,
+        )
 
     aes_avg_ms, aes_top10_ms, aes_rows_used = _benchmark_write_encrypt(
         label=f"AES ({args.aes_algorithm})",
         write_once=write_once_aes,
+        validate_once=(validate_once_aes if should_validate_roundtrip else None),
         encryption_properties=aes_props,
         scenario=scenario,
         iterations=args.iterations,
@@ -599,28 +820,124 @@ def main() -> None:
         include_warmup_in_results=args.include_warmup_in_results,
     )
 
+    # Optional decrypt benchmarks (decrypt-only; payload is encrypted once).
+    aes_dec_avg_ms = 0.0
+    aes_dec_top10_ms: List[float] = []
+    aes_dec_rows_used = 0
+    dbpa_dec_avg_ms = 0.0
+    dbpa_dec_top10_ms: List[float] = []
+    dbpa_dec_rows_used = 0
+
+    if args.measure_decrypt:
+        aes_dec_props = _build_aes_decryption_properties(
+            footer_key_name=footer_key_name,
+            col_key_name=col_key_name,
+            cache_lifetime_minutes=args.cache_lifetime_min,
+        )
+
+        if args.output_mode == "file":
+            # Ensure we have an encrypted payload on disk once for decrypt-only reads.
+            # Use a dedicated file to avoid mixing AES/DBPA payloads and to avoid
+            # perturbing the encrypt benchmark output artifact.
+            aes_decrypt_file = _derive_output_path(args.output_file, "aes_decrypt")
+            _write_once_to_file(table, aes_props, scenario, aes_decrypt_file)
+
+            def read_once_aes() -> int:
+                # Mirror base_app.py: use ParquetFile(...).read() to ensure
+                # decryption_properties is always applied across Arrow versions.
+                t = pq.ParquetFile(aes_decrypt_file, decryption_properties=aes_dec_props).read()
+                return t.num_rows
+        else:
+            buf = _encrypt_once_to_memory_buffer(table, aes_props, scenario)
+
+            def read_once_aes() -> int:
+                t = pq.ParquetFile(pa.BufferReader(buf), decryption_properties=aes_dec_props).read()
+                return t.num_rows
+
+        aes_dec_avg_ms, aes_dec_top10_ms, aes_dec_rows_used = _benchmark_read_decrypt(
+            label=f"AES decrypt ({args.aes_algorithm})",
+            read_once=read_once_aes,
+            decryption_properties=aes_dec_props,
+            iterations=args.iterations,
+            warmup=args.warmup,
+            include_warmup_in_results=args.include_warmup_in_results,
+        )
+
     dbpa_avg_ms = 0.0
     dbpa_top10_ms: List[float] = []
     dbpa_rows_used = 0
     if not args.skip_dbpa:
         assert dbpa_props is not None
+        assert dbpa_dec_props_for_validation is not None
+
+        dbpa_last_buf: Optional[pa.Buffer] = None
 
         def write_once_dbpa() -> int:
+            nonlocal dbpa_last_buf
             if args.output_mode == "file":
                 _write_once_to_file(table, dbpa_props, scenario, args.output_file)
+                dbpa_last_buf = None
             else:
-                _write_once_to_memory(table, dbpa_props, scenario)
+                dbpa_last_buf = _encrypt_once_to_memory_buffer(table, dbpa_props, scenario)
             return table.num_rows
+
+        def validate_once_dbpa() -> None:
+            if args.output_mode == "file":
+                src: Any = args.output_file
+            else:
+                if dbpa_last_buf is None:
+                    raise RuntimeError(
+                        "DBPA validation expected an in-memory encrypted buffer, but none was produced"
+                    )
+                src = dbpa_last_buf
+            _validate_encrypted_payload_can_be_decrypted(
+                label="EXTERNAL_DBPA_V1 (local agent)",
+                original_table=table,
+                encrypted_source=src,
+                decryption_properties=dbpa_dec_props_for_validation,
+                compare_first_rows=50,
+            )
 
         dbpa_avg_ms, dbpa_top10_ms, dbpa_rows_used = _benchmark_write_encrypt(
             label="EXTERNAL_DBPA_V1 (local agent)",
             write_once=write_once_dbpa,
+            validate_once=(validate_once_dbpa if should_validate_roundtrip else None),
             encryption_properties=dbpa_props,
             scenario=scenario,
             iterations=args.iterations,
             warmup=args.warmup,
             include_warmup_in_results=args.include_warmup_in_results,
         )
+
+        if args.measure_decrypt:
+            dbpa_dec_props = _build_external_dbpa_decryption_properties(
+                footer_key_name=footer_key_name,
+                col_key_name=col_key_name,
+                cache_lifetime_minutes=args.cache_lifetime_min,
+            )
+
+            if args.output_mode == "file":
+                dbpa_decrypt_file = _derive_output_path(args.output_file, "dbpa_decrypt")
+                _write_once_to_file(table, dbpa_props, scenario, dbpa_decrypt_file)
+
+                def read_once_dbpa() -> int:
+                    t = pq.ParquetFile(dbpa_decrypt_file, decryption_properties=dbpa_dec_props).read()
+                    return t.num_rows
+            else:
+                buf = _encrypt_once_to_memory_buffer(table, dbpa_props, scenario)
+
+                def read_once_dbpa() -> int:
+                    t = pq.ParquetFile(pa.BufferReader(buf), decryption_properties=dbpa_dec_props).read()
+                    return t.num_rows
+
+            dbpa_dec_avg_ms, dbpa_dec_top10_ms, dbpa_dec_rows_used = _benchmark_read_decrypt(
+                label="EXTERNAL_DBPA_V1 decrypt (local agent)",
+                read_once=read_once_dbpa,
+                decryption_properties=dbpa_dec_props,
+                iterations=args.iterations,
+                warmup=args.warmup,
+                include_warmup_in_results=args.include_warmup_in_results,
+            )
 
     runs_measured = args.iterations + (args.warmup if args.include_warmup_in_results else 0)
     print("\n------------------------------------------------------------")
@@ -655,16 +972,55 @@ def main() -> None:
             print()
             print("DBPA vs AES (avg_ms): N/A (AES avg_ms is 0)")
     print("------------------------------------------------------------")
+
+    if args.measure_decrypt:
+        print("\n------------------------------------------------------------")
+        print("Benchmark results (read + decrypt, ms)")
+        print("------------------------------------------------------------")
+        rows_used_dec = aes_dec_rows_used or dbpa_dec_rows_used
+        print(f"rows_used: {rows_used_dec}")
+        print(f"AES decrypt ({args.aes_algorithm})")
+        print(f"  runs_measured: {runs_measured} (warmup: {args.warmup}, included: {args.include_warmup_in_results})")
+        print(f"  avg_ms: {aes_dec_avg_ms:.3f}")
+        print("  top10_slowest_ms: " + ", ".join(f"{x:.3f}" for x in aes_dec_top10_ms))
+        if not args.skip_dbpa:
+            print()
+            print("EXTERNAL_DBPA_V1 decrypt (local agent)")
+            print(f"  runs_measured: {runs_measured} (warmup: {args.warmup}, included: {args.include_warmup_in_results})")
+            print(f"  avg_ms: {dbpa_dec_avg_ms:.3f}")
+            print("  top10_slowest_ms: " + ", ".join(f"{x:.3f}" for x in dbpa_dec_top10_ms))
+            if aes_dec_avg_ms > 0.0:
+                delta_pct = ((dbpa_dec_avg_ms - aes_dec_avg_ms) / aes_dec_avg_ms) * 100.0
+                relation = "slower" if delta_pct > 0 else "faster" if delta_pct < 0 else "the same"
+                print()
+                print(
+                    f"DBPA vs AES (decrypt avg_ms): {delta_pct:+.2f}% ({relation}; AES is baseline)"
+                )
+            else:
+                print()
+                print("DBPA vs AES (decrypt avg_ms): N/A (AES decrypt avg_ms is 0)")
+        print("------------------------------------------------------------")
     print()
     dbpa_avg_ms_csv = "" if args.skip_dbpa else f"{dbpa_avg_ms:.3f}"
     print("[STATS]",
-        f"{args.scenario_id},"
+        f"{args.scenario},"
         f"{rows_used},"
         f"{args.iterations},"
         f"{args.warmup},"
         f"{aes_avg_ms:.3f},"
         f"{dbpa_avg_ms_csv}"
     )
+
+    if args.measure_decrypt:
+        dbpa_dec_avg_ms_csv = "" if args.skip_dbpa else f"{dbpa_dec_avg_ms:.3f}"
+        print("[STATS_DECRYPT]",
+            f"{args.scenario},"
+            f"{(aes_dec_rows_used or dbpa_dec_rows_used)},"
+            f"{args.iterations},"
+            f"{args.warmup},"
+            f"{aes_dec_avg_ms:.3f},"
+            f"{dbpa_dec_avg_ms_csv}"
+        )
 
 
 if __name__ == "__main__":
