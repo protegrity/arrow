@@ -95,9 +95,8 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
 
     std::shared_ptr<ResizableBuffer> ciphertext_buffer =
         AllocateBuffer(::arrow::default_memory_pool(), expected_ciphertext_length);
-    int32_t encryption_length =
-        encryptor->EncryptWithManagedBuffer(str2span(plaintext), ciphertext_buffer.get(),
-      builder.Build());
+    int32_t encryption_length = encryptor->EncryptWithManagedBuffer(
+        str2span(plaintext), ciphertext_buffer.get(), builder.Build());
     ASSERT_EQ(expected_ciphertext_length, encryption_length);
 
     std::string ciphertext_str(ciphertext_buffer->data(),
@@ -500,9 +499,8 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
       AllocateBuffer(::arrow::default_memory_pool(), 0);
 
   std::string empty;
-  int32_t enc_len =
-      encryptor->EncryptWithManagedBuffer(
-          str2span(plaintext), ciphertext_buffer.get(), builder.Build());
+  int32_t enc_len = encryptor->EncryptWithManagedBuffer(
+      str2span(plaintext), ciphertext_buffer.get(), builder.Build());
 
   std::string ciphertext_str(ciphertext_buffer->data(),
                              ciphertext_buffer->data() + enc_len);
@@ -517,8 +515,8 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
   bool threw = false;
   int32_t dec_len = 0;
   try {
-    dec_len = decryptor->DecryptWithManagedBuffer(str2span(ciphertext_str),
-                                                  plaintext_buffer.get(), builder.Build());
+    dec_len = decryptor->DecryptWithManagedBuffer(
+        str2span(ciphertext_str), plaintext_buffer.get(), builder.Build());
   } catch (const ParquetException&) {
     threw = true;
   }

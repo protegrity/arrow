@@ -43,8 +43,7 @@ class PARQUET_EXPORT DecryptorInterface {
   /// each decryptor whether to use them or not.
   virtual int32_t Decrypt(
       ::arrow::util::span<const uint8_t> ciphertext,
-      ::arrow::util::span<const uint8_t> key,
-      ::arrow::util::span<const uint8_t> aad,
+      ::arrow::util::span<const uint8_t> key, ::arrow::util::span<const uint8_t> aad,
       ::arrow::util::span<uint8_t> plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 
@@ -52,8 +51,7 @@ class PARQUET_EXPORT DecryptorInterface {
   /// The buffer will be resized to the correct size during decryption. This method
   /// is used when the decryptor cannot calculate the plaintext length before decryption.
   virtual int32_t DecryptWithManagedBuffer(
-      ::arrow::util::span<const uint8_t> ciphertext,
-      ::arrow::ResizableBuffer* plaintext,
+      ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 };
 

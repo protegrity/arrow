@@ -60,11 +60,10 @@ int32_t Decryptor::Decrypt(::arrow::util::span<const uint8_t> ciphertext,
 }
 
 int32_t Decryptor::DecryptWithManagedBuffer(
-    ::arrow::util::span<const uint8_t> ciphertext,
-    ::arrow::ResizableBuffer* plaintext,
+    ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
     std::unique_ptr<EncodingProperties> encoding_properties) {
-  return decryptor_instance_->DecryptWithManagedBuffer(
-      ciphertext, plaintext, std::move(encoding_properties));
+  return decryptor_instance_->DecryptWithManagedBuffer(ciphertext, plaintext,
+                                                       std::move(encoding_properties));
 }
 
 // InternalFileDecryptor

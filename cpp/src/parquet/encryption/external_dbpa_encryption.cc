@@ -187,15 +187,16 @@ void UpdateEncryptorMetadata(
 // encryption process. This method will be called from the Encrypt and Decrypt
 // WithManagedBuffer methods.
 std::unique_ptr<EncodingProperties> UpdateEncodingProperties(
-  std::string column_name, Type::type data_type,
-  std::optional<int> datatype_length, Compression::type compression_type,
-  std::unique_ptr<EncodingProperties> encoding_properties) {
+    std::string column_name, Type::type data_type, std::optional<int> datatype_length,
+    Compression::type compression_type,
+    std::unique_ptr<EncodingProperties> encoding_properties) {
+  if (encoding_properties != nullptr) {
+      encoding_properties->set_column_path(column_name);
+      encoding_properties->set_physical_type(data_type, datatype_length);
+      encoding_properties->set_compression_codec(compression_type);
 
-  encoding_properties->set_column_path(column_name);
-  encoding_properties->set_physical_type(data_type, datatype_length);
-  encoding_properties->set_compression_codec(compression_type);
-
-  encoding_properties->validate();
+      encoding_properties->validate();
+  }
   return encoding_properties;
 }  // UpdateEncodingProperties()
 
@@ -324,11 +325,11 @@ int32_t ExternalDBPAEncryptorAdapter::EncryptWithManagedBuffer(
   if (encoding_properties == nullptr) {
     ARROW_LOG(ERROR) << "ExternalDBPAEncryptorAdapter:: encoding_properties is nullptr";
     throw ParquetException(
-        "ExternalDBPAEncryptorAdapter:: encoding_properties not provided, params not updated");
+        "ExternalDBPAEncryptorAdapter:: encoding_properties is null, params not updated");
   }
-  encoding_properties_ = UpdateEncodingProperties(
-      column_name_, data_type_, datatype_length_, compression_type_,
-      std::move(encoding_properties));
+  encoding_properties_ =
+      UpdateEncodingProperties(column_name_, data_type_, datatype_length_,
+                               compression_type_, std::move(encoding_properties));
   return InvokeExternalEncrypt(plaintext, ciphertext,
                                encoding_properties_->ToPropertiesMap());
 }

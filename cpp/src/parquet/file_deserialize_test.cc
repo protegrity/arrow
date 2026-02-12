@@ -1027,21 +1027,25 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
                   ::arrow::util::span<const uint8_t> /*key*/,
                   ::arrow::util::span<const uint8_t> /*aad*/,
                   ::arrow::util::span<uint8_t> plaintext,
-                  std::unique_ptr<parquet::encryption::EncodingProperties> encoding_properties) override {
+                  std::unique_ptr<parquet::encryption::EncodingProperties>
+                      encoding_properties) override {
     std::copy(ciphertext.begin(), ciphertext.end(), plaintext.begin());
-    // Fill column-level properties so validate() succeeds
-    encoding_properties->set_column_path(column_path_);
-    encoding_properties->set_physical_type(physical_type_);
-    encoding_properties->set_compression_codec(compression_codec_);
+    if (encoding_properties != nullptr) {
+      // Fill column-level properties so validate() succeeds
+      encoding_properties->set_column_path(column_path_);
+      encoding_properties->set_physical_type(physical_type_);
+      encoding_properties->set_compression_codec(compression_codec_);
 
-    encoding_properties->validate();
-    sink_->entries.emplace_back(encoding_properties->ToPropertiesMap());
+      encoding_properties->validate();
+      sink_->entries.emplace_back(encoding_properties->ToPropertiesMap());
+    }
     return static_cast<int32_t>(ciphertext.size());
   }
 
-  int32_t DecryptWithManagedBuffer(::arrow::util::span<const uint8_t> ciphertext,
-                                   ::arrow::ResizableBuffer* plaintext,
-                                   std::unique_ptr<parquet::encryption::EncodingProperties> encoding_properties) override {
+  int32_t DecryptWithManagedBuffer(
+      ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::unique_ptr<parquet::encryption::EncodingProperties> encoding_properties)
+      override {
     throw ParquetException("DecryptWithManagedBuffer not supported");
   }
 

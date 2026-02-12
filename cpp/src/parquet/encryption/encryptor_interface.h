@@ -40,8 +40,7 @@ class PARQUET_EXPORT EncryptorInterface {
   /// up to each encryptor whether to use them or not.
   virtual int32_t Encrypt(
       ::arrow::util::span<const uint8_t> plaintext,
-      ::arrow::util::span<const uint8_t> key,
-      ::arrow::util::span<const uint8_t> aad,
+      ::arrow::util::span<const uint8_t> key, ::arrow::util::span<const uint8_t> aad,
       ::arrow::util::span<uint8_t> ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 
@@ -50,8 +49,7 @@ class PARQUET_EXPORT EncryptorInterface {
   /// encryption. This method is used when the encryptor cannot calculate the
   /// ciphertext length before encryption.
   virtual int32_t EncryptWithManagedBuffer(
-      ::arrow::util::span<const uint8_t> plaintext,
-      ::arrow::ResizableBuffer* ciphertext,
+      ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 
   /// After the column_writer writes a dictionary or a data page, this method will be

@@ -54,11 +54,12 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override;
 
   /// Encryption not supported as we cannot calculate the ciphertext before encryption.
-  int32_t Encrypt(::arrow::util::span<const uint8_t> plaintext,
-                  ::arrow::util::span<const uint8_t> key,
-                  ::arrow::util::span<const uint8_t> aad,
-                  ::arrow::util::span<uint8_t> ciphertext,
-                  std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
+  int32_t Encrypt(
+      ::arrow::util::span<const uint8_t> plaintext,
+      ::arrow::util::span<const uint8_t> key,
+      ::arrow::util::span<const uint8_t> aad,
+      ::arrow::util::span<uint8_t> ciphertext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     std::stringstream ss;
     ss << "Encrypt is not supported in ExternalDBPAEncryptorAdapter, ";
     ss << "use EncryptWithManagedBuffer instead";
@@ -67,9 +68,10 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 
   /// Encrypt the plaintext and leave the results in the ciphertext buffer.
   /// The buffer will be resized to the appropriate size by the agent during encryption.
-  int32_t EncryptWithManagedBuffer(::arrow::util::span<const uint8_t> plaintext,
-                                   ::arrow::ResizableBuffer* ciphertext,
-                                   std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
+  int32_t EncryptWithManagedBuffer(
+      ::arrow::util::span<const uint8_t> plaintext,
+      ::arrow::ResizableBuffer* ciphertext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
   /// Encrypts plaintext footer, in order to compute footer signature (tag).
   int32_t SignedFooterEncrypt(::arrow::util::span<const uint8_t> footer,
@@ -135,9 +137,9 @@ void UpdateEncryptorMetadata(
 // and datatype length.
 PARQUET_EXPORT
 std::unique_ptr<EncodingProperties> UpdateEncodingProperties(
-  std::string column_name, Type::type data_type,
-  std::optional<int> datatype_length, Compression::type compression_type,
-  std::unique_ptr<EncodingProperties> encoding_properties);
+    std::string column_name, Type::type data_type, std::optional<int> datatype_length,
+    Compression::type compression_type,
+    std::unique_ptr<EncodingProperties> encoding_properties);
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
 /// operation is open, and is used to guarantee the lifetime of the encryptor.
@@ -191,11 +193,12 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
 
   /// Decrypt is not supported as we cannot calculate the plaintext length before
   /// decryption.
-  int32_t Decrypt(::arrow::util::span<const uint8_t> ciphertext,
-                  ::arrow::util::span<const uint8_t> key,
-                  ::arrow::util::span<const uint8_t> aad,
-                  ::arrow::util::span<uint8_t> plaintext,
-                  std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
+  int32_t Decrypt(
+      ::arrow::util::span<const uint8_t> ciphertext,
+      ::arrow::util::span<const uint8_t> key,
+      ::arrow::util::span<const uint8_t> aad,
+      ::arrow::util::span<uint8_t> plaintext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     std::stringstream ss;
     ss << "Decrypt is not supported in ExternalDBPADecryptorAdapter, ";
     ss << "use DecryptWithManagedBuffer instead";
@@ -206,9 +209,10 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   /// The buffer will be resized to the correct size during decryption. This method
   /// is used when the decryptor cannot calculate the plaintext length before
   /// decryption.
-  int32_t DecryptWithManagedBuffer(::arrow::util::span<const uint8_t> ciphertext,
-                                   ::arrow::ResizableBuffer* plaintext,
-                                   std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
+  int32_t DecryptWithManagedBuffer(
+      ::arrow::util::span<const uint8_t> ciphertext,
+      ::arrow::ResizableBuffer* plaintext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
  private:
   // agent_instance is assumed to be initialized at the time of construction.
