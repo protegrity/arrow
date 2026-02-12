@@ -137,24 +137,20 @@ if openssl_dep.found()
 
         # DBPS interface is header-only (dbpa_interface.h and friends).
         #
-        # IMPORTANT: Do not use Meson's CMake interpreter for DBPS here. DBPS' CMake
-        # target graph (CTest/CDash targets, generator expressions, etc.) has proven
-        # incompatible with Meson's CMake dependency extractor and can fail Meson
-        # configuration with "Cycle in CMake inputs/dependencies detected".
-        #
-        # Instead we use a tiny Meson wrapper (cpp/subprojects/packagefiles/dbps_agent)
-        # to expose the header-only dependency, and (optionally) build DBPS shared
-        # libraries via a build-time custom target that calls the real CMake.
-        dbps_sp = subproject('dbps_agent')
-        dbps_interface_dep = dbps_sp.get_variable('dbps_interface_dep')
+        # We do not build DBPS agents as part of Arrow's Meson build. Instead, point
+        # Meson at a local DBPS checkout's interface headers directory (typically
+        # .../DataBatchProtectionService/src/common).
+        dbps_inc = get_option('parquet_dbps_interface_include_dir')
+        if dbps_inc == ''
+            error('Parquet external DBPA encryption requires -Dparquet_dbps_interface_include_dir=/path/to/DataBatchProtectionService/src/common (must contain dbpa_interface.h).')
+        endif
+        dbps_interface_dep = declare_dependency(compile_args: ['-I' + dbps_inc])
 
         parquet_deps += [dbps_interface_dep, tcb_span_dep, magic_enum_dep]
 
         if get_option('parquet_build_dbps_libs').enabled()
             warning(
-                'Meson does not build DBPS shared libraries (parquet_build_dbps_libs is a no-op). ' +
-                'Provide your own agent shared library and set configuration_properties["agent_library_path"], ' +
-                'or build DBPS via its CMake build separately.',
+                'Meson does not build DBPS shared libraries. Provide your own agent shared library and set configuration_properties["agent_library_path"], or build DBPS via its CMake build separately.',
             )
         endif
 
