@@ -52,8 +52,7 @@ class PARQUET_EXPORT Encryptor {
                   std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
 
   int32_t EncryptWithManagedBuffer(
-      ::arrow::util::span<const uint8_t> plaintext,
-      ::arrow::ResizableBuffer* ciphertext,
+      ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
 
   /// After the column_writer writes a dictionary or a data page, this method will

@@ -55,8 +55,7 @@ class PARQUET_EXPORT Decryptor {
                   ::arrow::util::span<uint8_t> plaintext,
                   std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
   int32_t DecryptWithManagedBuffer(
-      ::arrow::util::span<const uint8_t> ciphertext,
-      ::arrow::ResizableBuffer* plaintext,
+      ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
 
  private:

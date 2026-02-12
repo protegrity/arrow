@@ -80,17 +80,19 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
 
   /// Encrypts plaintext with the key and aad. Key length is passed only for validation.
   /// If different from value in constructor, exception will be thrown.
-  int32_t Encrypt(::arrow::util::span<const uint8_t> plaintext,
-                  ::arrow::util::span<const uint8_t> key,
-                  ::arrow::util::span<const uint8_t> aad,
-                  ::arrow::util::span<uint8_t> ciphertext,
-                  std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
+  int32_t Encrypt(
+      ::arrow::util::span<const uint8_t> plaintext,
+      ::arrow::util::span<const uint8_t> key,
+      ::arrow::util::span<const uint8_t> aad,
+      ::arrow::util::span<uint8_t> ciphertext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
   /// Encrypt the plaintext and leave the results in the ciphertext buffer. This method is
   /// not supported as we can calculate the ciphertext length before encryption.
-  int32_t EncryptWithManagedBuffer(::arrow::util::span<const uint8_t> plaintext,
-                                   ::arrow::ResizableBuffer* ciphertext,
-                                   std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
+  int32_t EncryptWithManagedBuffer(
+      ::arrow::util::span<const uint8_t> plaintext,
+      ::arrow::ResizableBuffer* ciphertext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     throw ParquetException(
         "EncryptWithManagedBuffer is not supported in AesEncryptor, use Encrypt instead");
   }
@@ -170,18 +172,20 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
   /// validation. If different from value in constructor, exception will be thrown.
   /// The caller is responsible for ensuring that the plaintext buffer is at least as
   /// large as PlaintextLength(ciphertext_len).
-  int32_t Decrypt(::arrow::util::span<const uint8_t> ciphertext,
-                  ::arrow::util::span<const uint8_t> key,
-                  ::arrow::util::span<const uint8_t> aad,
-                  ::arrow::util::span<uint8_t> plaintext,
-                  std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
+  int32_t Decrypt(
+      ::arrow::util::span<const uint8_t> ciphertext,
+      ::arrow::util::span<const uint8_t> key,
+      ::arrow::util::span<const uint8_t> aad,
+      ::arrow::util::span<uint8_t> plaintext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
   /// Decrypt the ciphertext and leave the results in the plaintext buffer. This
   /// method is not supported as we can calculate the plaintext length before
   /// decryption.
-  int32_t DecryptWithManagedBuffer(::arrow::util::span<const uint8_t> ciphertext,
-                                   ::arrow::ResizableBuffer* plaintext,
-                                   std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
+  int32_t DecryptWithManagedBuffer(
+      ::arrow::util::span<const uint8_t> ciphertext,
+      ::arrow::ResizableBuffer* plaintext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     throw ParquetException(
         "DecryptWithManagedBuffer is not supported in AesDecryptor, use Decrypt instead");
   }
