@@ -51,7 +51,8 @@ int32_t AesEncryptor::CiphertextLength(int64_t plaintext_len) const {
 int32_t AesEncryptor::Encrypt(::arrow::util::span<const uint8_t> plaintext,
                               ::arrow::util::span<const uint8_t> key,
                               ::arrow::util::span<const uint8_t> aad,
-                              ::arrow::util::span<uint8_t> ciphertext) {
+                              ::arrow::util::span<uint8_t> ciphertext,
+                              std::unique_ptr<EncodingProperties> encoding_properties) {
   ThrowOpenSSLRequiredException();
   return -1;
 }
@@ -65,7 +66,8 @@ AesEncryptor::AesEncryptor(ParquetCipher::type alg_id, int32_t key_len, bool met
 int32_t AesDecryptor::Decrypt(::arrow::util::span<const uint8_t> ciphertext,
                               ::arrow::util::span<const uint8_t> key,
                               ::arrow::util::span<const uint8_t> aad,
-                              ::arrow::util::span<uint8_t> plaintext) {
+                              ::arrow::util::span<uint8_t> plaintext,
+                              std::unique_ptr<EncodingProperties> encoding_properties) {
   ThrowOpenSSLRequiredException();
   return -1;
 }

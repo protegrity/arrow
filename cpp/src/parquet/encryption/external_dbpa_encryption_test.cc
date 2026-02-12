@@ -90,15 +90,14 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
         .DataPageNumValues(100)
         .Build();
 
-    encryptor->UpdateEncodingProperties(builder.Build());
-
     ASSERT_LE(plaintext.size(), static_cast<size_t>(std::numeric_limits<int32_t>::max()));
     int32_t expected_ciphertext_length = static_cast<int32_t>(plaintext.size());
 
     std::shared_ptr<ResizableBuffer> ciphertext_buffer =
         AllocateBuffer(::arrow::default_memory_pool(), expected_ciphertext_length);
     int32_t encryption_length =
-        encryptor->EncryptWithManagedBuffer(str2span(plaintext), ciphertext_buffer.get());
+        encryptor->EncryptWithManagedBuffer(str2span(plaintext), ciphertext_buffer.get(),
+      builder.Build());
     ASSERT_EQ(expected_ciphertext_length, encryption_length);
 
     std::string ciphertext_str(ciphertext_buffer->data(),
@@ -116,15 +115,13 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
             algorithm, column_name, key_id, data_type, compression_type, app_context_,
             connection_config_, std::nullopt, key_value_metadata_);
 
-    decryptor->UpdateEncodingProperties(builder.Build());
-
     ASSERT_LE(ciphertext_str.size(),
               static_cast<size_t>(std::numeric_limits<int32_t>::max()));
     int32_t expected_plaintext_length = static_cast<int32_t>(ciphertext_str.size());
     std::shared_ptr<ResizableBuffer> plaintext_buffer =
         AllocateBuffer(::arrow::default_memory_pool(), expected_plaintext_length);
     int32_t decryption_length = decryptor->DecryptWithManagedBuffer(
-        str2span(ciphertext_str), plaintext_buffer.get());
+        str2span(ciphertext_str), plaintext_buffer.get(), builder.Build());
     ASSERT_EQ(expected_plaintext_length, decryption_length);
 
     std::string plaintext_str(plaintext_buffer->data(),
@@ -498,15 +495,14 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
       .DataPageNumValues(100)
       .Build();
 
-  encryptor->UpdateEncodingProperties(builder.Build());
-
   std::string plaintext = "Sensitive Data";
   std::shared_ptr<ResizableBuffer> ciphertext_buffer =
       AllocateBuffer(::arrow::default_memory_pool(), 0);
 
   std::string empty;
   int32_t enc_len =
-      encryptor->EncryptWithManagedBuffer(str2span(plaintext), ciphertext_buffer.get());
+      encryptor->EncryptWithManagedBuffer(
+          str2span(plaintext), ciphertext_buffer.get(), builder.Build());
 
   std::string ciphertext_str(ciphertext_buffer->data(),
                              ciphertext_buffer->data() + enc_len);
@@ -515,8 +511,6 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
       algorithm, column_name, wrong_key_id, data_type, compression_type, app_context,
       config, std::nullopt, key_value_metadata_);
 
-  decryptor->UpdateEncodingProperties(builder.Build());
-
   std::shared_ptr<ResizableBuffer> plaintext_buffer =
       AllocateBuffer(::arrow::default_memory_pool(), 0);
 
@@ -524,7 +518,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
   int32_t dec_len = 0;
   try {
     dec_len = decryptor->DecryptWithManagedBuffer(str2span(ciphertext_str),
-                                                  plaintext_buffer.get());
+                                                  plaintext_buffer.get(), builder.Build());
   } catch (const ParquetException&) {
     threw = true;
   }
