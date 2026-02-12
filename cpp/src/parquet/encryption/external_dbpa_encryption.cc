@@ -191,11 +191,11 @@ std::unique_ptr<EncodingProperties> UpdateEncodingProperties(
     Compression::type compression_type,
     std::unique_ptr<EncodingProperties> encoding_properties) {
   if (encoding_properties != nullptr) {
-      encoding_properties->set_column_path(column_name);
-      encoding_properties->set_physical_type(data_type, datatype_length);
-      encoding_properties->set_compression_codec(compression_type);
+    encoding_properties->set_column_path(column_name);
+    encoding_properties->set_physical_type(data_type, datatype_length);
+    encoding_properties->set_compression_codec(compression_type);
 
-      encoding_properties->validate();
+    encoding_properties->validate();
   }
   return encoding_properties;
 }  // UpdateEncodingProperties()
@@ -562,11 +562,11 @@ int32_t ExternalDBPADecryptorAdapter::DecryptWithManagedBuffer(
   if (encoding_properties == nullptr) {
     ARROW_LOG(ERROR) << "ExternalDBPADecryptorAdapter:: encoding_properties is nullptr";
     throw ParquetException(
-        "ExternalDBPADecryptorAdapter:: encoding_properties not provided, params not updated");
+        "ExternalDBPADecryptorAdapter:: encoding_properties is null, params not updated");
   }
-  encoding_properties_ = UpdateEncodingProperties(
-      column_name_, data_type_, datatype_length_, compression_type_,
-      std::move(encoding_properties));
+  encoding_properties_ =
+      UpdateEncodingProperties(column_name_, data_type_, datatype_length_,
+                               compression_type_, std::move(encoding_properties));
   return InvokeExternalDecrypt(ciphertext, plaintext,
                                encoding_properties_->ToPropertiesMap());
 }

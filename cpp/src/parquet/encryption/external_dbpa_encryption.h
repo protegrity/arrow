@@ -56,8 +56,7 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
   /// Encryption not supported as we cannot calculate the ciphertext before encryption.
   int32_t Encrypt(
       ::arrow::util::span<const uint8_t> plaintext,
-      ::arrow::util::span<const uint8_t> key,
-      ::arrow::util::span<const uint8_t> aad,
+      ::arrow::util::span<const uint8_t> key, ::arrow::util::span<const uint8_t> aad,
       ::arrow::util::span<uint8_t> ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     std::stringstream ss;
@@ -69,8 +68,7 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
   /// Encrypt the plaintext and leave the results in the ciphertext buffer.
   /// The buffer will be resized to the appropriate size by the agent during encryption.
   int32_t EncryptWithManagedBuffer(
-      ::arrow::util::span<const uint8_t> plaintext,
-      ::arrow::ResizableBuffer* ciphertext,
+      ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
   /// Encrypts plaintext footer, in order to compute footer signature (tag).
@@ -195,8 +193,7 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   /// decryption.
   int32_t Decrypt(
       ::arrow::util::span<const uint8_t> ciphertext,
-      ::arrow::util::span<const uint8_t> key,
-      ::arrow::util::span<const uint8_t> aad,
+      ::arrow::util::span<const uint8_t> key, ::arrow::util::span<const uint8_t> aad,
       ::arrow::util::span<uint8_t> plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     std::stringstream ss;
@@ -210,8 +207,7 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   /// is used when the decryptor cannot calculate the plaintext length before
   /// decryption.
   int32_t DecryptWithManagedBuffer(
-      ::arrow::util::span<const uint8_t> ciphertext,
-      ::arrow::ResizableBuffer* plaintext,
+      ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
  private:
