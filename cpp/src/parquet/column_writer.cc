@@ -326,17 +326,18 @@ class SerializedPageWriter : public PageWriter {
           EncodingProperties::MakeFromMetadata(metadata_->descr(),
                                                metadata_->properties(),
                                                static_cast<const DictionaryPage&>(page));
-      data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
       if (data_encryptor_->CanCalculateCiphertextLength()) {
         PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
             data_encryptor_->CiphertextLength(output_data_len), false));
         output_data_len =
             data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),
-                                     encryption_buffer_->mutable_span_as<uint8_t>());
+                                     encryption_buffer_->mutable_span_as<uint8_t>(),
+                                     std::move(encoding_properties));
       } else {
         output_data_len = data_encryptor_->EncryptWithManagedBuffer(
-            compressed_data->span_as<uint8_t>(), encryption_buffer_.get());
+            compressed_data->span_as<uint8_t>(), encryption_buffer_.get(),
+            std::move(encoding_properties));
       }
 
       output_data_buffer = encryption_buffer_->data();
@@ -451,17 +452,18 @@ class SerializedPageWriter : public PageWriter {
           EncodingProperties::MakeFromMetadata(metadata_->descr(),
                                                metadata_->properties(),
                                                static_cast<const DataPage&>(page));
-      data_encryptor_->UpdateEncodingProperties(std::move(encoding_properties));
 
       if (data_encryptor_->CanCalculateCiphertextLength()) {
         PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
             data_encryptor_->CiphertextLength(output_data_len), false));
         output_data_len =
             data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),
-                                     encryption_buffer_->mutable_span_as<uint8_t>());
+                                     encryption_buffer_->mutable_span_as<uint8_t>(),
+                                     std::move(encoding_properties));
       } else {
         output_data_len = data_encryptor_->EncryptWithManagedBuffer(
-            compressed_data->span_as<uint8_t>(), encryption_buffer_.get());
+            compressed_data->span_as<uint8_t>(), encryption_buffer_.get(),
+            std::move(encoding_properties));
       }
       output_data_buffer = encryption_buffer_->data();
 

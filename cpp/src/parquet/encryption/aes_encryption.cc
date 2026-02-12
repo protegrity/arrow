@@ -159,7 +159,8 @@ int32_t AesEncryptor::SignedFooterEncrypt(::arrow::util::span<const uint8_t> foo
 int32_t AesEncryptor::Encrypt(::arrow::util::span<const uint8_t> plaintext,
                               ::arrow::util::span<const uint8_t> key,
                               ::arrow::util::span<const uint8_t> aad,
-                              ::arrow::util::span<uint8_t> ciphertext) {
+                              ::arrow::util::span<uint8_t> ciphertext,
+                              std::unique_ptr<EncodingProperties> encoding_properties) {
   if (static_cast<size_t>(key_length_) != key.size()) {
     std::stringstream ss;
     ss << "Wrong key length " << key.size() << ". Should be " << key_length_;
@@ -413,7 +414,8 @@ int32_t AesDecryptor::CiphertextLength(int32_t plaintext_len) const {
 int32_t AesDecryptor::Decrypt(::arrow::util::span<const uint8_t> ciphertext,
                               ::arrow::util::span<const uint8_t> key,
                               ::arrow::util::span<const uint8_t> aad,
-                              ::arrow::util::span<uint8_t> plaintext) {
+                              ::arrow::util::span<uint8_t> plaintext,
+                              std::unique_ptr<EncodingProperties> encoding_properties) {
   if (static_cast<size_t>(key_length_) != key.size()) {
     std::stringstream ss;
     ss << "Wrong key length " << key.size() << ". Should be " << key_length_;

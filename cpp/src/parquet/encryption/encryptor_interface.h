@@ -38,23 +38,19 @@ class PARQUET_EXPORT EncryptorInterface {
   /// Encrypt the plaintext and leave the results in the ciphertext buffer.
   /// Most implementations will require the key and aad to be provided, but it is
   /// up to each encryptor whether to use them or not.
-  virtual int32_t Encrypt(::arrow::util::span<const uint8_t> plaintext,
-                          ::arrow::util::span<const uint8_t> key,
-                          ::arrow::util::span<const uint8_t> aad,
-                          ::arrow::util::span<uint8_t> ciphertext) = 0;
+  virtual int32_t Encrypt(
+      ::arrow::util::span<const uint8_t> plaintext,
+      ::arrow::util::span<const uint8_t> key, ::arrow::util::span<const uint8_t> aad,
+      ::arrow::util::span<uint8_t> ciphertext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 
   /// Encrypt the plaintext and leave the results in the ciphertext buffer.
   /// The buffer will be resized to the appropriate size by the encryptor during
   /// encryption. This method is used when the encryptor cannot calculate the
   /// ciphertext length before encryption.
-  virtual int32_t EncryptWithManagedBuffer(::arrow::util::span<const uint8_t> plaintext,
-                                           ::arrow::ResizableBuffer* ciphertext) = 0;
-
-  /// Some Encryptors may need to understand the page encoding before the encryption
-  /// process. This method will be called from ColumnWriter before invoking the
-  /// Encrypt method.
-  virtual void UpdateEncodingProperties(
-      std::unique_ptr<EncodingProperties> encoding_properties) {}
+  virtual int32_t EncryptWithManagedBuffer(
+      ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 
   /// After the column_writer writes a dictionary or a data page, this method will be
   /// called so that each encryptor can provide any encryptor-specific column
