@@ -137,14 +137,25 @@ if openssl_dep.found()
 
         # DBPS interface is header-only (dbpa_interface.h and friends).
         #
-        # We do not build DBPS agents as part of Arrow's Meson build. Instead, point
-        # Meson at a local DBPS checkout's interface headers directory (typically
-        # .../DataBatchProtectionService/src/common).
+        # We do not build DBPS agents as part of Arrow's Meson build. We only need the
+        # DBPS interface headers (dbpa_interface.h, enums.h, etc.) for compilation.
+        #
+        # Resolution order:
+        # - If user provides a local include dir (Meson option or env var), use it.
+        # - Otherwise, fall back to Meson's wrap subproject `dbps_agent`, which downloads
+        #   and unpacks DBPS sources, and exposes only the interface headers via a tiny
+        #   header-only Meson wrapper (cpp/subprojects/packagefiles/dbps_agent).
+        fs = import('fs')
         dbps_inc = get_option('parquet_dbps_interface_include_dir')
-        if dbps_inc == ''
-            error('Parquet external DBPA encryption requires -Dparquet_dbps_interface_include_dir=/path/to/DataBatchProtectionService/src/common (must contain dbpa_interface.h).')
+        if dbps_inc != ''
+            if not fs.exists(dbps_inc / 'dbpa_interface.h')
+                error('parquet_dbps_interface_include_dir/PARQUET_DBPS_INTERFACE_INCLUDE_DIR was set, but dbpa_interface.h was not found in: ' + dbps_inc)
+            endif
+            dbps_interface_dep = declare_dependency(compile_args: ['-I' + dbps_inc])
+        else
+            dbps_sp = subproject('dbps_agent')
+            dbps_interface_dep = dbps_sp.get_variable('dbps_interface_dep')
         endif
-        dbps_interface_dep = declare_dependency(compile_args: ['-I' + dbps_inc])
 
         parquet_deps += [dbps_interface_dep, tcb_span_dep, magic_enum_dep]
 
@@ -387,21 +398,21 @@ foreach key, val : parquet_tests
     )
     # Ensure the DBPA test agent is built before running any tests that may load it.
     # (No-op when dbpa_test_agent_lib is disabled/unset.)
+    test_env = {
+        # Make DBPATestAgent lookup deterministic under Meson. Some CI setups may
+        # not allow /proc/self/exe resolution or run tests with unexpected cwd.
+        'PARQUET_TEST_LIBRARY_CWD': meson.current_build_dir(),
+        # Reuse the standard env var used by Python tooling (`base_app.py`).
+        # Prefer this in C++ as well.
+        'DBPA_LIBRARY_PATH': dbpa_test_agent_path,
+        # Hardcode DBPA logging for Meson test runs to aid CI diagnostics.
+        'PARQUET_DBPA_LOG_LEVEL': 'INFO',
+    }
     test(
         test_name,
         exc,
         depends: dbpa_test_agent_lib,
-        env: {
-            # Make DBPATestAgent lookup deterministic under Meson. Some CI setups may
-            # not allow /proc/self/exe resolution or run tests with unexpected cwd.
-            'PARQUET_TEST_LIBRARY_CWD': meson.current_build_dir(),
-            # Reuse the standard env var used by Python tooling (`base_app.py`).
-            # Prefer this in C++ as well.
-            'DBPA_LIBRARY_PATH': dbpa_test_agent_path,
-            # Make DBPA-related code emit useful logs in CI (opt-in via env).
-            # This helps debug why Meson runs see unexpected configuration_properties.
-            'PARQUET_DBPA_LOG_LEVEL': 'DEBUG',
-        },
+        env: test_env,
     )
 endforeach
 
