@@ -398,21 +398,25 @@ foreach key, val : parquet_tests
     )
     # Ensure the DBPA test agent is built before running any tests that may load it.
     # (No-op when dbpa_test_agent_lib is disabled/unset.)
+    test_env = {
+        # Make DBPATestAgent lookup deterministic under Meson. Some CI setups may
+        # not allow /proc/self/exe resolution or run tests with unexpected cwd.
+        'PARQUET_TEST_LIBRARY_CWD': meson.current_build_dir(),
+        # Reuse the standard env var used by Python tooling (`base_app.py`).
+        # Prefer this in C++ as well.
+        'DBPA_LIBRARY_PATH': dbpa_test_agent_path,
+    }
+    # Don't force DEBUG logs by default: they can make Meson truncate errorlogs,
+    # hiding the real failing assertion/stacktrace. Opt-in via env.
+    dbpa_log_level = meson.get_env('PARQUET_DBPA_LOG_LEVEL')
+    if dbpa_log_level != ''
+        test_env += {'PARQUET_DBPA_LOG_LEVEL': dbpa_log_level}
+    endif
     test(
         test_name,
         exc,
         depends: dbpa_test_agent_lib,
-        env: {
-            # Make DBPATestAgent lookup deterministic under Meson. Some CI setups may
-            # not allow /proc/self/exe resolution or run tests with unexpected cwd.
-            'PARQUET_TEST_LIBRARY_CWD': meson.current_build_dir(),
-            # Reuse the standard env var used by Python tooling (`base_app.py`).
-            # Prefer this in C++ as well.
-            'DBPA_LIBRARY_PATH': dbpa_test_agent_path,
-            # Make DBPA-related code emit useful logs in CI (opt-in via env).
-            # This helps debug why Meson runs see unexpected configuration_properties.
-            'PARQUET_DBPA_LOG_LEVEL': 'DEBUG',
-        },
+        env: test_env,
     )
 endforeach
 
