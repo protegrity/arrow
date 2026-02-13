@@ -137,14 +137,25 @@ if openssl_dep.found()
 
         # DBPS interface is header-only (dbpa_interface.h and friends).
         #
-        # We do not build DBPS agents as part of Arrow's Meson build. Instead, point
-        # Meson at a local DBPS checkout's interface headers directory (typically
-        # .../DataBatchProtectionService/src/common).
+        # We do not build DBPS agents as part of Arrow's Meson build. We only need the
+        # DBPS interface headers (dbpa_interface.h, enums.h, etc.) for compilation.
+        #
+        # Resolution order:
+        # - If user provides a local include dir (Meson option or env var), use it.
+        # - Otherwise, fall back to Meson's wrap subproject `dbps_agent`, which downloads
+        #   and unpacks DBPS sources, and exposes only the interface headers via a tiny
+        #   header-only Meson wrapper (cpp/subprojects/packagefiles/dbps_agent).
+        fs = import('fs')
         dbps_inc = get_option('parquet_dbps_interface_include_dir')
-        if dbps_inc == ''
-            error('Parquet external DBPA encryption requires -Dparquet_dbps_interface_include_dir=/path/to/DataBatchProtectionService/src/common (must contain dbpa_interface.h).')
+        if dbps_inc != ''
+            if not fs.exists(dbps_inc / 'dbpa_interface.h')
+                error('parquet_dbps_interface_include_dir/PARQUET_DBPS_INTERFACE_INCLUDE_DIR was set, but dbpa_interface.h was not found in: ' + dbps_inc)
+            endif
+            dbps_interface_dep = declare_dependency(compile_args: ['-I' + dbps_inc])
+        else
+            dbps_sp = subproject('dbps_agent')
+            dbps_interface_dep = dbps_sp.get_variable('dbps_interface_dep')
         endif
-        dbps_interface_dep = declare_dependency(compile_args: ['-I' + dbps_inc])
 
         parquet_deps += [dbps_interface_dep, tcb_span_dep, magic_enum_dep]
 
