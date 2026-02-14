@@ -151,7 +151,7 @@ DBPATestAgent::~DBPATestAgent() {}
 extern "C" {
 // Keep this symbol visible and retained so dlopen()+dlsym() based tests work reliably
 // under various linkers/flags (e.g. LTO / section GC).
-PARQUET_EXPORT PARQUET_TEST_AGENT_USED DataBatchProtectionAgentInterface*
+PARQUET_EXPORT DataBatchProtectionAgentInterface*
 create_new_instance() {
   return new parquet::encryption::external::DBPATestAgent();
 }
