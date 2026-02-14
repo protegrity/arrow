@@ -407,6 +407,9 @@ foreach key, val : parquet_tests
         'DBPA_LIBRARY_PATH': dbpa_test_agent_path,
         # Hardcode DBPA logging for Meson test runs to aid CI diagnostics.
         'PARQUET_DBPA_LOG_LEVEL': 'INFO',
+        # CI harnesses sometimes set MALLOC_PERTURB_ to catch UAF/uninit reads.
+        # Override to disable it for these tests (0 disables perturbation in glibc).
+        'MALLOC_PERTURB_': '0',
     }
     test(
         test_name,
