@@ -405,13 +405,9 @@ foreach key, val : parquet_tests
         # Reuse the standard env var used by Python tooling (`base_app.py`).
         # Prefer this in C++ as well.
         'DBPA_LIBRARY_PATH': dbpa_test_agent_path,
+        # Hardcode DBPA logging for Meson test runs to aid CI diagnostics.
+        'PARQUET_DBPA_LOG_LEVEL': 'INFO',
     }
-    # Don't force DEBUG logs by default: they can make Meson truncate errorlogs,
-    # hiding the real failing assertion/stacktrace. Opt-in via env.
-    dbpa_log_level = meson.get_env('PARQUET_DBPA_LOG_LEVEL')
-    if dbpa_log_level != ''
-        test_env += {'PARQUET_DBPA_LOG_LEVEL': dbpa_log_level}
-    endif
     test(
         test_name,
         exc,
