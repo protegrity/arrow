@@ -18,6 +18,7 @@
 #include "parquet/encryption/external/test_utils.h"
 
 #include <cstdlib>
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -81,7 +82,18 @@ std::string TestUtils::GetTestLibraryPath() {
   }
 
   std::vector<std::string> possible_filenames = {
-      "libDBPATestAgent.so", "libDBPATestAgent.dylib", "DBPATestAgent.dll"};
+      // Linux / macOS
+      "libDBPATestAgent.so",
+      "libDBPATestAgent.dylib",
+
+      // Windows (MSVC): no "lib" prefix for DLLs
+      "DBPATestAgent.dll",
+      // Windows (MinGW): typically uses "lib" prefix even for DLLs
+      "libDBPATestAgent.dll",
+
+      // Some toolchains use a debug postfix (commonly "d")
+      "DBPATestAgentd.dll",
+      "libDBPATestAgentd.dll"};
 
   std::vector<std::string> possible_directories = {exec_dir + "/", base_path + "/",
                                                    "./", ""};
@@ -197,6 +209,18 @@ std::string TestUtils::GetTestLibraryPath() {
           if (leaf == filename) {
             candidate = true;
             break;
+          }
+        }
+        // Also accept files whose *basename* (not extension) contains
+        // "DBPATestAgent" (case-insensitive). This helps in toolchains/builds
+        // that apply prefixes/suffixes beyond the expected filenames.
+        if (!candidate) {
+          std::string stem = p.stem().string();
+          std::transform(stem.begin(), stem.end(), stem.begin(),
+                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+          constexpr const char* kNeedle = "dbpatestagent";
+          if (stem.find(kNeedle) != std::string::npos) {
+            candidate = true;
           }
         }
         if (!candidate) continue;
