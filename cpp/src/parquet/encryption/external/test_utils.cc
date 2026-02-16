@@ -30,8 +30,9 @@
 #  include <unistd.h>
 #elif defined(_WIN32)
 #  include <windows.h>
-#  include <system_error_code>
 #endif
+
+#include <system_error>
 
 namespace parquet::encryption::external::test {
 
