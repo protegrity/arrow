@@ -17,7 +17,9 @@
 
 #include "parquet/encryption/external/test_utils.h"
 
+#include <cstdlib>
 #include <filesystem>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -40,6 +42,8 @@ std::string TestUtils::GetExecutableDirectory() {
     return std::filesystem::path(path).parent_path().string();
   }
 #elif defined(__linux__)
+
+  std::cout << "GetExecutableDirectory (linux): " << std::filesystem::current_path().string() << std::endl;
   char path[PATH_MAX];
   ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
   if (len != -1) {
@@ -52,6 +56,7 @@ std::string TestUtils::GetExecutableDirectory() {
     return std::filesystem::path(path).parent_path().string();
   }
 #endif
+  std::cout << "GetExecutableDirectory (fallback): " << std::filesystem::current_path().string() << std::endl;
   // Fallback to current working directory if we can't determine executable path
   return std::filesystem::current_path().string();
 }
@@ -59,6 +64,7 @@ std::string TestUtils::GetExecutableDirectory() {
 std::string TestUtils::GetTestLibraryPath() {
   // Check for environment variable to override the executable directory
   const char* cwd_override = std::getenv("PARQUET_TEST_LIBRARY_CWD");
+  const bool debug_paths = true;
   std::string base_path;
 
   if (cwd_override && cwd_override[0]) {
@@ -77,12 +83,25 @@ std::string TestUtils::GetTestLibraryPath() {
   for (const auto& filename : possible_filenames) {
     for (const auto& directory : possible_directories) {
       std::string path = directory + filename;
+      if (debug_paths) {
+        std::cerr << "PARQUET_TEST_LIBRARY_DEBUG_PATHS: checking '" << path
+                  << "'\n";
+      }
       if (std::filesystem::exists(path)) {
+        if (debug_paths) {
+          std::cerr << "PARQUET_TEST_LIBRARY_DEBUG_PATHS: found '" << path
+                    << "'\n";
+        }
         return path;
       }
     }
   }
 
+  if (debug_paths) {
+    std::cerr << "PARQUET_TEST_LIBRARY_DEBUG_PATHS: no library found; searched "
+              << possible_directories.size() * possible_filenames.size()
+              << " paths\n";
+  }
   throw std::runtime_error("Could not find library");
 }
 
