@@ -151,7 +151,7 @@ std::string TestUtils::GetTestLibraryPath() {
     }
   }
 
-  throw std::runtime_error("Could not find library (libDBPATestAgent.so or similar in this platform)");
+  throw std::runtime_error("test_utils.cc: Could not find DBPATestAgent library ");
 }
 
 }  // namespace parquet::encryption::external::test
