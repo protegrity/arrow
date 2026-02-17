@@ -39,15 +39,12 @@ namespace parquet::encryption::external::test {
 
 std::string TestUtils::GetExecutableDirectory() {
 #ifdef __APPLE__
-std::cout << "GetExecutableDirectory (apple): " << std::endl;
-
   char path[PATH_MAX];
   uint32_t size = sizeof(path);
   if (_NSGetExecutablePath(path, &size) == 0) {
     return std::filesystem::path(path).parent_path().string();
   }
 #elif defined(__linux__)
-  std::cout << "GetExecutableDirectory (linux): " << std::endl;
   char path[PATH_MAX];
   ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
   if (len != -1) {
@@ -55,13 +52,11 @@ std::cout << "GetExecutableDirectory (apple): " << std::endl;
     return std::filesystem::path(path).parent_path().string();
   }
 #elif defined(_WIN32)
-
   char path[MAX_PATH];
   if (GetModuleFileNameA(NULL, path, MAX_PATH) != 0) {
     return std::filesystem::path(path).parent_path().string();
   }
 #endif
-  std::cout << "GetExecutableDirectory (fallback): "  << std::endl;
   // Fallback to current working directory if we can't determine executable path
   return std::filesystem::current_path().string();
 }
@@ -70,7 +65,7 @@ std::string TestUtils::GetTestLibraryPath() {
   // Check for environment variable to override the executable directory
   const char* cwd_override = std::getenv("PARQUET_TEST_LIBRARY_CWD");
   const bool debug_paths = true;
-  const bool recursive_search = true;
+  const bool recursive_search = false;
   std::string base_path;
 
   const std::string exec_dir = GetExecutableDirectory();
@@ -82,18 +77,21 @@ std::string TestUtils::GetTestLibraryPath() {
   }
 
   std::vector<std::string> possible_filenames = {
-      // Linux / macOS
-      "libDBPATestAgent.so",
-      "libDBPATestAgent.dylib",
+      #if defined(__linux__)
+        "libDBPATestAgent.so"
+      #elif defined(__APPLE__)
+        "libDBPATestAgent.dylib"
+      #elif defined(_WIN32)
+        // Windows (MSVC): no "lib" prefix for DLLs
+        "DBPATestAgent.dll",
+        // Windows (MinGW): typically uses "lib" prefix even for DLLs
+        "libDBPATestAgent.dll",
 
-      // Windows (MSVC): no "lib" prefix for DLLs
-      "DBPATestAgent.dll",
-      // Windows (MinGW): typically uses "lib" prefix even for DLLs
-      "libDBPATestAgent.dll",
-
-      // Some toolchains use a debug postfix (commonly "d")
-      "DBPATestAgentd.dll",
-      "libDBPATestAgentd.dll"};
+        // Some toolchains use a debug postfix (commonly "d")
+        "DBPATestAgentd.dll",
+        "libDBPATestAgentd.dll"
+      #endif
+    };
 
   std::vector<std::string> possible_directories = {exec_dir + "/", base_path + "/",
                                                    "./", ""};
