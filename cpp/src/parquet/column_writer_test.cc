@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include <cstring>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -56,6 +57,39 @@ namespace test {
 
 using ::testing::IsNull;
 using ::testing::NotNull;
+
+namespace {
+
+static void AssertParquetBufferLooksSane(const std::shared_ptr<::arrow::Buffer>& buffer) {
+  ASSERT_NE(buffer, nullptr);
+  ASSERT_GE(buffer->size(), 12) << "Buffer too small to be a Parquet file: size="
+                                << buffer->size();
+
+  const uint8_t* data = buffer->data();
+  const int64_t size = buffer->size();
+
+  const std::string start_magic(reinterpret_cast<const char*>(data), 4);
+  const uint8_t* trailer = data + (size - 8);
+  uint32_t footer_len_le = 0;
+  std::memcpy(&footer_len_le, trailer, sizeof(uint32_t));
+  const uint32_t footer_len = ::arrow::bit_util::FromLittleEndian(footer_len_le);
+  const std::string trailer_magic(reinterpret_cast<const char*>(trailer + 4), 4);
+
+  ASSERT_TRUE(start_magic == "PAR1" || start_magic == "PARE")
+      << "Unexpected start magic: '" << start_magic << "'";
+  ASSERT_TRUE(trailer_magic == "PAR1" || trailer_magic == "PARE")
+      << "Unexpected trailer magic: '" << trailer_magic << "' (footer_len=" << footer_len
+      << ", size=" << size << ")";
+  ASSERT_EQ(trailer_magic, start_magic)
+      << "Start/trailer magic mismatch start_magic='" << start_magic
+      << "', trailer_magic='" << trailer_magic << "' (footer_len=" << footer_len
+      << ", size=" << size << ")";
+  ASSERT_LE(static_cast<int64_t>(footer_len), size - 8)
+      << "Footer length exceeds size: footer_len=" << footer_len << ", size=" << size;
+  ASSERT_GT(footer_len, 0U) << "Footer length is zero (footer/trailer likely corrupt)";
+}
+
+}  // namespace
 
 // The default size used in most tests.
 const int SMALL_SIZE = 100;
@@ -1944,6 +1978,7 @@ TEST_F(TestColumnWriterEncryption, AESEncryption) {
 
   ASSERT_OK_AND_ASSIGN(auto buffer, sink_->Finish());
   ASSERT_GT(buffer->size(), 0);
+  AssertParquetBufferLooksSane(buffer);
 
   std::map<std::string, std::shared_ptr<ColumnDecryptionProperties>> decryption_cols;
   auto decryption_col_builder = ColumnDecryptionProperties::Builder("encrypted_column");

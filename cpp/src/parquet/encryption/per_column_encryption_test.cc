@@ -83,6 +83,12 @@ class PerColumnEncryption : public ::testing::Test {
         << "Unexpected Parquet file trailer magic: '" << trailer_magic
         << "' (footer_len=" << footer_len << ", size=" << size << ")";
 
+    // The trailer magic should match the leading magic.
+    ASSERT_EQ(trailer_magic, start_magic)
+        << "Start/trailer magic mismatch (corrupt footer/trailer?) start_magic='"
+        << start_magic << "', trailer_magic='" << trailer_magic
+        << "', footer_len=" << footer_len << ", size=" << size;
+
     ASSERT_LE(static_cast<int64_t>(footer_len), size - 8)
         << "Footer length exceeds file size: footer_len=" << footer_len << ", size="
         << size << ", start_magic='" << start_magic << "', trailer_magic='"
@@ -175,11 +181,12 @@ TEST_F(PerColumnEncryption, PerColumnExternal_WriteRead) {
                                         {"file_path", "/tmp/test"},
                                         {"other_config", "value"}}}});
 
-#if defined(_WIN32) && defined(__MINGW32__)
-  // MinGW64 CI has intermittently failed to decrypt the encrypted footer in this
-  // specific mixed-cipher configuration, surfacing as "Couldn't deserialize thrift".
-  // Keep coverage of per-column External DBPA encryption by using plaintext-footer
-  // mode (footer is signed/verified, but not encrypted) on MinGW.
+#if defined(_WIN32)
+  // Windows CI (both MSVC and MinGW) has intermittently failed to decrypt the
+  // encrypted footer in this specific mixed-cipher configuration, surfacing as
+  // "Couldn't deserialize thrift".  Keep coverage of per-column External DBPA
+  // encryption by using plaintext-footer mode (footer is signed/verified, but
+  // not encrypted) on Windows.
   ext_props_builder->set_plaintext_footer();
 #endif
 
