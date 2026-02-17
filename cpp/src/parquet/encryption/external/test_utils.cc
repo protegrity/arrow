@@ -61,18 +61,86 @@ std::string TestUtils::GetTestLibraryPath() {
   const char* cwd_override = std::getenv("PARQUET_TEST_LIBRARY_CWD");
   std::string base_path;
 
+  const std::string exec_dir = GetExecutableDirectory();
   if (cwd_override && cwd_override[0]) {
     base_path = std::string(cwd_override);
   } else {
     // Get the directory where the executable is located
-    base_path = GetExecutableDirectory();
+    base_path = exec_dir;
   }
 
   std::vector<std::string> possible_filenames = {
-      "libDBPATestAgent.so", "libDBPATestAgent.dylib", "DBPATestAgent.dll"};
+#if defined(__linux__)
+    "libDBPATestAgent.so"
+#elif defined(__APPLE__)
+    "libDBPATestAgent.dylib"
+#elif defined(_WIN32)
+    // Windows (MSVC): no "lib" prefix for DLLs
+    "DBPATestAgent.dll",
+    // Windows (MinGW): typically uses "lib" prefix even for DLLs
+    "libDBPATestAgent.dll",
 
-  std::vector<std::string> possible_directories = {GetExecutableDirectory() + "/",
-                                                   base_path + "/", "./", ""};
+    // Some toolchains use a debug postfix (commonly "d")
+    "DBPATestAgentd.dll",
+    "libDBPATestAgentd.dll"
+#endif
+  };
+
+  std::vector<std::string> possible_directories = {exec_dir + "/", base_path + "/", "./",
+                                                   ""};
+
+  // Arrow's CMake places most runtime artifacts under:
+  //   <build>/cpp/<lowercase-build-type>/
+  // and CI often runs `ctest` from <build>/cpp. On Windows in particular, this
+  // means the shared library can sit under "./debug/" (or "./release/") even
+  // when the test executable isn't.
+  const std::string cwd = std::filesystem::current_path().string();
+  const std::filesystem::path cwd_path = std::filesystem::current_path();
+  const std::filesystem::path exec_dir_path = std::filesystem::path(exec_dir);
+  const std::string exec_parent = exec_dir_path.parent_path().string();
+
+  // Common CMake build-type directory spellings (Arrow CI frequently uses "debug").
+  const std::vector<std::string> build_type_dirs = {
+      "debug",          "Debug",          "release",    "Release",
+      "relwithdebinfo", "RelWithDebInfo", "minsizerel", "MinSizeRel"};
+
+  auto add_build_type_dirs = [&](const std::filesystem::path& root) {
+    if (root.empty()) {
+      return;
+    }
+    const std::string root_s = root.string();
+    for (const auto& cfg : build_type_dirs) {
+      possible_directories.push_back(root_s + "/" + cfg + "/");
+    }
+  };
+
+  // Search build-type dirs under CWD and a few parents (handles ctest running
+  // from build/cpp/src/* while outputs are in build/cpp/<cfg>/).
+  {
+    std::filesystem::path p = cwd_path;
+    for (int i = 0; i < 5 && !p.empty(); ++i) {
+      add_build_type_dirs(p);
+      p = p.parent_path();
+    }
+  }
+
+  // Also handle the common "build root" case where CWD is <build> (not <build>/cpp).
+  for (const auto& cfg : build_type_dirs) {
+    possible_directories.push_back(cwd + "/cpp/" + cfg + "/");
+  }
+
+  // Finally, search under the executable's parent and its parents.
+  {
+    std::filesystem::path p = exec_dir_path.parent_path();
+    for (int i = 0; i < 5 && !p.empty(); ++i) {
+      add_build_type_dirs(p);
+      p = p.parent_path();
+    }
+  }
+
+  if (!exec_parent.empty()) {
+    possible_directories.push_back(exec_parent + "/");
+  }
 
   for (const auto& filename : possible_filenames) {
     for (const auto& directory : possible_directories) {
@@ -83,7 +151,7 @@ std::string TestUtils::GetTestLibraryPath() {
     }
   }
 
-  throw std::runtime_error("Could not find library");
+  throw std::runtime_error("test_utils.cc: Could not find DBPATestAgent library ");
 }
 
 }  // namespace parquet::encryption::external::test
