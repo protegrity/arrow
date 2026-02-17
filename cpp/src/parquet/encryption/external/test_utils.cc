@@ -64,8 +64,6 @@ std::string TestUtils::GetExecutableDirectory() {
 std::string TestUtils::GetTestLibraryPath() {
   // Check for environment variable to override the executable directory
   const char* cwd_override = std::getenv("PARQUET_TEST_LIBRARY_CWD");
-  const bool debug_paths = true;
-  const bool recursive_search = false;
   std::string base_path;
 
   const std::string exec_dir = GetExecutableDirectory();
@@ -152,102 +150,14 @@ std::string TestUtils::GetTestLibraryPath() {
   for (const auto& filename : possible_filenames) {
     for (const auto& directory : possible_directories) {
       std::string path = directory + filename;
-      if (debug_paths) {
-        std::cerr << "PARQUET_TEST_LIBRARY_DEBUG_PATHS: checking '" << path
-                  << "'\n";
-      }
       if (std::filesystem::exists(path)) {
-        if (debug_paths) {
-          std::cerr << "PARQUET_TEST_LIBRARY_DEBUG_PATHS: found '" << path
-                    << "'\n";
-        }
+        std::cerr << "PARQUET_TEST_LIBRARY_DEBUG_PATHS: found '" << path
+                  << "'\n";
         return path;
       }
     }
   }
 
-  // Optional recursive search, starting from the executable directory.
-  // Useful in dev/test setups where the shared library may be nested under build
-  // directories.
-  if (recursive_search) {
-    if (debug_paths) {
-      std::cerr
-          << "PARQUET_TEST_LIBRARY_DEBUG_PATHS: recursive search enabled; starting at '"
-          << exec_dir << "'\n";
-    }
-
-    std::error_code ec;
-    std::filesystem::path root(exec_dir);
-    if (std::filesystem::exists(root, ec) &&
-        std::filesystem::is_directory(root, ec)) {
-      constexpr size_t kMaxVisited = 200000;
-      size_t visited = 0;
-
-      for (std::filesystem::recursive_directory_iterator it(
-               root, std::filesystem::directory_options::skip_permission_denied, ec),
-           end;
-           it != end; it.increment(ec)) {
-        if (ec) {
-          ec.clear();
-          continue;
-        }
-        if (++visited > kMaxVisited) {
-          if (debug_paths) {
-            std::cerr << "PARQUET_TEST_LIBRARY_DEBUG_PATHS: recursive search hit "
-                      << kMaxVisited << " entries; stopping\n";
-          }
-          break;
-        }
-
-        const auto& p = it->path();
-        const std::string leaf = p.filename().string();
-
-        bool candidate = false;
-        for (const auto& filename : possible_filenames) {
-          if (leaf == filename) {
-            candidate = true;
-            break;
-          }
-        }
-        // Also accept files whose *basename* (not extension) contains
-        // "DBPATestAgent" (case-insensitive). This helps in toolchains/builds
-        // that apply prefixes/suffixes beyond the expected filenames.
-        if (!candidate) {
-          std::string stem = p.stem().string();
-          std::transform(stem.begin(), stem.end(), stem.begin(),
-                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-          constexpr const char* kNeedle = "dbpatestagent";
-          if (stem.find(kNeedle) != std::string::npos) {
-            candidate = true;
-          }
-        }
-        if (!candidate) continue;
-
-        if ((std::filesystem::is_regular_file(p, ec) ||
-             std::filesystem::is_symlink(p, ec)) &&
-            !ec && std::filesystem::exists(p, ec) && !ec) {
-          if (debug_paths) {
-            std::cerr
-                << "PARQUET_TEST_LIBRARY_DEBUG_PATHS: found (recursive) '"
-                << p.string() << "'\n";
-          }
-          return p.string();
-        }
-        ec.clear();
-      }
-    } else if (debug_paths) {
-      std::cerr
-          << "PARQUET_TEST_LIBRARY_DEBUG_PATHS: recursive search root '"
-          << exec_dir << "' does not exist or is not a directory\n";
-    }
-  }
-
-
-  if (debug_paths) {
-    std::cerr << "PARQUET_TEST_LIBRARY_DEBUG_PATHS: no library found; searched "
-              << possible_directories.size() * possible_filenames.size()
-              << " paths\n";
-  }
   throw std::runtime_error("Could not find library");
 }
 
