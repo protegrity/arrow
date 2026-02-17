@@ -50,15 +50,19 @@ PARQUET_EXPORT void DefaultSharedLibraryClosingFn(void* library_handle);
 // closing the shared library.
 class PARQUET_EXPORT DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
  private:
+  using DestroyInstanceFn = void (*)(DataBatchProtectionAgentInterface*);
+
   std::unique_ptr<DataBatchProtectionAgentInterface> wrapped_agent_;
   void* library_handle_;
   std::function<void(void*)> handle_closing_fn_;
+  DestroyInstanceFn destroy_instance_fn_ = nullptr;
 
  public:
   // Constructor that takes ownership of the wrapped agent
   explicit DBPALibraryWrapper(
       std::unique_ptr<DataBatchProtectionAgentInterface> agent, void* library_handle,
-      std::function<void(void*)> handle_closing_fn = &DefaultSharedLibraryClosingFn);
+      std::function<void(void*)> handle_closing_fn = &DefaultSharedLibraryClosingFn,
+      DestroyInstanceFn destroy_instance_fn = nullptr);
 
   // Destructor
   // This is the main reason for the decorator/wrapper.

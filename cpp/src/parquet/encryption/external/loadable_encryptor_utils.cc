@@ -36,6 +36,9 @@ namespace parquet::encryption::external {
 // This needs to match the return type of the create_new_instance function in the
 // shared library.
 typedef DataBatchProtectionAgentInterface* (*create_encryptor_t)();
+// Optional function pointer type for destroying instances inside the shared library.
+// If present, Arrow will prefer calling this to avoid cross-DLL delete issues on Windows.
+typedef void (*destroy_encryptor_t)(DataBatchProtectionAgentInterface*);
 
 std::unique_ptr<DataBatchProtectionAgentInterface> LoadableEncryptorUtils::CreateInstance(
     void* library_handle) {
@@ -88,9 +91,25 @@ LoadableEncryptorUtils::LoadFromLibrary(const std::string& library_path) {
   void* library_handle = library_handle_result.ValueOrDie();
   auto agent_instance = CreateInstance(library_handle);
 
+  // Best-effort: look for an optional destroy function.
+  // We don't require it for backwards compatibility.
+  destroy_encryptor_t destroy_instance_fn = nullptr;
+  auto destroy_symbol_result =
+      ::arrow::internal::GetSymbol(library_handle, "destroy_instance");
+  if (destroy_symbol_result.ok()) {
+    destroy_instance_fn =
+        reinterpret_cast<destroy_encryptor_t>(destroy_symbol_result.ValueOrDie());
+  } else {
+    ARROW_LOG(DEBUG)
+        << "Optional symbol 'destroy_instance(DataBatchProtectionAgentInterface*)' not "
+           "found in DBPA library; falling back to delete.";
+  }
+
   // Wrap the agent in a DBPALibraryWrapper
   auto wrapped_agent =
-      std::make_unique<DBPALibraryWrapper>(std::move(agent_instance), library_handle);
+      std::make_unique<DBPALibraryWrapper>(std::move(agent_instance), library_handle,
+                                           &DefaultSharedLibraryClosingFn,
+                                           destroy_instance_fn);
 
   return wrapped_agent;
 }

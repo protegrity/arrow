@@ -38,10 +38,12 @@ void DefaultSharedLibraryClosingFn(void* library_handle) {
 
 DBPALibraryWrapper::DBPALibraryWrapper(
     std::unique_ptr<DataBatchProtectionAgentInterface> agent, void* library_handle,
-    std::function<void(void*)> handle_closing_fn)
+    std::function<void(void*)> handle_closing_fn,
+    DBPALibraryWrapper::DestroyInstanceFn destroy_instance_fn)
     : wrapped_agent_(std::move(agent)),
       library_handle_(library_handle),
-      handle_closing_fn_(std::move(handle_closing_fn)) {
+      handle_closing_fn_(std::move(handle_closing_fn)),
+      destroy_instance_fn_(destroy_instance_fn) {
   // Ensure the wrapped agent is not null
   if (!wrapped_agent_) {
     throw std::invalid_argument("DBPAWrapper: Cannot create wrapper with null agent");
@@ -68,7 +70,15 @@ DBPALibraryWrapper::~DBPALibraryWrapper() {
   // Explicitly destroy the wrapped agent first
   if (wrapped_agent_) {
     DataBatchProtectionAgentInterface* wrapped_agent = wrapped_agent_.release();
-    delete wrapped_agent;
+    // IMPORTANT (Windows / MinGW): deleting an object allocated inside a DLL from
+    // outside that DLL can corrupt the heap if CRT/allocators differ. If the
+    // plugin provides a C ABI destroy function, prefer it so deletion happens in
+    // the same module that allocated the object.
+    if (destroy_instance_fn_ != nullptr) {
+      destroy_instance_fn_(wrapped_agent);
+    } else {
+      delete wrapped_agent;
+    }
   }
 
   // Now we can close the shared library using the provided function

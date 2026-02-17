@@ -152,6 +152,10 @@ extern "C" {
 DataBatchProtectionAgentInterface* create_new_instance() {
   return new parquet::encryption::external::DBPATestAgent();
 }
+
+// Optional destroy function so the instance is deleted inside the same shared library.
+// This avoids cross-DLL heap issues on Windows / MinGW.
+void destroy_instance(DataBatchProtectionAgentInterface* instance) { delete instance; }
 }
 
 }  // namespace parquet::encryption::external
