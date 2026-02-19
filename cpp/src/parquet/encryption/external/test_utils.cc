@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+#include <iostream>
 
 #ifdef __APPLE__
 #  include <mach-o/dyld.h>
@@ -57,6 +58,21 @@ std::string TestUtils::GetExecutableDirectory() {
 }
 
 std::string TestUtils::GetTestLibraryPath() {
+  // Strong override: reuse the same env var as the Python tooling
+  // (`python/scripts/base_app.py`): DBPA_LIBRARY_PATH.
+  //
+  // This allows CI/build systems to provide the exact path to the DBPA agent shared
+  // library, avoiding reliance on executable-path heuristics or current working directory.
+  const char* explicit_path = std::getenv("DBPA_LIBRARY_PATH");
+  if (explicit_path && explicit_path[0]) {
+    std::string p(explicit_path);
+    if (std::filesystem::exists(p)) {
+      return p;
+    }
+    throw std::runtime_error("DBPA_LIBRARY_PATH is set but the file does not exist: " +
+                             p);
+  }
+
   // Check for environment variable to override the executable directory
   const char* cwd_override = std::getenv("PARQUET_TEST_LIBRARY_CWD");
   std::string base_path;
@@ -151,7 +167,17 @@ std::string TestUtils::GetTestLibraryPath() {
     }
   }
 
-  throw std::runtime_error("test_utils.cc: Could not find DBPATestAgent library ");
+  // Provide a detailed error to make CI failures diagnosable.
+  std::string msg = "Could not find DBPA test agent library. Tried:\n";
+  for (const auto& filename : possible_filenames) {
+    for (const auto& directory : possible_directories) {
+      msg += "  - " + (directory + filename) + "\n";
+    }
+  }
+  msg += "PARQUET_TEST_LIBRARY_CWD=";
+  msg += (cwd_override && cwd_override[0]) ? cwd_override : "<unset>";
+  msg += "\n";
+  throw std::runtime_error(msg);
 }
 
 }  // namespace parquet::encryption::external::test

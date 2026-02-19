@@ -149,7 +149,10 @@ DBPATestAgent::~DBPATestAgent() {}
 
 // Export function for creating new instances from shared library
 extern "C" {
-DataBatchProtectionAgentInterface* create_new_instance() {
+// Keep this symbol visible and retained so dlopen()+dlsym() based tests work reliably
+// under various linkers/flags (e.g. LTO / section GC).
+PARQUET_EXPORT DataBatchProtectionAgentInterface*
+create_new_instance() {
   return new parquet::encryption::external::DBPATestAgent();
 }
 }
