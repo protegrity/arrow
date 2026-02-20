@@ -89,6 +89,10 @@ endif
 
 parquet_deps = [arrow_dep, rapidjson_dep, thrift_dep]
 
+# Default to no DBPA test-agent library (only built when encryption+testing are enabled).
+dbpa_test_agent_lib = disabler()
+dbpa_test_agent_path = ''
+
 if needs_parquet_encryption or get_option('parquet_require_encryption').auto()
     openssl_dep = dependency('openssl', required: needs_parquet_encryption)
 else
@@ -99,8 +103,15 @@ if openssl_dep.found()
     parquet_deps += openssl_dep
 
     parquet_srcs += files(
+        'encryption/aes_encryption.cc',
         'encryption/crypto_factory.cc',
-        'encryption/encryption_internal.cc',
+        'encryption/encoding_properties.cc',
+        'encryption/encryption_utils.cc',
+        'encryption/external/dbpa_enum_utils.cc',
+        'encryption/external/dbpa_executor.cc',
+        'encryption/external/dbpa_library_wrapper.cc',
+        'encryption/external/loadable_encryptor_utils.cc',
+        'encryption/external_dbpa_encryption.cc',
         'encryption/file_key_unwrapper.cc',
         'encryption/file_key_wrapper.cc',
         'encryption/file_system_key_material_store.cc',
@@ -112,8 +123,51 @@ if openssl_dep.found()
         'encryption/local_wrap_kms_client.cc',
         'encryption/openssl_internal.cc',
     )
+
+    # External DBPA integration and its header-only deps are only relevant when
+    # encryption support is enabled (i.e., OpenSSL is available).
+    if needs_parquet_encryption or get_option('parquet_require_encryption').auto()
+        tcb_span_dep = dependency(
+            'tcb_span',
+            fallback: ['tcb-span', 'tcb_span_dep'],
+        )
+        magic_enum_dep = dependency(
+            'magic_enum_header_only',
+            fallback: ['magic-enum', 'magic_enum_dep'],
+        )
+
+        # DBPS interface is header-only (dbpa_interface.h and friends).
+        #
+        # We do not build DBPS agents as part of Arrow's Meson build. We only need the
+        # DBPS interface headers (dbpa_interface.h, enums.h, etc.) for compilation.
+        # These are obtained via Meson's wrap subproject `dbps_agent`, which downloads
+        # and unpacks DBPS sources, and exposes only the interface headers via a tiny
+        # header-only Meson wrapper (cpp/subprojects/packagefiles/dbps_agent).
+        dbps_sp = subproject('dbps_agent')
+        dbps_interface_dep = dbps_sp.get_variable('dbps_interface_dep')
+
+        parquet_deps += [dbps_interface_dep, tcb_span_dep, magic_enum_dep]
+
+        # Build the in-tree DBPA test agent shared library used by external encryption tests.
+        # CMake builds this as `DBPATestAgent` when ARROW_TESTING is enabled; Meson needs an
+        # equivalent target so tests can dlopen() `libDBPATestAgent.so`.
+        if needs_testing
+            dbpa_test_agent_lib = shared_library(
+                'DBPATestAgent',
+                sources: files('encryption/external/dbpa_test_agent.cc'),
+                include_directories: include_directories('..'),
+                # Keep this test agent as self-contained as possible. It is dlopen()'d
+                # by tests, so avoid unnecessary runtime dependencies (e.g., libarrow.so)
+                # which can differ between Meson/CMake CI environments.
+                dependencies: [magic_enum_dep, tcb_span_dep, dbps_interface_dep],
+                install: false,
+                gnu_symbol_visibility: 'default',
+            )
+            dbpa_test_agent_path = dbpa_test_agent_lib.full_path()
+        endif
+    endif
 else
-    parquet_srcs += files('encryption/encryption_internal_nossl.cc')
+    parquet_srcs += files('encryption/aes_encryption_nossl.cc')
 endif
 
 parquet_lib = library(
@@ -123,7 +177,10 @@ parquet_lib = library(
     gnu_symbol_visibility: 'inlineshidden',
 )
 
-parquet_dep = declare_dependency(link_with: parquet_lib)
+parquet_dep = declare_dependency(
+    link_with: parquet_lib,
+    dependencies: parquet_deps,
+)
 
 subdir('api')
 subdir('arrow')
@@ -216,6 +273,7 @@ parquet_tests = {
     'writer-test': {
         'sources': files(
             'column_writer_test.cc',
+            'encryption/external/test_utils.cc',
             'file_serialize_test.cc',
             'stream_writer_test.cc',
         ),
@@ -226,6 +284,7 @@ parquet_tests = {
             'arrow/arrow_reader_writer_test.cc',
             'arrow/arrow_statistics_test.cc',
             'arrow/variant_test.cc',
+            'encryption/external/test_utils.cc',
         ),
     },
     'arrow-internals-test': {
@@ -240,7 +299,12 @@ parquet_tests = {
             'arrow/arrow_schema_test.cc',
         ),
     },
-    'file_deserialize_test': {'sources': files('file_deserialize_test.cc')},
+    'file_deserialize_test': {
+        'sources': files(
+            'encryption/external/test_utils.cc',
+            'file_deserialize_test.cc',
+        ),
+    },
     'schema_test': {'sources': files('schema_test.cc')},
 }
 
@@ -248,10 +312,16 @@ if needs_parquet_encryption
     parquet_tests += {
         'encryption-test': {
             'sources': files(
-                'encryption/encryption_internal_test.cc',
+                'encryption/aes_encryption_test.cc',
+                'encryption/crypto_factory_test.cc',
+                'encryption/encoding_properties_test.cc',
+                'encryption/external/test_utils.cc',
+                'encryption/external_dbpa_encryption_test.cc',
+                'encryption/per_column_encryption_test.cc',
                 'encryption/properties_test.cc',
                 'encryption/read_configurations_test.cc',
                 'encryption/test_encryption_util.cc',
+                'encryption/test_in_memory_kms.cc',
                 'encryption/write_configurations_test.cc',
             ),
         },
@@ -297,7 +367,17 @@ foreach key, val : parquet_tests
         sources: val['sources'] + files('test_util.cc'),
         dependencies: parquet_test_dep,
     )
-    test(test_name, exc)
+    # Ensure the DBPA test agent is built before running any tests that may load it.
+    # (No-op when dbpa_test_agent_lib is disabled/unset.)
+    test_env = {
+        # Make DBPATestAgent lookup deterministic under Meson. Some CI setups may
+        # not allow /proc/self/exe resolution or run tests with unexpected cwd.
+        'PARQUET_TEST_LIBRARY_CWD': meson.current_build_dir(),
+        'DBPA_LIBRARY_PATH': dbpa_test_agent_path,
+        # Hardcode DBPA logging for Meson test runs to aid CI diagnostics.
+        'PARQUET_DBPA_LOG_LEVEL': 'INFO',
+    }
+    test(test_name, exc, depends: dbpa_test_agent_lib, env: test_env)
 endforeach
 
 parquet_benchmarks = {
