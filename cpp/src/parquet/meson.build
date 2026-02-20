@@ -177,22 +177,25 @@ endif
 # (e.g. EncodingProperties, IsParquetCipherSupported) are not linkable from test
 # executables. When building tests/benchmarks, relax visibility to avoid link
 # failures in Meson CI.
-parquet_symbol_visibility = 'inlineshidden'
-if needs_testing
-    parquet_symbol_visibility = 'default'
-endif
+# (TODO argmarco - this is an experiment. if things break, uncomment 181-190)
+#parquet_symbol_visibility = 'inlineshidden'
+#if needs_testing
+#    parquet_symbol_visibility = 'default'
+#endif
 
 parquet_lib = library(
     'arrow-parquet',
     sources: parquet_srcs,
     dependencies: parquet_deps,
-    gnu_symbol_visibility: parquet_symbol_visibility,
+    gnu_symbol_visibility: 'inlineshidden',
+#gnu_symbol_visibility: parquet_symbol_visibility, 
 )
 
-parquet_dep = declare_dependency(
-    link_with: parquet_lib,
-    dependencies: parquet_deps,
-)
+parquet_dep = declare_dependency(link_with: parquet_lib)
+#parquet_dep = declare_dependency(
+#    link_with: parquet_lib,
+#    dependencies: parquet_deps,
+#)
 
 subdir('api')
 subdir('arrow')
