@@ -621,6 +621,10 @@ if needs_testing
         boost_opt = cmake.subproject_options()
         boost_opt.add_cmake_defines(
             {'BOOST_INCLUDE_LIBRARIES': 'filesystem;system'},
+            # Keep Boost's CMake graph minimal for Meson's CMake introspection.
+            {'BUILD_TESTING': 'OFF'},
+            {'BOOST_ENABLE_TESTING': 'OFF'},
+            {'CMAKE_UNITY_BUILD': 'OFF'},
         )
         boost_proj = cmake.subproject('boost', options: boost_opt)
         filesystem_dep = boost_proj.dependency('boost_filesystem')
