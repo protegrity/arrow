@@ -65,8 +65,6 @@ if not thrift_dep.found()
         {
             'BUILD_COMPILER': 'OFF',
             'BUILD_EXAMPLES': 'OFF',
-            'BUILD_TESTING': 'OFF',
-            'BUILD_TESTS': 'OFF',
             'BUILD_TUTORIALS': 'OFF',
             'CMAKE_UNITY_BUILD': 'OFF',
             'WITH_AS3': 'OFF',

@@ -632,11 +632,13 @@ if needs_testing
 
     gtest_dep = dependency('gtest')
     gtest_main_dep = dependency('gtest_main')
+    gtest_dep = dependency('gtest')
     gmock_dep = dependency('gmock')
 else
     filesystem_dep = disabler()
     gtest_dep = disabler()
     gtest_main_dep = disabler()
+    gtest_dep = disabler()
     gmock_dep = disabler()
 endif
 
