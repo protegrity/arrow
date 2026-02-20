@@ -127,7 +127,10 @@ if openssl_dep.found()
     # External DBPA integration and its header-only deps are only relevant when
     # encryption support is enabled (i.e., OpenSSL is available).
     if needs_parquet_encryption or get_option('parquet_require_encryption').auto()
-        tcb_span_dep = dependency('tcb_span', fallback: ['tcb-span', 'tcb_span_dep'])
+        tcb_span_dep = dependency(
+            'tcb_span', 
+            fallback: ['tcb-span', 'tcb_span_dep'],
+        )
         magic_enum_dep = dependency(
             'magic_enum_header_only',
             fallback: ['magic-enum', 'magic_enum_dep'],
@@ -148,9 +151,6 @@ if openssl_dep.found()
         # Build the in-tree DBPA test agent shared library used by external encryption tests.
         # CMake builds this as `DBPATestAgent` when ARROW_TESTING is enabled; Meson needs an
         # equivalent target so tests can dlopen() `libDBPATestAgent.so`.
-        #
-        # Keep it Meson-native (no CMake), and place the output next to parquet test
-        # executables so `TestUtils::GetTestLibraryPath()` can find it via the executable dir.
         if needs_testing
             dbpa_test_agent_lib = shared_library(
                 'DBPATestAgent',
