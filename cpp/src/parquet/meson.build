@@ -128,7 +128,7 @@ if openssl_dep.found()
     # encryption support is enabled (i.e., OpenSSL is available).
     if needs_parquet_encryption or get_option('parquet_require_encryption').auto()
         tcb_span_dep = dependency(
-            'tcb_span', 
+            'tcb_span',
             fallback: ['tcb-span', 'tcb_span_dep'],
         )
         magic_enum_dep = dependency(
@@ -170,25 +170,11 @@ else
     parquet_srcs += files('encryption/aes_encryption_nossl.cc')
 endif
 
-
-# Parquet's CMake build uses explicit export macros and (on ELF) a version script
-# to control symbol visibility. Meson doesn't currently replicate that machinery.
-# With Meson's default hidden visibility, some non-exported-but-test-used symbols
-# (e.g. EncodingProperties, IsParquetCipherSupported) are not linkable from test
-# executables. When building tests/benchmarks, relax visibility to avoid link
-# failures in Meson CI.
-# (TODO argmarco - this is an experiment. if things break, uncomment 181-190)
-#parquet_symbol_visibility = 'inlineshidden'
-#if needs_testing
-#    parquet_symbol_visibility = 'default'
-#endif
-
 parquet_lib = library(
     'arrow-parquet',
     sources: parquet_srcs,
     dependencies: parquet_deps,
     gnu_symbol_visibility: 'inlineshidden',
-#gnu_symbol_visibility: parquet_symbol_visibility, 
 )
 
 parquet_dep = declare_dependency(
@@ -387,8 +373,6 @@ foreach key, val : parquet_tests
         # Make DBPATestAgent lookup deterministic under Meson. Some CI setups may
         # not allow /proc/self/exe resolution or run tests with unexpected cwd.
         'PARQUET_TEST_LIBRARY_CWD': meson.current_build_dir(),
-        # Reuse the standard env var used by Python tooling (`base_app.py`).
-        # Prefer this in C++ as well.
         'DBPA_LIBRARY_PATH': dbpa_test_agent_path,
         # Hardcode DBPA logging for Meson test runs to aid CI diagnostics.
         'PARQUET_DBPA_LOG_LEVEL': 'INFO',
