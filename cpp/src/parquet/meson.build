@@ -314,7 +314,10 @@ parquet_tests = {
         ),
     },
     'file_deserialize_test': {
-        'sources': files('file_deserialize_test.cc', 'encryption/external/test_utils.cc'),
+        'sources': files(
+            'encryption/external/test_utils.cc',
+            'file_deserialize_test.cc',
+        ),
     },
     'schema_test': {'sources': files('schema_test.cc')},
 }
@@ -390,12 +393,7 @@ foreach key, val : parquet_tests
         # Hardcode DBPA logging for Meson test runs to aid CI diagnostics.
         'PARQUET_DBPA_LOG_LEVEL': 'INFO',
     }
-    test(
-        test_name,
-        exc,
-        depends: dbpa_test_agent_lib,
-        env: test_env,
-    )
+    test(test_name, exc, depends: dbpa_test_agent_lib, env: test_env)
 endforeach
 
 parquet_benchmarks = {
