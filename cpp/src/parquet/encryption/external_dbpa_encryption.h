@@ -134,7 +134,7 @@ void UpdateEncryptorMetadata(
 // Update the encoding properties based on the column name, data type, compression type,
 // and datatype length.
 PARQUET_EXPORT
-std::unique_ptr<EncodingProperties> UpdateEncodingProperties(
+std::unique_ptr<EncodingProperties> BuildEncodingProperties(
     std::string column_name, Type::type data_type, std::optional<int> datatype_length,
     Compression::type compression_type,
     std::unique_ptr<EncodingProperties> encoding_properties);

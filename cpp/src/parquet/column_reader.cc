@@ -571,18 +571,16 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {
 
     // Decrypt it if we need to
     if (data_decryptor_ != nullptr) {
-      std::unique_ptr<EncodingProperties> encoding_properties =
-          GetEncodingProperties(current_page_header_);
-
       std::shared_ptr<ResizableBuffer> decryption_buffer;
       if (data_decryptor_->CanCalculateLengths()) {
         decryption_buffer = AllocateBuffer(
             properties_.memory_pool(), data_decryptor_->PlaintextLength(compressed_len));
         compressed_len =
             data_decryptor_->Decrypt(page_buffer->span_as<uint8_t>(),
-                                     decryption_buffer->mutable_span_as<uint8_t>(),
-                                     std::move(encoding_properties));
+                                     decryption_buffer->mutable_span_as<uint8_t>());
       } else {
+        std::unique_ptr<EncodingProperties> encoding_properties =
+            GetEncodingProperties(current_page_header_);
         decryption_buffer = AllocateBuffer(properties_.memory_pool(), 0);
         compressed_len = data_decryptor_->DecryptWithManagedBuffer(
             page_buffer->span_as<uint8_t>(), decryption_buffer.get(),

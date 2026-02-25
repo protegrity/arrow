@@ -307,10 +307,6 @@ class SerializedPageWriter : public PageWriter {
     if (data_encryptor_.get()) {
       UpdateEncryption(encryption::kDictionaryPage);
 
-      // Creating an EncodingProperties object from the metadata.
-      // We're retrieving the column descriptor and writer properties
-      // from the metadata_ object to simplify the code.
-      //
       // WriterProperties is created using WriterProperties::Builder::build() (in
       // parquet/properties.h) via ParquetFileFormat::MakeWriter (in
       // arrow/dataset/file_parquet.cc), and passed down to
@@ -322,19 +318,20 @@ class SerializedPageWriter : public PageWriter {
       // where a ColumnDescriptor is extracted from the SchemaDescriptor, and
       // passed into ColumnChunkMetaDataBuilder::Make()
 
-      std::unique_ptr<EncodingProperties> encoding_properties =
-          EncodingProperties::MakeFromMetadata(metadata_->descr(),
-                                               metadata_->properties(),
-                                               static_cast<const DictionaryPage&>(page));
-
       if (data_encryptor_->CanCalculateCiphertextLength()) {
         PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
             data_encryptor_->CiphertextLength(output_data_len), false));
         output_data_len =
             data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),
-                                     encryption_buffer_->mutable_span_as<uint8_t>(),
-                                     std::move(encoding_properties));
+                                     encryption_buffer_->mutable_span_as<uint8_t>());
       } else {
+        // Creating an EncodingProperties object from the metadata.
+        // We're retrieving the column descriptor and writer properties
+        // from the metadata_ object to simplify the code.
+        std::unique_ptr<EncodingProperties> encoding_properties =
+            EncodingProperties::MakeFromMetadata(metadata_->descr(),
+                                                 metadata_->properties(),
+                                                 static_cast<const DictionaryPage&>(page));
         output_data_len = data_encryptor_->EncryptWithManagedBuffer(
             compressed_data->span_as<uint8_t>(), encryption_buffer_.get(),
             std::move(encoding_properties));
@@ -434,10 +431,6 @@ class SerializedPageWriter : public PageWriter {
     if (data_encryptor_.get()) {
       UpdateEncryption(encryption::kDataPage);
 
-      // Creating an EncodingProperties object from the metadata.
-      // We're retrieving the column descriptor and writer properties
-      // from the metadata_ object to simplify the code.
-      //
       // WriterProperties is created using WriterProperties::Builder::build()
       // (in parquet/properties.h ) via ParquetFileFormat::MakeWriter
       // (in arrow/dataset/file_parquet.cc), and passed down to
@@ -448,19 +441,21 @@ class SerializedPageWriter : public PageWriter {
       // RowGroupMetadataBuilder NextColumnChunk() (parquet/metadata.cc) where a
       // ColumnDescriptor is extracted from the SchemaDescriptor, and passed into
       // ColumnChunkMetaDataBuilder::Make()
-      std::unique_ptr<EncodingProperties> encoding_properties =
-          EncodingProperties::MakeFromMetadata(metadata_->descr(),
-                                               metadata_->properties(),
-                                               static_cast<const DataPage&>(page));
 
       if (data_encryptor_->CanCalculateCiphertextLength()) {
         PARQUET_THROW_NOT_OK(encryption_buffer_->Resize(
             data_encryptor_->CiphertextLength(output_data_len), false));
         output_data_len =
             data_encryptor_->Encrypt(compressed_data->span_as<uint8_t>(),
-                                     encryption_buffer_->mutable_span_as<uint8_t>(),
-                                     std::move(encoding_properties));
+                                     encryption_buffer_->mutable_span_as<uint8_t>());
       } else {
+        // Creating an EncodingProperties object from the metadata.
+        // We're retrieving the column descriptor and writer properties
+        // from the metadata_ object to simplify the code.
+        std::unique_ptr<EncodingProperties> encoding_properties =
+            EncodingProperties::MakeFromMetadata(metadata_->descr(),
+                                                 metadata_->properties(),
+                                                 static_cast<const DataPage&>(page));
         output_data_len = data_encryptor_->EncryptWithManagedBuffer(
             compressed_data->span_as<uint8_t>(), encryption_buffer_.get(),
             std::move(encoding_properties));

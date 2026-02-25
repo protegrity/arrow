@@ -196,7 +196,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, SignedFooterEncryptionThrowsException) 
                ParquetException);
 }
 
-TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptWithoutUpdateEncodingPropertiesThrows) {
+TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptWithoutBuildEncodingPropertiesThrows) {
   ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
@@ -215,7 +215,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptWithoutUpdateEncodingPropertiesT
       ParquetException);
 }
 
-TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithoutUpdateEncodingPropertiesThrows) {
+TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithoutBuildEncodingPropertiesThrows) {
   ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";

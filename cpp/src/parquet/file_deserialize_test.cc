@@ -1038,6 +1038,8 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
 
       encoding_properties->validate();
       sink_->entries.emplace_back(encoding_properties->ToPropertiesMap());
+    } else {
+      throw ParquetException("Encoding properties are null");
     }
     return static_cast<int32_t>(ciphertext.size());
   }

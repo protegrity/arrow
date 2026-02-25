@@ -186,7 +186,7 @@ void UpdateEncryptorMetadata(
 // Some Encryptors and Decryptors may need to understand the page encoding before the
 // encryption process. This method will be called from the Encrypt and Decrypt
 // WithManagedBuffer methods.
-std::unique_ptr<EncodingProperties> UpdateEncodingProperties(
+std::unique_ptr<EncodingProperties> BuildEncodingProperties(
     std::string column_name, Type::type data_type, std::optional<int> datatype_length,
     Compression::type compression_type,
     std::unique_ptr<EncodingProperties> encoding_properties) {
@@ -198,7 +198,7 @@ std::unique_ptr<EncodingProperties> UpdateEncodingProperties(
     encoding_properties->validate();
   }
   return encoding_properties;
-}  // UpdateEncodingProperties()
+}  // BuildEncodingProperties()
 
 std::optional<std::map<std::string, std::string>>
 ExternalDBPAUtils::KeyValueMetadataToStringMap(
@@ -328,8 +328,8 @@ int32_t ExternalDBPAEncryptorAdapter::EncryptWithManagedBuffer(
         "ExternalDBPAEncryptorAdapter:: encoding_properties is null, params not updated");
   }
   encoding_properties_ =
-      UpdateEncodingProperties(column_name_, data_type_, datatype_length_,
-                               compression_type_, std::move(encoding_properties));
+      BuildEncodingProperties(column_name_, data_type_, datatype_length_,
+                              compression_type_, std::move(encoding_properties));
   return InvokeExternalEncrypt(plaintext, ciphertext,
                                encoding_properties_->ToPropertiesMap());
 }
@@ -565,8 +565,8 @@ int32_t ExternalDBPADecryptorAdapter::DecryptWithManagedBuffer(
         "ExternalDBPADecryptorAdapter:: encoding_properties is null, params not updated");
   }
   encoding_properties_ =
-      UpdateEncodingProperties(column_name_, data_type_, datatype_length_,
-                               compression_type_, std::move(encoding_properties));
+      BuildEncodingProperties(column_name_, data_type_, datatype_length_,
+                              compression_type_, std::move(encoding_properties));
   return InvokeExternalDecrypt(ciphertext, plaintext,
                                encoding_properties_->ToPropertiesMap());
 }
