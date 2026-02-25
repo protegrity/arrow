@@ -329,9 +329,9 @@ class SerializedPageWriter : public PageWriter {
         // We're retrieving the column descriptor and writer properties
         // from the metadata_ object to simplify the code.
         std::unique_ptr<EncodingProperties> encoding_properties =
-            EncodingProperties::MakeFromMetadata(metadata_->descr(),
-                                                 metadata_->properties(),
-                                                 static_cast<const DictionaryPage&>(page));
+            EncodingProperties::MakeFromMetadata(
+                metadata_->descr(), metadata_->properties(),
+                static_cast<const DictionaryPage&>(page));
         output_data_len = data_encryptor_->EncryptWithManagedBuffer(
             compressed_data->span_as<uint8_t>(), encryption_buffer_.get(),
             std::move(encoding_properties));

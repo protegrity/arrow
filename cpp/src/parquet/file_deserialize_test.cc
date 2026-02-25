@@ -1013,7 +1013,7 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
         physical_type_(physical_type),
         compression_codec_(compression_codec) {}
 
-  [[nodiscard]] bool CanCalculateLengths() const override { return true; }
+  [[nodiscard]] bool CanCalculateLengths() const override { return false; }
 
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override {
     return ciphertext_len;
@@ -1029,7 +1029,15 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
                   ::arrow::util::span<uint8_t> plaintext,
                   std::unique_ptr<parquet::encryption::EncodingProperties>
                       encoding_properties) override {
-    std::copy(ciphertext.begin(), ciphertext.end(), plaintext.begin());
+    throw ParquetException("Decrypt not supported");
+  }
+
+  int32_t DecryptWithManagedBuffer(
+      ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::unique_ptr<parquet::encryption::EncodingProperties> encoding_properties)
+      override {
+    PARQUET_THROW_NOT_OK(plaintext->Resize(ciphertext.size()));
+    std::memcpy(plaintext->mutable_data(), ciphertext.data(), ciphertext.size());
     if (encoding_properties != nullptr) {
       // Fill column-level properties so validate() succeeds
       encoding_properties->set_column_path(column_path_);
@@ -1042,13 +1050,6 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
       throw ParquetException("Encoding properties are null");
     }
     return static_cast<int32_t>(ciphertext.size());
-  }
-
-  int32_t DecryptWithManagedBuffer(
-      ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
-      std::unique_ptr<parquet::encryption::EncodingProperties> encoding_properties)
-      override {
-    throw ParquetException("DecryptWithManagedBuffer not supported");
   }
 
  private:
