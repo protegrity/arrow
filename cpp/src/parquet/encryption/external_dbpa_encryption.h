@@ -132,10 +132,10 @@ void UpdateEncryptorMetadata(
 // Populate the encoding properties based on the column name, data type, compression type,
 // and datatype length.
 PARQUET_EXPORT
-void PopulateEncodingProperties(
-    EncodingProperties* encoding_properties, std::string column_name,
-    Type::type data_type, std::optional<int> datatype_length,
-    Compression::type compression_type);
+void PopulateEncodingProperties(EncodingProperties* encoding_properties,
+                                std::string column_name, Type::type data_type,
+                                std::optional<int> datatype_length,
+                                Compression::type compression_type);
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
 /// operation is open, and is used to guarantee the lifetime of the encryptor.

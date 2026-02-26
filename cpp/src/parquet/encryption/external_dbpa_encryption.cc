@@ -186,10 +186,10 @@ void UpdateEncryptorMetadata(
 // Some Encryptors and Decryptors may need to understand the page encoding before the
 // encryption process. This method will be called from the Encrypt and Decrypt
 // WithManagedBuffer methods.
-void PopulateEncodingProperties(
-    EncodingProperties* encoding_properties, std::string column_name,
-    Type::type data_type, std::optional<int> datatype_length,
-    Compression::type compression_type) {
+void PopulateEncodingProperties(EncodingProperties* encoding_properties,
+                                std::string column_name, Type::type data_type,
+                                std::optional<int> datatype_length,
+                                Compression::type compression_type) {
   if (!encoding_properties) return;
   encoding_properties->set_column_path(column_name);
   encoding_properties->set_physical_type(data_type, datatype_length);
@@ -327,8 +327,7 @@ int32_t ExternalDBPAEncryptorAdapter::EncryptWithManagedBuffer(
   }
   PopulateEncodingProperties(encoding_properties.get(), column_name_, data_type_,
                              datatype_length_, compression_type_);
-  return InvokeExternalEncrypt(plaintext, ciphertext,
-                               std::move(encoding_properties));
+  return InvokeExternalEncrypt(plaintext, ciphertext, std::move(encoding_properties));
 }
 
 int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
