@@ -93,7 +93,7 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 
   int32_t InvokeExternalEncrypt(::arrow::util::span<const uint8_t> plaintext,
                                 ::arrow::ResizableBuffer* ciphertext,
-                                std::map<std::string, std::string> encoding_attrs);
+                                std::unique_ptr<EncodingProperties> encoding_properties);
 
   ParquetCipher::type algorithm_;
   std::string column_name_;
@@ -105,8 +105,6 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
   std::map<std::string, std::string> configuration_properties_;
 
   std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
-
-  std::unique_ptr<EncodingProperties> encoding_properties_;
 
   // Accumulated column encryption metadata per module type (e.g., data page,
   // dictionary page) to be used later by GetKeyValueMetadata.
@@ -131,13 +129,13 @@ void UpdateEncryptorMetadata(
     const EncodingProperties& encoding_properties,
     const dbps::external::EncryptionResult& result);
 
-// Update the encoding properties based on the column name, data type, compression type,
+// Populate the encoding properties based on the column name, data type, compression type,
 // and datatype length.
 PARQUET_EXPORT
-std::unique_ptr<EncodingProperties> BuildEncodingProperties(
-    std::string column_name, Type::type data_type, std::optional<int> datatype_length,
-    Compression::type compression_type,
-    std::unique_ptr<EncodingProperties> encoding_properties);
+void PopulateEncodingProperties(
+    EncodingProperties* encoding_properties, std::string column_name,
+    Type::type data_type, std::optional<int> datatype_length,
+    Compression::type compression_type);
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
 /// operation is open, and is used to guarantee the lifetime of the encryptor.
@@ -235,8 +233,6 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   std::map<std::string, std::string> configuration_properties_;
 
   std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
-
-  std::unique_ptr<EncodingProperties> encoding_properties_;
 
   // Store the key value metadata from the column chunk metadata.
   std::shared_ptr<KeyValueMetadata> key_value_metadata_;

@@ -186,19 +186,17 @@ void UpdateEncryptorMetadata(
 // Some Encryptors and Decryptors may need to understand the page encoding before the
 // encryption process. This method will be called from the Encrypt and Decrypt
 // WithManagedBuffer methods.
-std::unique_ptr<EncodingProperties> BuildEncodingProperties(
-    std::string column_name, Type::type data_type, std::optional<int> datatype_length,
-    Compression::type compression_type,
-    std::unique_ptr<EncodingProperties> encoding_properties) {
-  if (encoding_properties != nullptr) {
-    encoding_properties->set_column_path(column_name);
-    encoding_properties->set_physical_type(data_type, datatype_length);
-    encoding_properties->set_compression_codec(compression_type);
+void PopulateEncodingProperties(
+    EncodingProperties* encoding_properties, std::string column_name,
+    Type::type data_type, std::optional<int> datatype_length,
+    Compression::type compression_type) {
+  if (!encoding_properties) return;
+  encoding_properties->set_column_path(column_name);
+  encoding_properties->set_physical_type(data_type, datatype_length);
+  encoding_properties->set_compression_codec(compression_type);
 
-    encoding_properties->validate();
-  }
-  return encoding_properties;
-}  // BuildEncodingProperties()
+  encoding_properties->validate();
+}  // PopulateEncodingProperties()
 
 std::optional<std::map<std::string, std::string>>
 ExternalDBPAUtils::KeyValueMetadataToStringMap(
@@ -327,11 +325,10 @@ int32_t ExternalDBPAEncryptorAdapter::EncryptWithManagedBuffer(
     throw ParquetException(
         "ExternalDBPAEncryptorAdapter:: encoding_properties is null, params not updated");
   }
-  encoding_properties_ =
-      BuildEncodingProperties(column_name_, data_type_, datatype_length_,
-                              compression_type_, std::move(encoding_properties));
+  PopulateEncodingProperties(encoding_properties.get(), column_name_, data_type_,
+                             datatype_length_, compression_type_);
   return InvokeExternalEncrypt(plaintext, ciphertext,
-                               encoding_properties_->ToPropertiesMap());
+                               std::move(encoding_properties));
 }
 
 int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
@@ -344,7 +341,7 @@ int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
 
 int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
     ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
-    std::map<std::string, std::string> encoding_attrs) {
+    std::unique_ptr<EncodingProperties> encoding_properties) {
   if (::arrow::util::ArrowLog::IsLevelEnabled(
           ::arrow::util::ArrowLogLevel::ARROW_DEBUG)) {
     ARROW_LOG(DEBUG) << "*-*-*- START: ExternalDBPAEncryptor::Encrypt *-*-*-";
@@ -361,6 +358,7 @@ int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
   }
 
   ARROW_LOG(DEBUG) << "Calling agent_instance_->Encrypt...";
+  auto encoding_attrs = encoding_properties->ToPropertiesMap();
   std::unique_ptr<EncryptionResult> result =
       agent_instance_->Encrypt(plaintext, std::move(encoding_attrs));
 
@@ -394,7 +392,7 @@ int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
   // Accumulate any column_encryption_metadata returned by the result per module type
   UpdateEncryptorMetadata(
       /*metadata_by_module*/ column_encryption_metadata_,
-      /*encoding_properties*/ *encoding_properties_,
+      /*encoding_properties*/ *encoding_properties,
       /*result*/ *result);
 
   return static_cast<int32_t>(result->size());
@@ -564,11 +562,10 @@ int32_t ExternalDBPADecryptorAdapter::DecryptWithManagedBuffer(
     throw ParquetException(
         "ExternalDBPADecryptorAdapter:: encoding_properties is null, params not updated");
   }
-  encoding_properties_ =
-      BuildEncodingProperties(column_name_, data_type_, datatype_length_,
-                              compression_type_, std::move(encoding_properties));
+  PopulateEncodingProperties(encoding_properties.get(), column_name_, data_type_,
+                             datatype_length_, compression_type_);
   return InvokeExternalDecrypt(ciphertext, plaintext,
-                               encoding_properties_->ToPropertiesMap());
+                               encoding_properties->ToPropertiesMap());
 }
 
 int32_t ExternalDBPADecryptorAdapter::InvokeExternalDecrypt(
