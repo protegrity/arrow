@@ -54,10 +54,11 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override;
 
   /// Encryption not supported as we cannot calculate the ciphertext before encryption.
-  int32_t Encrypt(::arrow::util::span<const uint8_t> plaintext,
-                  ::arrow::util::span<const uint8_t> key,
-                  ::arrow::util::span<const uint8_t> aad,
-                  ::arrow::util::span<uint8_t> ciphertext) override {
+  int32_t Encrypt(
+      ::arrow::util::span<const uint8_t> plaintext,
+      ::arrow::util::span<const uint8_t> key, ::arrow::util::span<const uint8_t> aad,
+      ::arrow::util::span<uint8_t> ciphertext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     std::stringstream ss;
     ss << "Encrypt is not supported in ExternalDBPAEncryptorAdapter, ";
     ss << "use EncryptWithManagedBuffer instead";
@@ -66,8 +67,9 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 
   /// Encrypt the plaintext and leave the results in the ciphertext buffer.
   /// The buffer will be resized to the appropriate size by the agent during encryption.
-  int32_t EncryptWithManagedBuffer(::arrow::util::span<const uint8_t> plaintext,
-                                   ::arrow::ResizableBuffer* ciphertext) override;
+  int32_t EncryptWithManagedBuffer(
+      ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
   /// Encrypts plaintext footer, in order to compute footer signature (tag).
   int32_t SignedFooterEncrypt(::arrow::util::span<const uint8_t> footer,
@@ -75,9 +77,6 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
                               ::arrow::util::span<const uint8_t> aad,
                               ::arrow::util::span<const uint8_t> nonce,
                               ::arrow::util::span<uint8_t> encrypted_footer) override;
-
-  void UpdateEncodingProperties(
-      std::unique_ptr<EncodingProperties> encoding_properties) override;
 
   std::shared_ptr<KeyValueMetadata> GetKeyValueMetadata(int8_t module_type) override;
 
@@ -94,7 +93,7 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 
   int32_t InvokeExternalEncrypt(::arrow::util::span<const uint8_t> plaintext,
                                 ::arrow::ResizableBuffer* ciphertext,
-                                std::map<std::string, std::string> encoding_attrs);
+                                std::unique_ptr<EncodingProperties> encoding_properties);
 
   ParquetCipher::type algorithm_;
   std::string column_name_;
@@ -106,9 +105,6 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
   std::map<std::string, std::string> configuration_properties_;
 
   std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
-
-  std::unique_ptr<EncodingProperties> encoding_properties_;
-  bool encoding_properties_updated_ = false;
 
   // Accumulated column encryption metadata per module type (e.g., data page,
   // dictionary page) to be used later by GetKeyValueMetadata.
@@ -132,6 +128,14 @@ void UpdateEncryptorMetadata(
     std::map<int8_t, std::map<std::string, std::string>>& metadata_by_module,
     const EncodingProperties& encoding_properties,
     const dbps::external::EncryptionResult& result);
+
+// Populate the encoding properties based on the column name, data type, compression type,
+// and datatype length.
+PARQUET_EXPORT
+void PopulateEncodingProperties(EncodingProperties* encoding_properties,
+                                std::string column_name, Type::type data_type,
+                                std::optional<int> datatype_length,
+                                Compression::type compression_type);
 
 /// Factory for ExternalDBPAEncryptorAdapter instances. The cache exists while the write
 /// operation is open, and is used to guarantee the lifetime of the encryptor.
@@ -185,10 +189,11 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
 
   /// Decrypt is not supported as we cannot calculate the plaintext length before
   /// decryption.
-  int32_t Decrypt(::arrow::util::span<const uint8_t> ciphertext,
-                  ::arrow::util::span<const uint8_t> key,
-                  ::arrow::util::span<const uint8_t> aad,
-                  ::arrow::util::span<uint8_t> plaintext) override {
+  int32_t Decrypt(
+      ::arrow::util::span<const uint8_t> ciphertext,
+      ::arrow::util::span<const uint8_t> key, ::arrow::util::span<const uint8_t> aad,
+      ::arrow::util::span<uint8_t> plaintext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     std::stringstream ss;
     ss << "Decrypt is not supported in ExternalDBPADecryptorAdapter, ";
     ss << "use DecryptWithManagedBuffer instead";
@@ -199,11 +204,9 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   /// The buffer will be resized to the correct size during decryption. This method
   /// is used when the decryptor cannot calculate the plaintext length before
   /// decryption.
-  int32_t DecryptWithManagedBuffer(::arrow::util::span<const uint8_t> ciphertext,
-                                   ::arrow::ResizableBuffer* plaintext) override;
-
-  void UpdateEncodingProperties(
-      std::unique_ptr<EncodingProperties> encoding_properties) override;
+  int32_t DecryptWithManagedBuffer(
+      ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
  private:
   // agent_instance is assumed to be initialized at the time of construction.
@@ -230,9 +233,6 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   std::map<std::string, std::string> configuration_properties_;
 
   std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance_;
-
-  std::unique_ptr<EncodingProperties> encoding_properties_;
-  bool encoding_properties_updated_ = false;
 
   // Store the key value metadata from the column chunk metadata.
   std::shared_ptr<KeyValueMetadata> key_value_metadata_;

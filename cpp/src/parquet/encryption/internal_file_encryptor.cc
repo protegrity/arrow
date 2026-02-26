@@ -44,19 +44,17 @@ bool Encryptor::CanCalculateCiphertextLength() const {
 }
 
 int32_t Encryptor::Encrypt(::arrow::util::span<const uint8_t> plaintext,
-                           ::arrow::util::span<uint8_t> ciphertext) {
+                           ::arrow::util::span<uint8_t> ciphertext,
+                           std::unique_ptr<EncodingProperties> encoding_properties) {
   return encryptor_instance_->Encrypt(plaintext, key_.as_span(), str2span(aad_),
-                                      ciphertext);
+                                      ciphertext, std::move(encoding_properties));
 }
 
-int32_t Encryptor::EncryptWithManagedBuffer(::arrow::util::span<const uint8_t> plaintext,
-                                            ::arrow::ResizableBuffer* ciphertext) {
-  return encryptor_instance_->EncryptWithManagedBuffer(plaintext, ciphertext);
-}
-
-void Encryptor::UpdateEncodingProperties(
+int32_t Encryptor::EncryptWithManagedBuffer(
+    ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
     std::unique_ptr<EncodingProperties> encoding_properties) {
-  encryptor_instance_->UpdateEncodingProperties(std::move(encoding_properties));
+  return encryptor_instance_->EncryptWithManagedBuffer(plaintext, ciphertext,
+                                                       std::move(encoding_properties));
 }
 
 std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_type) {

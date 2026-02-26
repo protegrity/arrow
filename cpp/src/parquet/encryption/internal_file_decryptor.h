@@ -52,11 +52,11 @@ class PARQUET_EXPORT Decryptor {
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const;
   [[nodiscard]] int32_t CiphertextLength(int32_t plaintext_len) const;
   int32_t Decrypt(::arrow::util::span<const uint8_t> ciphertext,
-                  ::arrow::util::span<uint8_t> plaintext);
-  int32_t DecryptWithManagedBuffer(::arrow::util::span<const uint8_t> ciphertext,
-                                   ::arrow::ResizableBuffer* plaintext);
-
-  void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties);
+                  ::arrow::util::span<uint8_t> plaintext,
+                  std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
+  int32_t DecryptWithManagedBuffer(
+      ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
 
  private:
   std::unique_ptr<encryption::DecryptorInterface> decryptor_instance_;
