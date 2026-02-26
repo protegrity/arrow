@@ -43,20 +43,18 @@ class PARQUET_EXPORT DecryptorInterface {
   /// Decrypt the ciphertext and leave the results in the plaintext buffer.
   /// Most implementations will require the key and aad to be provided, but it is up to
   /// each decryptor whether to use them or not.
-  virtual int32_t Decrypt(std::span<const uint8_t> ciphertext,
-                          std::span<const uint8_t> key,
-                          std::span<const uint8_t> aad,
-                          std::span<uint8_t> plaintext) = 0;
+  virtual int32_t Decrypt(
+      std::span<const uint8_t> ciphertext,
+      std::span<const uint8_t> key, std::span<const uint8_t> aad,
+      std::span<uint8_t> plaintext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 
   /// Decrypt the ciphertext and leave the results in the plaintext buffer.
-  /// The buffer will be resized to the correct size during decryption. This method is used
-  /// when the decryptor cannot calculate the plaintext length before decryption.
-  virtual int32_t DecryptWithManagedBuffer(std::span<const uint8_t> ciphertext,
-                                  ::arrow::ResizableBuffer* plaintext) = 0;
-
-  // Some Encryptors may need to understand the page encoding before the encryption process.
-  // This method will be called from ColumnWriter before invoking the Encrypt method.
-  virtual void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {};
+  /// The buffer will be resized to the correct size during decryption. This method
+  /// is used when the decryptor cannot calculate the plaintext length before decryption.
+  virtual int32_t DecryptWithManagedBuffer(
+      std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 };
 
 }  // namespace parquet::encryption

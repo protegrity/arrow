@@ -48,12 +48,13 @@ class PARQUET_EXPORT Encryptor {
   [[nodiscard]] bool CanCalculateCiphertextLength() const;
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const;
 
-  int32_t Encrypt(std::span<const uint8_t> plaintext, std::span<uint8_t> ciphertext);
+  int32_t Encrypt(std::span<const uint8_t> plaintext,
+                  std::span<uint8_t> ciphertext,
+                  std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
 
-  int32_t EncryptWithManagedBuffer(std::span<const uint8_t> plaintext,
-                                   ::arrow::ResizableBuffer* ciphertext);
-
-  void UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties);
+  int32_t EncryptWithManagedBuffer(
+      std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
 
   /// After the column_writer writes a dictionary or a data page, this method will
   /// be called so that each encryptor can provide any encryptor-specific column

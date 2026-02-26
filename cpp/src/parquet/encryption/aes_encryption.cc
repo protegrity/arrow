@@ -154,9 +154,11 @@ int32_t AesEncryptor::SignedFooterEncrypt(
   return GcmEncrypt(footer, key, nonce, aad, encrypted_footer);
 }
 
-int32_t AesEncryptor::Encrypt(
-    std::span<const uint8_t> plaintext, std::span<const uint8_t> key, std::span<const uint8_t> aad,
-    std::span<uint8_t> ciphertext) {
+int32_t AesEncryptor::Encrypt(std::span<const uint8_t> plaintext,
+                              std::span<const uint8_t> key,
+                              std::span<const uint8_t> aad,
+                              std::span<uint8_t> ciphertext,
+                              std::unique_ptr<EncodingProperties> encoding_properties) {
   if (static_cast<size_t>(key_length_) != key.size()) {
     std::stringstream ss;
     ss << "Wrong key length " << key.size() << ". Should be " << key_length_;
@@ -406,9 +408,11 @@ int32_t AesDecryptor::CiphertextLength(int32_t plaintext_len) const {
   return plaintext_len + ciphertext_size_delta_;
 }
 
-int32_t AesDecryptor::Decrypt(
-    std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
-    std::span<const uint8_t> aad, std::span<uint8_t> plaintext) {
+int32_t AesDecryptor::Decrypt(std::span<const uint8_t> ciphertext,
+                              std::span<const uint8_t> key,
+                              std::span<const uint8_t> aad,
+                              std::span<uint8_t> plaintext,
+                              std::unique_ptr<EncodingProperties> encoding_properties) {
   if (static_cast<size_t>(key_length_) != key.size()) {
     std::stringstream ss;
     ss << "Wrong key length " << key.size() << ". Should be " << key_length_;

@@ -54,18 +54,18 @@ int32_t Decryptor::CiphertextLength(int32_t plaintext_len) const {
   return decryptor_instance_->CiphertextLength(plaintext_len);
 }
 
-void Decryptor::UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {
-  decryptor_instance_->UpdateEncodingProperties(std::move(encoding_properties));
-}
-
 int32_t Decryptor::Decrypt(std::span<const uint8_t> ciphertext,
-                           std::span<uint8_t> plaintext) {
-  return decryptor_instance_->Decrypt(ciphertext, key_.as_span(), str2span(aad_), plaintext);
+                           std::span<uint8_t> plaintext,
+                           std::unique_ptr<EncodingProperties> encoding_properties) {
+  return decryptor_instance_->Decrypt(ciphertext, key_.as_span(), str2span(aad_),
+                                      plaintext, std::move(encoding_properties));
 }
 
-int32_t Decryptor::DecryptWithManagedBuffer(std::span<const uint8_t> ciphertext,
-                                            ::arrow::ResizableBuffer* plaintext) {
-  return decryptor_instance_->DecryptWithManagedBuffer(ciphertext, plaintext);
+int32_t Decryptor::DecryptWithManagedBuffer(
+    std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+    std::unique_ptr<EncodingProperties> encoding_properties) {
+  return decryptor_instance_->DecryptWithManagedBuffer(ciphertext, plaintext,
+                                                       std::move(encoding_properties));
 }
 
 // InternalFileDecryptor
