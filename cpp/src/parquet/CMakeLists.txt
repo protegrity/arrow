@@ -510,9 +510,7 @@ add_parquet_test(arrow-reader-writer-test
                  SOURCES
                  arrow/arrow_reader_writer_test.cc
                  arrow/arrow_statistics_test.cc
-                 arrow/variant_test.cc
-                 $<$<BOOL:${PARQUET_REQUIRE_ENCRYPTION}>:encryption/external/test_utils.cc>
-)
+                 arrow/variant_test.cc)
 
 add_parquet_test(arrow-index-test SOURCES arrow/index_test.cc)
 

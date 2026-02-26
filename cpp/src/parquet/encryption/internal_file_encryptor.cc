@@ -46,17 +46,17 @@ bool Encryptor::CanCalculateCiphertextLength() const {
 }
 
 int32_t Encryptor::Encrypt(std::span<const uint8_t> plaintext,
-                           std::span<uint8_t> ciphertext) {
-  return encryptor_instance_->Encrypt(plaintext, key_.as_span(), str2span(aad_), ciphertext);
+                           std::span<uint8_t> ciphertext,
+                           std::unique_ptr<EncodingProperties> encoding_properties) {
+  return encryptor_instance_->Encrypt(plaintext, key_.as_span(), str2span(aad_),
+                                      ciphertext, std::move(encoding_properties));
 }
 
-int32_t Encryptor::EncryptWithManagedBuffer(std::span<const uint8_t> plaintext,
-                                            ::arrow::ResizableBuffer* ciphertext) {
-  return encryptor_instance_->EncryptWithManagedBuffer(plaintext, ciphertext);
-}
-
-void Encryptor::UpdateEncodingProperties(std::unique_ptr<EncodingProperties> encoding_properties) {
-  encryptor_instance_->UpdateEncodingProperties(std::move(encoding_properties));
+int32_t Encryptor::EncryptWithManagedBuffer(
+    std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+    std::unique_ptr<EncodingProperties> encoding_properties) {
+  return encryptor_instance_->EncryptWithManagedBuffer(plaintext, ciphertext,
+                                                       std::move(encoding_properties));
 }
 
 std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_type) {
