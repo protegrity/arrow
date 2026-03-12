@@ -64,6 +64,8 @@ TEST(EncodingPropertiesTest, DictionaryPageSettersAndToMap) {
   auto props = EncodingProperties::Builder()
                    .PageType(PageType::DICTIONARY_PAGE)
                    .PageEncoding(Encoding::PLAIN)
+                   .DictPageNumValues(10)
+                   .DictPageIsSorted(true)
                    .Build();
 
   props->set_column_path("schema.col");
@@ -78,6 +80,8 @@ TEST(EncodingPropertiesTest, DictionaryPageSettersAndToMap) {
   ASSERT_EQ(m.at("compression_codec"), std::string("ZSTD"));
   ASSERT_EQ(m.at("page_type"), std::string("DICTIONARY_PAGE"));
   ASSERT_EQ(m.at("page_encoding"), std::string("PLAIN"));
+  ASSERT_EQ(m.at("dict_page_num_values"), std::to_string(10));
+  ASSERT_EQ(m.at("dict_page_is_sorted"), "true");
 }
 
 TEST(EncodingPropertiesTest, BuilderDataPageV1ValidationSuccessAndMap) {
@@ -174,10 +178,29 @@ TEST(EncodingPropertiesTest, FixedLengthBytesWrongUsageThrows) {
   EXPECT_THROW(props->validate(), std::invalid_argument);
 }
 
+TEST(EncodingPropertiesTest, DictionaryPageIsSortedIsOptional) {
+  // is_sorted is optional per the Parquet spec; omitting it should still validate
+  auto props = EncodingProperties::Builder()
+                   .PageType(PageType::DICTIONARY_PAGE)
+                   .PageEncoding(Encoding::PLAIN)
+                   .DictPageNumValues(5)
+                   .Build();
+
+  props->set_column_path("schema.col");
+  props->set_physical_type(Type::INT32, std::nullopt);
+  props->set_compression_codec(::arrow::Compression::UNCOMPRESSED);
+
+  EXPECT_NO_THROW(props->validate());
+  auto m = props->ToPropertiesMap();
+  ASSERT_EQ(m.at("dict_page_num_values"), std::to_string(5));
+  ASSERT_EQ(m.count("dict_page_is_sorted"), 0);  // not present when not set
+}
+
 TEST(EncodingPropertiesTest, BuilderOptionalFixedLengthBytesAndToMap) {
   auto props = EncodingProperties::Builder()
                    .PageType(PageType::DICTIONARY_PAGE)
                    .PageEncoding(Encoding::RLE_DICTIONARY)
+                   .DictPageNumValues(3)
                    .Build();
   props->set_column_path("fixed_col");
   props->set_physical_type(Type::FIXED_LEN_BYTE_ARRAY, std::optional<std::int64_t>(16));
@@ -189,7 +212,10 @@ TEST(EncodingPropertiesTest, BuilderOptionalFixedLengthBytesAndToMap) {
 }
 
 TEST(EncodingPropertiesTest, MissingPageEncodingThrows) {
-  auto props = EncodingProperties::Builder().PageType(PageType::DICTIONARY_PAGE).Build();
+  auto props = EncodingProperties::Builder()
+                   .PageType(PageType::DICTIONARY_PAGE)
+                   .DictPageNumValues(1)
+                   .Build();
   props->set_column_path("schema.col");
 
   EXPECT_THROW(props->validate(), std::invalid_argument);
@@ -236,7 +262,8 @@ TEST(EncodingPropertiesTest, MakeFromMetadataDictionaryPage) {
   auto writer_props = wp_builder.build();
 
   auto buffer = ::parquet::AllocateBuffer();
-  parquet::DictionaryPage page(buffer, /*num_values=*/4, Encoding::RLE_DICTIONARY);
+  parquet::DictionaryPage page(buffer, /*num_values=*/4, Encoding::RLE_DICTIONARY,
+                               /*is_sorted=*/true);
 
   auto props = EncodingProperties::MakeFromMetadata(descr, writer_props.get(), page);
   EXPECT_NO_THROW(props->validate());
@@ -246,6 +273,8 @@ TEST(EncodingPropertiesTest, MakeFromMetadataDictionaryPage) {
   ASSERT_EQ(m.at("compression_codec"), std::string("GZIP"));
   ASSERT_EQ(m.at("page_type"), std::string("DICTIONARY_PAGE"));
   ASSERT_EQ(m.at("page_encoding"), std::string("RLE_DICTIONARY"));
+  ASSERT_EQ(m.at("dict_page_num_values"), std::to_string(4));
+  ASSERT_EQ(m.at("dict_page_is_sorted"), "true");
 }
 
 TEST(EncodingPropertiesTest, MakeFromMetadataDataPageV2ValidationAndMap) {
@@ -428,8 +457,8 @@ TEST(EncodingPropertiesTest, SequentialFailuresForDataPageV2RequiredFields) {
 }
 
 TEST(EncodingPropertiesTest, SequentialFailuresForDictionaryPageRequiredFields) {
-  // Dictionary pages require: column path, physical type, compression codec, page type,
-  // and page encoding. We'll add them incrementally.
+  // Dictionary pages require: column path, page type, page encoding, and
+  // dict_page_num_values. We'll add them incrementally.
   auto builder = EncodingProperties::Builder();
 
   // Missing everything => Build should throw because page type is required at build time
@@ -437,16 +466,21 @@ TEST(EncodingPropertiesTest, SequentialFailuresForDictionaryPageRequiredFields) 
 
   builder.PageType(PageType::DICTIONARY_PAGE);
   auto props = builder.Build();
-  // Now validation fails due to missing encoding and column-level properties
+  // Now validation fails due to missing encoding
   EXPECT_THROW(props->validate(), std::invalid_argument);  // missing encoding
 
   builder.PageEncoding(Encoding::RLE_DICTIONARY);
   props = builder.Build();
-  // Still missing column/path
+  // Still missing column path
   EXPECT_THROW(props->validate(), std::invalid_argument);  // missing column path
 
   props->set_column_path("schema.col");
-  // Dictionary page doesn't require physical type or compression to validate
+  // Still missing dict_page_num_values
+  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing num_values
+
+  builder.DictPageNumValues(10);
+  props = builder.Build();
+  props->set_column_path("schema.col");
   EXPECT_NO_THROW(props->validate());
 }
 

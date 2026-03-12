@@ -440,6 +440,10 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
 
     builder.PageType(parquet::PageType::type::DICTIONARY_PAGE);
     builder.PageEncoding(ToParquetEncoding(dictionary_page_header.encoding));
+    builder.DictPageNumValues(dictionary_page_header.num_values);
+    if (dictionary_page_header.__isset.is_sorted) {
+      builder.DictPageIsSorted(dictionary_page_header.is_sorted);
+    }
   } else if (page_type_from_header ==
              format::PageType::DATA_PAGE) {  // this is DataPageV1
     format::DataPageHeader data_page_header = page_header.data_page_header;
