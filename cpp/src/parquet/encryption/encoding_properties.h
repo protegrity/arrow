@@ -115,9 +115,8 @@ class PARQUET_EXPORT EncodingProperties {
 
   //--------------------------------
   // Dictionary page properties.
-
-  // there are not specific properties for dictionary pages,
-  // other than the page encoding (captured above).
+  std::optional<int32_t> dict_page_num_values_;
+  std::optional<bool> dict_page_is_sorted_;
 
   //--------------------------------
 };  // class EncodingProperties
@@ -156,6 +155,10 @@ class PARQUET_EXPORT EncodingPropertiesBuilder {
   EncodingPropertiesBuilder& PageV2NumNulls(int32_t num_nulls);
   EncodingPropertiesBuilder& PageV2IsCompressed(bool is_compressed);
 
+  // Dictionary page properties
+  EncodingPropertiesBuilder& DictPageNumValues(int32_t num_values);
+  EncodingPropertiesBuilder& DictPageIsSorted(bool is_sorted);
+
   // Build the final object
   std::unique_ptr<EncodingProperties> Build();
 
@@ -186,6 +189,10 @@ class PARQUET_EXPORT EncodingPropertiesBuilder {
   std::optional<int32_t> page_v2_repetition_levels_byte_length_;
   std::optional<int32_t> page_v2_num_nulls_;
   std::optional<bool> page_v2_is_compressed_;
+
+  // Dictionary page properties
+  std::optional<int32_t> dict_page_num_values_;
+  std::optional<bool> dict_page_is_sorted_;
 };  // class EncodingPropertiesBuilder
 
 //--------------------------------
