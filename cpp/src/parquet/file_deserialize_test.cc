@@ -1187,6 +1187,9 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDictionaryPageEncodingProperties) {
   ASSERT_EQ(props.at("compression_codec"), std::string("UNCOMPRESSED"));
   ASSERT_EQ(props.at("page_type"), std::string("DICTIONARY_PAGE"));
   ASSERT_EQ(props.at("page_encoding"), std::string("PLAIN"));
+  ASSERT_EQ(props.at("dict_page_num_values"), std::to_string(num_rows));
+  // is_sorted is not set in the thrift header by default, so it should be absent
+  ASSERT_EQ(props.count("dict_page_is_sorted"), 0);
 }
 
 TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV1EncodingProperties) {

@@ -44,7 +44,9 @@ EncodingProperties::EncodingProperties(const EncodingPropertiesBuilder& builder)
       page_v2_repetition_levels_byte_length_(
           builder.page_v2_repetition_levels_byte_length_),
       page_v2_num_nulls_(builder.page_v2_num_nulls_),
-      page_v2_is_compressed_(builder.page_v2_is_compressed_) {}
+      page_v2_is_compressed_(builder.page_v2_is_compressed_),
+      dict_page_num_values_(builder.dict_page_num_values_),
+      dict_page_is_sorted_(builder.dict_page_is_sorted_) {}
 
 // Builder static method
 EncodingPropertiesBuilder EncodingProperties::Builder() {
@@ -120,8 +122,10 @@ void EncodingProperties::validate() {
       throw std::invalid_argument("PageV2IsCompressed is required");
     }
   } else if (page_type_ == parquet::PageType::DICTIONARY_PAGE) {
-    // no validations required for DICTIONARY_PAGE
-    // (the requirement for 'encoding' is satisfied by the page_encoding check above)
+    if (!dict_page_num_values_.has_value()) {
+      throw std::invalid_argument("DictPageNumValues is required for DICTIONARY_PAGE");
+    }
+    // is_sorted is optional per the Parquet spec, so no validation needed.
   }
 }  // validate()
 
@@ -170,6 +174,8 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
   } else if (column_page.type() == parquet::PageType::DICTIONARY_PAGE) {
     DictionaryPage dict_page = static_cast<const DictionaryPage&>(column_page);
     builder.PageEncoding(dict_page.encoding());
+    builder.DictPageNumValues(dict_page.num_values());
+    builder.DictPageIsSorted(dict_page.is_sorted());
   } else {
     throw std::invalid_argument(std::string("Unknown Page Type:: ") +
                                 EnumToString(column_page.type()));
@@ -214,7 +220,10 @@ std::map<std::string, std::string> EncodingProperties::ToPropertiesMap() const {
     result["page_v2_num_nulls"] = std::to_string(page_v2_num_nulls_.value());
     result["page_v2_is_compressed"] = (page_v2_is_compressed_.value() ? "true" : "false");
   } else if (page_type_ == parquet::PageType::DICTIONARY_PAGE) {
-    // no other properties are set for DICTIONARY_PAGE
+    result["dict_page_num_values"] = std::to_string(dict_page_num_values_.value());
+    if (dict_page_is_sorted_.has_value()) {
+      result["dict_page_is_sorted"] = (dict_page_is_sorted_.value() ? "true" : "false");
+    }
   }
 
   return result;
@@ -322,6 +331,17 @@ EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2NumNulls(int32_t num
 EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2IsCompressed(
     bool is_compressed) {
   page_v2_is_compressed_ = is_compressed;
+  return *this;
+}
+
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::DictPageNumValues(
+    int32_t num_values) {
+  dict_page_num_values_ = num_values;
+  return *this;
+}
+
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::DictPageIsSorted(bool is_sorted) {
+  dict_page_is_sorted_ = is_sorted;
   return *this;
 }
 
