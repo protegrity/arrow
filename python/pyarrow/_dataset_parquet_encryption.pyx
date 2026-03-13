@@ -45,6 +45,11 @@ cdef class ParquetEncryptionConfig(_Weakrefable):
     encryption_config : pyarrow.parquet.encryption.EncryptionConfiguration
         Shared pointer to an `EncryptionConfiguration` object. This object defines specific
         encryption settings for Parquet data, including the keys assigned to different columns.
+        If this is set, the external_encryption_config cannot be set.
+    external_encryption_config : pyarrow.parquet.encryption.ExternalEncryptionConfiguration
+        Shared pointer to an `ExternalEncryptionConfiguration` object. This object defines
+        specific encryption settings for Parquet data, which allows for per-column
+        encryption algorithms. If this is set, the encryption_config cannot be set.
 
     Raises
     ------
@@ -58,9 +63,8 @@ cdef class ParquetEncryptionConfig(_Weakrefable):
     __slots__ = ()
 
     def __cinit__(self, CryptoFactory crypto_factory, KmsConnectionConfig kms_connection_config,
-                  EncryptionConfiguration encryption_config):
-
-        cdef shared_ptr[CEncryptionConfiguration] c_encryption_config
+                  EncryptionConfiguration encryption_config=None,
+                  ExternalEncryptionConfiguration external_encryption_config=None):
 
         if crypto_factory is None:
             raise ValueError("crypto_factory cannot be None")
@@ -68,18 +72,24 @@ cdef class ParquetEncryptionConfig(_Weakrefable):
         if kms_connection_config is None:
             raise ValueError("kms_connection_config cannot be None")
 
-        if encryption_config is None:
-            raise ValueError("encryption_config cannot be None")
+        if encryption_config is None and external_encryption_config is None:
+            raise ValueError(
+                "both encryption_config and external_encryption_config cannot be None")
+
+        if encryption_config is not None and external_encryption_config is not None:
+            raise ValueError(
+                "cannot set both encryption_config and external_encryption_config")
 
         self.c_config.reset(new CParquetEncryptionConfig())
-
-        c_encryption_config = pyarrow_unwrap_encryptionconfig(
-            encryption_config)
 
         self.c_config.get().crypto_factory = pyarrow_unwrap_cryptofactory(crypto_factory)
         self.c_config.get().kms_connection_config = pyarrow_unwrap_kmsconnectionconfig(
             kms_connection_config)
-        self.c_config.get().encryption_config = c_encryption_config
+
+        if encryption_config is not None:
+            self.c_config.get().encryption_config = pyarrow_unwrap_encryptionconfig(encryption_config)
+        else:
+            self.c_config.get().external_encryption_config = pyarrow_unwrap_external_encryptionconfig(external_encryption_config)
 
     @staticmethod
     cdef wrap(shared_ptr[CParquetEncryptionConfig] c_config):
@@ -111,7 +121,12 @@ cdef class ParquetDecryptionConfig(_Weakrefable):
         for connecting to a Key Management Service (KMS) during decryption.
     decryption_config : pyarrow.parquet.encryption.DecryptionConfiguration
         Shared pointer to a `DecryptionConfiguration` object, specifying decryption settings
-        for reading encrypted Parquet data.
+        for reading encrypted Parquet data. If this is set, external_decryption_config
+        cannot be set.
+    external_decryption_config: pyarrow.parquet.encryption.ExternalDecryptionConfiguration
+        Shared pointer to an `ExternalDecryptionConfiguration` object, defining specific
+        decryption settings for reading Parquet data which was encrypted with an
+        ExternalEncryptionConfiguration. If this is set, decryption_config cannot be set.
 
     Raises
     ------
@@ -126,23 +141,29 @@ cdef class ParquetDecryptionConfig(_Weakrefable):
     __slots__ = ()
 
     def __cinit__(self, CryptoFactory crypto_factory, KmsConnectionConfig kms_connection_config,
-                  DecryptionConfiguration decryption_config):
+                  DecryptionConfiguration decryption_config=None,
+                  ExternalDecryptionConfiguration external_decryption_config=None):
 
-        cdef shared_ptr[CDecryptionConfiguration] c_decryption_config
-
-        if decryption_config is None:
+        if decryption_config is None and external_decryption_config is None:
             raise ValueError(
-                "decryption_config cannot be None")
+                "both decryption_config and external_decryption_config cannot be None")
+
+        if decryption_config is not None and external_decryption_config is not None:
+            raise ValueError(
+                "cannot set both decryption_config and external_decryption_config")
 
         self.c_config.reset(new CParquetDecryptionConfig())
-
-        c_decryption_config = pyarrow_unwrap_decryptionconfig(
-            decryption_config)
 
         self.c_config.get().crypto_factory = pyarrow_unwrap_cryptofactory(crypto_factory)
         self.c_config.get().kms_connection_config = pyarrow_unwrap_kmsconnectionconfig(
             kms_connection_config)
-        self.c_config.get().decryption_config = c_decryption_config
+
+        if decryption_config is not None:
+            self.c_config.get().decryption_config = pyarrow_unwrap_decryptionconfig(
+                decryption_config)
+        else:
+            self.c_config.get().external_decryption_config = pyarrow_unwrap_external_decryptionconfig(
+                external_decryption_config)
 
     @staticmethod
     cdef wrap(shared_ptr[CParquetDecryptionConfig] c_config):
@@ -167,7 +188,12 @@ def set_decryption_properties(
     FileDecryptionProperties config not None
 ):
     cdef CReaderProperties* reader_props = opts.reader_properties()
-    reader_props.file_decryption_properties(config.unwrap())
+    if isinstance(config, ExternalFileDecryptionProperties):
+        reader_props.file_decryption_properties(
+            static_pointer_cast[CFileDecryptionProperties, CExternalFileDecryptionProperties](
+                (<ExternalFileDecryptionProperties>config).unwrap_external()))
+    else:
+        reader_props.file_decryption_properties((<FileDecryptionProperties>config).unwrap())
 
 
 def set_decryption_config(

@@ -84,13 +84,27 @@ parquet::ReaderProperties MakeReaderProperties(
   auto parquet_decrypt_config = parquet_scan_options->parquet_decryption_config;
 
   if (parquet_decrypt_config != nullptr) {
-    file_decryption_prop =
-        parquet_decrypt_config->crypto_factory->GetFileDecryptionProperties(
-            *parquet_decrypt_config->kms_connection_config,
-            *parquet_decrypt_config->decryption_config, path, filesystem);
+    if (parquet_decrypt_config->decryption_config != nullptr &&
+        parquet_decrypt_config->external_decryption_config != nullptr) {
+      throw parquet::ParquetException(
+          "Cannot set both decryption_config and external_decryption_config");
+    }
+
+    if (parquet_decrypt_config->decryption_config != nullptr) {
+      file_decryption_prop =
+          parquet_decrypt_config->crypto_factory->GetFileDecryptionProperties(
+              *parquet_decrypt_config->kms_connection_config,
+              *parquet_decrypt_config->decryption_config, path, filesystem);
+    } else if (parquet_decrypt_config->external_decryption_config != nullptr) {
+      file_decryption_prop =
+          parquet_decrypt_config->crypto_factory->GetExternalFileDecryptionProperties(
+              *parquet_decrypt_config->kms_connection_config,
+              *parquet_decrypt_config->external_decryption_config, path, filesystem);
+    }
   }
 #else
-  if (parquet_scan_options->parquet_decryption_config != nullptr) {
+  if (parquet_scan_options->parquet_decryption_config != nullptr ||
+      parquet_scan_options->parquet_decryption_config->external_decryption_config != nullptr) {
     parquet::ParquetException::NYI("Encryption is not supported in this build.");
   }
 #endif
@@ -727,11 +741,30 @@ Result<std::shared_ptr<FileWriter>> ParquetFileFormat::MakeWriter(
   auto parquet_encrypt_config = parquet_options->parquet_encryption_config;
 
   if (parquet_encrypt_config != nullptr) {
-    auto file_encryption_prop =
-        parquet_encrypt_config->crypto_factory->GetFileEncryptionProperties(
-            *parquet_encrypt_config->kms_connection_config,
-            *parquet_encrypt_config->encryption_config, destination_locator.path,
-            destination_locator.filesystem);
+    if (parquet_encrypt_config->encryption_config != nullptr &&
+        parquet_encrypt_config->external_encryption_config != nullptr) {
+      throw parquet::ParquetException(
+          "Cannot set both encryption_config and external_encryption_config");
+    }
+
+    std::shared_ptr<parquet::FileEncryptionProperties> file_encryption_prop = nullptr;
+    if (parquet_encrypt_config->encryption_config != nullptr) {
+      file_encryption_prop =
+          parquet_encrypt_config->crypto_factory->GetFileEncryptionProperties(
+              *parquet_encrypt_config->kms_connection_config,
+              *parquet_encrypt_config->encryption_config, destination_locator.path,
+              destination_locator.filesystem);
+    } else if (parquet_encrypt_config->external_encryption_config != nullptr) {
+      file_encryption_prop =
+          parquet_encrypt_config->crypto_factory->GetExternalFileEncryptionProperties(
+              *parquet_encrypt_config->kms_connection_config,
+              *parquet_encrypt_config->external_encryption_config,
+              destination_locator.path, destination_locator.filesystem);
+    }
+
+    if (file_encryption_prop == nullptr) {
+      throw parquet::ParquetException("Failed to get file encryption properties");
+    }
 
     auto writer_properties =
         parquet::WriterProperties::Builder(*parquet_options->writer_properties)
@@ -744,7 +777,8 @@ Result<std::shared_ptr<FileWriter>> ParquetFileFormat::MakeWriter(
                             writer_properties, parquet_options->arrow_writer_properties));
   }
 #else
-  if (parquet_options->parquet_encryption_config != nullptr) {
+  if (parquet_options->parquet_encryption_config != nullptr ||
+      parquet_options->parquet_encryption_config->external_encryption_config != nullptr) {
     return Status::NotImplemented("Encryption is not supported in this build.");
   }
 #endif
