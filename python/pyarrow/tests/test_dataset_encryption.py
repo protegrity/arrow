@@ -98,10 +98,12 @@ def kms_factory(kms_connection_configuration):
 
 
 def get_agent_library_path():
-    return os.environ.get(
-        "DBPA_LIBRARY_PATH",
-        "libDBPATestAgent.so" if platform.system() == "Linux" else "libDBPATestAgent.dylib",
+    default = (
+        "libDBPATestAgent.so"
+        if platform.system() == "Linux"
+        else "libDBPATestAgent.dylib"
     )
+    return os.environ.get("DBPA_LIBRARY_PATH", default)
 
 
 def create_external_encryption_config():
@@ -285,9 +287,10 @@ def test_large_row_encryption_decryption():
     encryption_unavailable, reason="Parquet Encryption is not currently enabled"
 )
 def test_dataset_external_encryption_decryption():
-    if not os.path.exists(get_agent_library_path()):
+    agent_path = get_agent_library_path()
+    if not os.path.exists(agent_path):
         pytest.skip(
-            f"External DBPA agent library not found in path [{get_agent_library_path()}]"
+            f"External DBPA agent library not found in path [{agent_path}]"
         )
 
     table = create_sample_table()

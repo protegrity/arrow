@@ -515,8 +515,8 @@ class DatasetExternalConfigEncryptionTestBase
     }
   }
 
-  static Result<std::shared_ptr<Table>> ReadDataset(const std::shared_ptr<Dataset>& dataset,
-                                                    bool use_threads) {
+  static Result<std::shared_ptr<Table>> ReadDataset(
+      const std::shared_ptr<Dataset>& dataset, bool use_threads) {
     ARROW_ASSIGN_OR_RAISE(auto scanner_builder, dataset->NewScan());
     ARROW_EXPECT_OK(scanner_builder->UseThreads(use_threads));
     ARROW_ASSIGN_OR_RAISE(auto scanner, scanner_builder->Finish());
