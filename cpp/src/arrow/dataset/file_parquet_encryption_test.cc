@@ -411,8 +411,10 @@ class DatasetExternalConfigEncryptionTestBase
     parquet_encryption_config->crypto_factory = crypto_factory_;
     parquet_encryption_config->kms_connection_config = kms_connection_config_;
     parquet_encryption_config->encryption_config = nullptr;
-    parquet_encryption_config->external_encryption_config = std::move(external_encryption_config);
-    parquet_file_write_options->parquet_encryption_config = std::move(parquet_encryption_config);
+    parquet_encryption_config->external_encryption_config =
+        std::move(external_encryption_config);
+    parquet_file_write_options->parquet_encryption_config =
+        std::move(parquet_encryption_config);
 
     // Write dataset.
     auto dataset = std::make_shared<InMemoryDataset>(table_);
@@ -475,8 +477,10 @@ class DatasetExternalConfigEncryptionTestBase
     parquet_decryption_config->crypto_factory = crypto_factory_;
     parquet_decryption_config->kms_connection_config = kms_connection_config_;
     parquet_decryption_config->decryption_config = nullptr;
-    parquet_decryption_config->external_decryption_config = std::move(external_decryption_config);
-    parquet_scan_options->parquet_decryption_config = std::move(parquet_decryption_config);
+    parquet_decryption_config->external_decryption_config =
+        std::move(external_decryption_config);
+    parquet_scan_options->parquet_decryption_config =
+        std::move(parquet_decryption_config);
 
     auto file_format = std::make_shared<ParquetFileFormat>();
     file_format->default_fragment_scan_options = std::move(parquet_scan_options);
@@ -504,7 +508,8 @@ class DatasetExternalConfigEncryptionTestBase
     } else {
       ASSERT_OK_AND_ASSIGN(auto dataset, OpenDataset(kBaseDir, file_format));
       for (int i = 0; i < 2; ++i) {
-        ASSERT_OK_AND_ASSIGN(auto read_table, ReadDataset(dataset, /*use_threads=*/false));
+        ASSERT_OK_AND_ASSIGN(auto read_table,
+                             ReadDataset(dataset, /*use_threads=*/false));
         CheckDatasetResults(read_table);
       }
     }
@@ -541,7 +546,8 @@ class DatasetExternalConfigEncryptionTestBase
   std::shared_ptr<parquet::encryption::KmsConnectionConfig> kms_connection_config_;
 };
 
-class DatasetExternalConfigEncryptionTest : public DatasetExternalConfigEncryptionTestBase {
+class DatasetExternalConfigEncryptionTest
+    : public DatasetExternalConfigEncryptionTestBase {
  public:
   void PrepareTableAndPartitioning() override {
     auto table_schema = schema({field("a", int64()), field("c", int64()),
@@ -568,7 +574,7 @@ TEST_P(DatasetExternalConfigEncryptionTest, WriteReadDatasetWithExternalConfigs)
 
 TEST(DatasetExternalConfigEncryptionValidationTest, RejectBothEncryptionConfigs) {
   ASSERT_OK_AND_ASSIGN(auto file_system, fs::internal::MockFileSystem::Make(
-                                            std::chrono::system_clock::now(), {}));
+                                             std::chrono::system_clock::now(), {}));
   ASSERT_OK(file_system->CreateDir(std::string(kBaseDir)));
 
   // CryptoFactory + in-memory KMS
@@ -581,11 +587,12 @@ TEST(DatasetExternalConfigEncryptionValidationTest, RejectBothEncryptionConfigs)
       std::make_shared<parquet::encryption::TestOnlyInMemoryKmsClientFactory>(
           /*wrap_locally=*/true, key_map);
   crypto_factory->RegisterKmsClientFactory(std::move(kms_client_factory));
-  auto kms_connection_config = std::make_shared<parquet::encryption::KmsConnectionConfig>();
+  auto kms_connection_config =
+      std::make_shared<parquet::encryption::KmsConnectionConfig>();
 
   // Intentionally set BOTH standard and external encryption configs
-  auto encryption_config =
-      std::make_shared<parquet::encryption::EncryptionConfiguration>(std::string(kFooterKeyName));
+  auto encryption_config = std::make_shared<parquet::encryption::EncryptionConfiguration>(
+      std::string(kFooterKeyName));
   encryption_config->uniform_encryption = true;
 
   auto external_encryption_config =
@@ -622,11 +629,13 @@ TEST(DatasetExternalConfigEncryptionValidationTest, RejectBothEncryptionConfigs)
 }
 
 TEST(DatasetExternalConfigEncryptionValidationTest, RejectBothDecryptionConfigs) {
-  // Configure file format scan options with BOTH standard and external decryption configs.
+  // Configure file format scan options with BOTH standard and external decryption
+  // configs.
   auto parquet_scan_options = std::make_shared<ParquetFragmentScanOptions>();
 
   auto crypto_factory = std::make_shared<parquet::encryption::CryptoFactory>();
-  auto kms_connection_config = std::make_shared<parquet::encryption::KmsConnectionConfig>();
+  auto kms_connection_config =
+      std::make_shared<parquet::encryption::KmsConnectionConfig>();
 
   auto decryption_config =
       std::make_shared<parquet::encryption::DecryptionConfiguration>();

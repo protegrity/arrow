@@ -323,7 +323,8 @@ def test_dataset_external_encryption_decryption():
     )
 
     # Read path using parquet_decryption_config
-    pq_scan_opts = ds.ParquetFragmentScanOptions(decryption_config=parquet_decryption_cfg)
+    pq_scan_opts = ds.ParquetFragmentScanOptions(
+        decryption_config=parquet_decryption_cfg)
     pformat = pa.dataset.ParquetFileFormat(default_fragment_scan_options=pq_scan_opts)
     dataset = ds.dataset("sample_dataset_external", format=pformat, filesystem=mockfs)
     assert table.equals(dataset.to_table())

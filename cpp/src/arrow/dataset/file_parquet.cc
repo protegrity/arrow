@@ -104,7 +104,8 @@ parquet::ReaderProperties MakeReaderProperties(
   }
 #else
   if (parquet_scan_options->parquet_decryption_config != nullptr ||
-      parquet_scan_options->parquet_decryption_config->external_decryption_config != nullptr) {
+      parquet_scan_options->parquet_decryption_config->external_decryption_config !=
+          nullptr) {
     parquet::ParquetException::NYI("Encryption is not supported in this build.");
   }
 #endif

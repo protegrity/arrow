@@ -89,7 +89,8 @@ cdef class ParquetEncryptionConfig(_Weakrefable):
         if encryption_config is not None:
             self.c_config.get().encryption_config = pyarrow_unwrap_encryptionconfig(encryption_config)
         else:
-            self.c_config.get().external_encryption_config = pyarrow_unwrap_external_encryptionconfig(external_encryption_config)
+            self.c_config.get().external_encryption_config = pyarrow_unwrap_external_encryptionconfig(
+                external_encryption_config)
 
     @staticmethod
     cdef wrap(shared_ptr[CParquetEncryptionConfig] c_config):
