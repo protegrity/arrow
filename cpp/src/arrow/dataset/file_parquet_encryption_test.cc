@@ -27,6 +27,7 @@
 #include "arrow/dataset/parquet_encryption_config.h"
 #include "arrow/dataset/partition.h"
 #include "arrow/filesystem/mockfs.h"
+#include "arrow/io/memory.h"
 #include "arrow/status.h"
 #include "arrow/table.h"
 #include "arrow/testing/future_util.h"
@@ -40,6 +41,7 @@
 #include "parquet/encryption/crypto_factory.h"
 #include "parquet/encryption/encryption_internal.h"  // for EnsureBackendInitialized
 #include "parquet/encryption/encryption_utils.h"
+#include "parquet/encryption/external/test_utils.h"
 #include "parquet/encryption/kms_client.h"
 #include "parquet/encryption/test_in_memory_kms.h"
 
@@ -355,6 +357,294 @@ class DatasetEncryptionTest : public DatasetEncryptionTestBase<EncryptionTestPar
     partitioning_ = std::make_shared<HivePartitioning>(schema({field("part", utf8())}));
   }
 };
+
+// Base class to test writing and reading encrypted dataset using
+// ExternalEncryptionConfiguration / ExternalDecryptionConfiguration.
+class DatasetExternalConfigEncryptionTestBase : public testing::Test {
+ public:
+  void SetUp() override {
+#ifdef ARROW_VALGRIND
+    // Not necessary otherwise, but prevents a Valgrind leak by making sure
+    // OpenSSL initialization is done from the main thread
+    // (see GH-38304 for analysis).
+    ::parquet::encryption::EnsureBackendInitialized();
+#endif
+
+    EXPECT_OK_AND_ASSIGN(file_system_, fs::internal::MockFileSystem::Make(
+                                           std::chrono::system_clock::now(), {}));
+    ASSERT_OK(file_system_->CreateDir(std::string(kBaseDir)));
+
+    ASSERT_NO_FATAL_FAILURE(PrepareTableAndPartitioning());
+    ASSERT_OK_AND_ASSIGN(expected_table_, table_->CombineChunks());
+    ASSERT_OK_AND_ASSIGN(expected_table_, SortTable(expected_table_));
+
+    try {
+      library_path_ =
+          parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
+    } catch (const std::exception& e) {
+      GTEST_SKIP() << "External DBPA agent library not available: " << e.what();
+    }
+
+    // Configure CryptoFactory / KMS for dataset write & scan.
+    std::unordered_map<std::string, SecureString> key_map;
+    key_map.emplace(kColumnMasterKeyId, kColumnMasterKey);
+    key_map.emplace(kFooterKeyMasterKeyId, kFooterKeyMasterKey);
+
+    crypto_factory_ = std::make_shared<parquet::encryption::CryptoFactory>();
+    auto kms_client_factory =
+        std::make_shared<parquet::encryption::TestOnlyInMemoryKmsClientFactory>(
+            /*wrap_locally=*/true, key_map);
+    crypto_factory_->RegisterKmsClientFactory(std::move(kms_client_factory));
+    kms_connection_config_ = std::make_shared<parquet::encryption::KmsConnectionConfig>();
+
+    // External encryption config (this is what dataset plumbing should support).
+    auto external_encryption_config =
+        std::make_shared<parquet::encryption::ExternalEncryptionConfiguration>(
+            std::string(kFooterKeyName));
+    external_encryption_config->uniform_encryption = false;
+    // Encrypt column "a" with the default algorithm/key mapping.
+    external_encryption_config->column_keys = kColumnKeyMapping;
+    // Encrypt column "c" using the external algorithm.
+    external_encryption_config->per_column_encryption.emplace(
+        "c",
+        parquet::encryption::ColumnEncryptionAttributes{
+            parquet::ParquetCipher::EXTERNAL_DBPA_V1, std::string(kColumnMasterKeyId)});
+    external_encryption_config->app_context =
+        "{\"user_id\": \"dataset-test\", \"location\": \"test\"}";
+    external_encryption_config
+        ->configuration_properties[parquet::ParquetCipher::EXTERNAL_DBPA_V1] = {
+        {"agent_library_path", library_path_}};
+
+    auto file_format = std::make_shared<ParquetFileFormat>();
+    auto parquet_file_write_options =
+        checked_pointer_cast<ParquetFileWriteOptions>(file_format->DefaultWriteOptions());
+
+    auto parquet_encryption_config = std::make_shared<ParquetEncryptionConfig>();
+    parquet_encryption_config->crypto_factory = crypto_factory_;
+    parquet_encryption_config->kms_connection_config = kms_connection_config_;
+    parquet_encryption_config->encryption_config = nullptr;
+    parquet_encryption_config->external_encryption_config =
+        std::move(external_encryption_config);
+    parquet_file_write_options->parquet_encryption_config =
+        std::move(parquet_encryption_config);
+
+    // Write dataset.
+    auto dataset = std::make_shared<InMemoryDataset>(table_);
+    EXPECT_OK_AND_ASSIGN(auto scanner_builder, dataset->NewScan());
+    ARROW_EXPECT_OK(scanner_builder->UseThreads(false));
+    EXPECT_OK_AND_ASSIGN(auto scanner, scanner_builder->Finish());
+
+    FileSystemDatasetWriteOptions write_options;
+    write_options.file_write_options = parquet_file_write_options;
+    write_options.filesystem = file_system_;
+    write_options.base_dir = "external";
+    write_options.partitioning = partitioning_;
+    write_options.basename_template = "part{i}.parquet";
+    ASSERT_OK(FileSystemDataset::Write(write_options, std::move(scanner)));
+  }
+
+  virtual void PrepareTableAndPartitioning() = 0;
+
+  Result<std::shared_ptr<Dataset>> OpenDataset(
+      std::string_view base_dir, const std::shared_ptr<ParquetFileFormat>& file_format) {
+    fs::FileSelector selector;
+    selector.base_dir = base_dir;
+    selector.recursive = true;
+
+    FileSystemFactoryOptions factory_options;
+    factory_options.partitioning = partitioning_;
+    factory_options.partition_base_dir = base_dir;
+    ARROW_ASSIGN_OR_RAISE(auto dataset_factory,
+                          FileSystemDatasetFactory::Make(file_system_, selector,
+                                                         file_format, factory_options));
+    return dataset_factory->Finish();
+  }
+
+  void TestScanDataset() {
+    auto parquet_scan_options = std::make_shared<ParquetFragmentScanOptions>();
+
+    // External decryption config (this is what dataset plumbing should support).
+    auto external_decryption_config =
+        std::make_shared<parquet::encryption::ExternalDecryptionConfiguration>();
+    external_decryption_config->app_context =
+        "{\"user_id\": \"dataset-test\", \"location\": \"test\"}";
+    external_decryption_config
+        ->configuration_properties[parquet::ParquetCipher::EXTERNAL_DBPA_V1] = {
+        {"agent_library_path", library_path_}};
+
+    auto parquet_decryption_config = std::make_shared<ParquetDecryptionConfig>();
+    parquet_decryption_config->crypto_factory = crypto_factory_;
+    parquet_decryption_config->kms_connection_config = kms_connection_config_;
+    parquet_decryption_config->decryption_config = nullptr;
+    parquet_decryption_config->external_decryption_config =
+        std::move(external_decryption_config);
+    parquet_scan_options->parquet_decryption_config =
+        std::move(parquet_decryption_config);
+
+    auto file_format = std::make_shared<ParquetFileFormat>();
+    file_format->default_fragment_scan_options = std::move(parquet_scan_options);
+
+    ASSERT_OK_AND_ASSIGN(auto dataset, OpenDataset("external", file_format));
+    for (int i = 0; i < 2; ++i) {
+      ASSERT_OK_AND_ASSIGN(auto read_table, ReadDataset(dataset, /*use_threads=*/false));
+      CheckDatasetResults(read_table);
+    }
+  }
+
+  static Result<std::shared_ptr<Table>> ReadDataset(
+      const std::shared_ptr<Dataset>& dataset, bool use_threads) {
+    ARROW_ASSIGN_OR_RAISE(auto scanner_builder, dataset->NewScan());
+    ARROW_EXPECT_OK(scanner_builder->UseThreads(use_threads));
+    ARROW_ASSIGN_OR_RAISE(auto scanner, scanner_builder->Finish());
+    return scanner->ToTable();
+  }
+
+  void CheckDatasetResults(const std::shared_ptr<Table>& table) {
+    ASSERT_OK(table->ValidateFull());
+    ASSERT_OK_AND_ASSIGN(auto combined_table, table->CombineChunks());
+    ASSERT_OK_AND_ASSIGN(auto sorted_table, SortTable(combined_table));
+    AssertTablesEqual(*sorted_table, *expected_table_);
+  }
+
+  Result<std::shared_ptr<Table>> SortTable(const std::shared_ptr<Table>& table) {
+    compute::SortOptions options({compute::SortKey("a")});
+    ARROW_ASSIGN_OR_RAISE(auto indices, compute::SortIndices(table, options));
+    ARROW_ASSIGN_OR_RAISE(auto sorted, compute::Take(table, indices));
+    EXPECT_EQ(sorted.kind(), Datum::TABLE);
+    return sorted.table();
+  }
+
+ protected:
+  std::shared_ptr<fs::FileSystem> file_system_;
+  std::shared_ptr<Table> table_, expected_table_;
+  std::shared_ptr<Partitioning> partitioning_;
+  std::shared_ptr<parquet::encryption::CryptoFactory> crypto_factory_;
+  std::shared_ptr<parquet::encryption::KmsConnectionConfig> kms_connection_config_;
+  std::string library_path_;
+};
+
+class DatasetExternalConfigEncryptionTest
+    : public DatasetExternalConfigEncryptionTestBase {
+ public:
+  void PrepareTableAndPartitioning() override {
+    auto table_schema = schema({field("a", int64()), field("c", int64()),
+                                field("e", int64()), field("part", utf8())});
+    table_ = TableFromJSON(table_schema, {R"([
+                          [ 0, 9, 1, "a" ],
+                          [ 1, 8, 2, "a" ],
+                          [ 2, 7, 1, "c" ],
+                          [ 3, 6, 2, "c" ],
+                          [ 4, 5, 1, "e" ],
+                          [ 5, 4, 2, "e" ],
+                          [ 6, 3, 1, "g" ],
+                          [ 7, 2, 2, "g" ],
+                          [ 8, 1, 1, "i" ],
+                          [ 9, 0, 2, "i" ]
+                        ])"});
+    partitioning_ = std::make_shared<HivePartitioning>(schema({field("part", utf8())}));
+  }
+};
+
+TEST_F(DatasetExternalConfigEncryptionTest, WriteReadDatasetWithExternalConfigs) {
+  ASSERT_NO_FATAL_FAILURE(TestScanDataset());
+}
+
+TEST(DatasetExternalConfigEncryptionValidationTest, RejectBothEncryptionConfigs) {
+  ASSERT_OK_AND_ASSIGN(auto file_system, fs::internal::MockFileSystem::Make(
+                                             std::chrono::system_clock::now(), {}));
+  ASSERT_OK(file_system->CreateDir(std::string(kBaseDir)));
+
+  // CryptoFactory + in-memory KMS
+  std::unordered_map<std::string, SecureString> key_map;
+  key_map.emplace(kColumnMasterKeyId, kColumnMasterKey);
+  key_map.emplace(kFooterKeyMasterKeyId, kFooterKeyMasterKey);
+
+  auto crypto_factory = std::make_shared<parquet::encryption::CryptoFactory>();
+  auto kms_client_factory =
+      std::make_shared<parquet::encryption::TestOnlyInMemoryKmsClientFactory>(
+          /*wrap_locally=*/true, key_map);
+  crypto_factory->RegisterKmsClientFactory(std::move(kms_client_factory));
+  auto kms_connection_config =
+      std::make_shared<parquet::encryption::KmsConnectionConfig>();
+
+  // Intentionally set BOTH standard and external encryption configs
+  auto encryption_config = std::make_shared<parquet::encryption::EncryptionConfiguration>(
+      std::string(kFooterKeyName));
+  encryption_config->uniform_encryption = true;
+
+  auto external_encryption_config =
+      std::make_shared<parquet::encryption::ExternalEncryptionConfiguration>(
+          std::string(kFooterKeyName));
+  external_encryption_config->uniform_encryption = true;
+
+  auto parquet_encryption_config = std::make_shared<ParquetEncryptionConfig>();
+  parquet_encryption_config->crypto_factory = crypto_factory;
+  parquet_encryption_config->kms_connection_config = kms_connection_config;
+  parquet_encryption_config->encryption_config = encryption_config;
+  parquet_encryption_config->external_encryption_config = external_encryption_config;
+
+  auto file_format = std::make_shared<ParquetFileFormat>();
+  auto parquet_file_write_options =
+      checked_pointer_cast<ParquetFileWriteOptions>(file_format->DefaultWriteOptions());
+  parquet_file_write_options->parquet_encryption_config = parquet_encryption_config;
+
+  ASSERT_OK_AND_ASSIGN(auto sink, io::BufferOutputStream::Create());
+  auto table_schema = schema({field("a", int64()), field("part", utf8())});
+  fs::FileLocator destination_locator{file_system, "part0.parquet"};
+
+  try {
+    (void)file_format->MakeWriter(sink, table_schema, parquet_file_write_options,
+                                  destination_locator);
+    FAIL() << "Expected ParquetException";
+  } catch (const parquet::ParquetException& e) {
+    const std::string msg = e.what();
+    ASSERT_NE(
+        msg.find("Cannot set both encryption_config and external_encryption_config"),
+        std::string::npos)
+        << msg;
+  }
+}
+
+TEST(DatasetExternalConfigEncryptionValidationTest, RejectBothDecryptionConfigs) {
+  // Configure file format scan options with BOTH standard and external decryption
+  // configs.
+  auto parquet_scan_options = std::make_shared<ParquetFragmentScanOptions>();
+
+  auto crypto_factory = std::make_shared<parquet::encryption::CryptoFactory>();
+  auto kms_connection_config =
+      std::make_shared<parquet::encryption::KmsConnectionConfig>();
+
+  auto decryption_config =
+      std::make_shared<parquet::encryption::DecryptionConfiguration>();
+  auto external_decryption_config =
+      std::make_shared<parquet::encryption::ExternalDecryptionConfiguration>();
+
+  auto parquet_decryption_config = std::make_shared<ParquetDecryptionConfig>();
+  parquet_decryption_config->crypto_factory = crypto_factory;
+  parquet_decryption_config->kms_connection_config = kms_connection_config;
+  parquet_decryption_config->decryption_config = decryption_config;
+  parquet_decryption_config->external_decryption_config = external_decryption_config;
+
+  parquet_scan_options->parquet_decryption_config = parquet_decryption_config;
+
+  auto file_format = std::make_shared<ParquetFileFormat>();
+  file_format->default_fragment_scan_options = std::move(parquet_scan_options);
+
+  // The decryption-config validation runs before the file is opened/parsing begins,
+  // so the contents here don't matter.
+  auto buf = std::make_shared<Buffer>("not a parquet file");
+
+  try {
+    (void)file_format->Inspect(FileSource(buf));
+    FAIL() << "Expected ParquetException";
+  } catch (const parquet::ParquetException& e) {
+    const std::string msg = e.what();
+    ASSERT_NE(
+        msg.find("Cannot set both decryption_config and external_decryption_config"),
+        std::string::npos)
+        << msg;
+  }
+}
 
 // This test demonstrates the process of writing a partitioned Parquet file with the same
 // encryption properties applied to each file within the dataset. The encryption

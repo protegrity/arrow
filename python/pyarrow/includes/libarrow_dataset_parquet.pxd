@@ -28,11 +28,13 @@ cdef extern from "arrow/dataset/parquet_encryption_config.h" namespace "arrow::d
         shared_ptr[CCryptoFactory] crypto_factory
         shared_ptr[CKmsConnectionConfig] kms_connection_config
         shared_ptr[CEncryptionConfiguration] encryption_config
+        shared_ptr[CExternalEncryptionConfiguration] external_encryption_config
 
     cdef cppclass CParquetDecryptionConfig "arrow::dataset::ParquetDecryptionConfig":
         shared_ptr[CCryptoFactory] crypto_factory
         shared_ptr[CKmsConnectionConfig] kms_connection_config
         shared_ptr[CDecryptionConfiguration] decryption_config
+        shared_ptr[CExternalDecryptionConfiguration] external_decryption_config
 
 
 cdef extern from "arrow/dataset/api.h" namespace "arrow::dataset" nogil:
