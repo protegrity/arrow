@@ -201,6 +201,7 @@ if(ARROW_PARQUET)
                            SOURCES
                            file_parquet_encryption_test.cc
                            ${PROJECT_SOURCE_DIR}/src/parquet/encryption/test_in_memory_kms.cc
+                           ${PROJECT_SOURCE_DIR}/src/parquet/encryption/external/test_utils.cc
     )
   endif()
 endif()

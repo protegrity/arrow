@@ -24,6 +24,8 @@ class CryptoFactory;
 struct KmsConnectionConfig;
 struct EncryptionConfiguration;
 struct DecryptionConfiguration;
+struct ExternalEncryptionConfiguration;
+struct ExternalDecryptionConfiguration;
 }  // namespace parquet::encryption
 
 namespace arrow {
@@ -46,8 +48,15 @@ struct ARROW_DS_EXPORT ParquetEncryptionConfig {
   std::shared_ptr<parquet::encryption::KmsConnectionConfig> kms_connection_config;
 
   ///  Shared pointer to EncryptionConfiguration object, defining specific encryption
-  ///  settings for Parquet data, like keys for different columns.
+  ///  settings for Parquet data, like keys for different columns. If this is set,
+  ///  the external_encryption_config cannot be set.
   std::shared_ptr<parquet::encryption::EncryptionConfiguration> encryption_config;
+
+  ///  Shared pointer to ExternalEncryptionConfiguration object, defining specific
+  ///  encryption settings for Parquet data, which allows for different per-column
+  ///  encryption algorithms. If this is set, the encryption_config cannot be set.
+  std::shared_ptr<parquet::encryption::ExternalEncryptionConfiguration>
+      external_encryption_config;
 };
 
 /// \brief Core configuration class encapsulating parameters for high-level decryption
@@ -67,8 +76,16 @@ struct ARROW_DS_EXPORT ParquetDecryptionConfig {
   std::shared_ptr<parquet::encryption::KmsConnectionConfig> kms_connection_config;
 
   ///  Shared pointer to DecryptionConfiguration object, specifying decryption settings
-  ///  for reading encrypted Parquet data.
+  ///  for reading encrypted Parquet data. If this is set, the external_decryption_config
+  ///  cannot be set.
   std::shared_ptr<parquet::encryption::DecryptionConfiguration> decryption_config;
+
+  ///  Shared pointer to ExternalDecryptionConfiguration object, defining specific
+  ///  decryption settings for reading Parquet data which was encrypted with an
+  ///  ExternalEncryptionConfiguration.
+  ///  If this is set, the decryption_config cannot be set.
+  std::shared_ptr<parquet::encryption::ExternalDecryptionConfiguration>
+      external_decryption_config;
 };
 
 }  // namespace dataset
