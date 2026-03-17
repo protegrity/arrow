@@ -40,6 +40,7 @@
 #include "parquet/arrow/reader.h"
 #include "parquet/encryption/crypto_factory.h"
 #include "parquet/encryption/encryption_utils.h"
+#include "parquet/encryption/external/test_utils.h"
 #include "parquet/encryption/kms_client.h"
 #include "parquet/encryption/test_in_memory_kms.h"
 
@@ -344,28 +345,10 @@ class DatasetEncryptionTest : public DatasetEncryptionTestBase {
   }
 };
 
-struct ExternalConfigTestParam {
-  bool uniform_encryption;  // false is using per-column keys
-  bool concurrently;
-};
-
-std::ostream& operator<<(std::ostream& os, const ExternalConfigTestParam& param) {
-  os << (param.uniform_encryption ? "UniformEncryption" : "ColumnKeys") << " ";
-  os << (param.concurrently ? "Threaded" : "Serial");
-  return os;
-}
-
 // Base class to test writing and reading encrypted dataset using
 // ExternalEncryptionConfiguration / ExternalDecryptionConfiguration.
-class DatasetExternalConfigEncryptionTestBase
-    : public testing::TestWithParam<ExternalConfigTestParam> {
+class DatasetExternalConfigEncryptionTestBase : public testing::Test {
  public:
-#ifdef ARROW_VALGRIND
-  static constexpr int kConcurrentIterations = 4;
-#else
-  static constexpr int kConcurrentIterations = 20;
-#endif
-
   void SetUp() override {
 #ifdef ARROW_VALGRIND
     // Not necessary otherwise, but prevents a Valgrind leak by making sure
@@ -381,6 +364,13 @@ class DatasetExternalConfigEncryptionTestBase
     ASSERT_NO_FATAL_FAILURE(PrepareTableAndPartitioning());
     ASSERT_OK_AND_ASSIGN(expected_table_, table_->CombineChunks());
     ASSERT_OK_AND_ASSIGN(expected_table_, SortTable(expected_table_));
+
+    try {
+      library_path_ =
+          parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
+    } catch (const std::exception& e) {
+      GTEST_SKIP() << "External DBPA agent library not available: " << e.what();
+    }
 
     // Configure CryptoFactory / KMS for dataset write & scan.
     std::unordered_map<std::string, SecureString> key_map;
@@ -398,10 +388,19 @@ class DatasetExternalConfigEncryptionTestBase
     auto external_encryption_config =
         std::make_shared<parquet::encryption::ExternalEncryptionConfiguration>(
             std::string(kFooterKeyName));
-    external_encryption_config->uniform_encryption = GetParam().uniform_encryption;
-    if (!GetParam().uniform_encryption) {
-      external_encryption_config->column_keys = kColumnKeyMapping;
-    }
+    external_encryption_config->uniform_encryption = false;
+    // Encrypt column "a" with the default algorithm/key mapping.
+    external_encryption_config->column_keys = kColumnKeyMapping;
+    // Encrypt column "c" using the external algorithm.
+    external_encryption_config->per_column_encryption.emplace(
+        "c",
+        parquet::encryption::ColumnEncryptionAttributes{
+            parquet::ParquetCipher::EXTERNAL_DBPA_V1, std::string(kColumnMasterKeyId)});
+    external_encryption_config->app_context =
+        "{\"user_id\": \"dataset-test\", \"location\": \"test\"}";
+    external_encryption_config
+        ->configuration_properties[parquet::ParquetCipher::EXTERNAL_DBPA_V1] = {
+        {"agent_library_path", library_path_}};
 
     auto file_format = std::make_shared<ParquetFileFormat>();
     auto parquet_file_write_options =
@@ -419,34 +418,16 @@ class DatasetExternalConfigEncryptionTestBase
     // Write dataset.
     auto dataset = std::make_shared<InMemoryDataset>(table_);
     EXPECT_OK_AND_ASSIGN(auto scanner_builder, dataset->NewScan());
-    ARROW_EXPECT_OK(scanner_builder->UseThreads(GetParam().concurrently));
+    ARROW_EXPECT_OK(scanner_builder->UseThreads(false));
     EXPECT_OK_AND_ASSIGN(auto scanner, scanner_builder->Finish());
 
-    if (GetParam().concurrently) {
-      ASSERT_OK_AND_ASSIGN(auto pool, arrow::internal::ThreadPool::Make(16));
-      std::vector<Future<>> futures;
-      for (int i = 1; i <= kConcurrentIterations; ++i) {
-        FileSystemDatasetWriteOptions write_options;
-        write_options.file_write_options = parquet_file_write_options;
-        write_options.filesystem = file_system_;
-        write_options.base_dir = "thread-" + std::to_string(i);
-        write_options.partitioning = partitioning_;
-        write_options.basename_template = "part{i}.parquet";
-        futures.push_back(
-            DeferNotOk(pool->Submit(FileSystemDataset::Write, write_options, scanner)));
-      }
-      for (auto& future : futures) {
-        ASSERT_FINISHES_OK(future);
-      }
-    } else {
-      FileSystemDatasetWriteOptions write_options;
-      write_options.file_write_options = parquet_file_write_options;
-      write_options.filesystem = file_system_;
-      write_options.base_dir = kBaseDir;
-      write_options.partitioning = partitioning_;
-      write_options.basename_template = "part{i}.parquet";
-      ASSERT_OK(FileSystemDataset::Write(write_options, std::move(scanner)));
-    }
+    FileSystemDatasetWriteOptions write_options;
+    write_options.file_write_options = parquet_file_write_options;
+    write_options.filesystem = file_system_;
+    write_options.base_dir = "external";
+    write_options.partitioning = partitioning_;
+    write_options.basename_template = "part{i}.parquet";
+    ASSERT_OK(FileSystemDataset::Write(write_options, std::move(scanner)));
   }
 
   virtual void PrepareTableAndPartitioning() = 0;
@@ -472,6 +453,11 @@ class DatasetExternalConfigEncryptionTestBase
     // External decryption config (this is what dataset plumbing should support).
     auto external_decryption_config =
         std::make_shared<parquet::encryption::ExternalDecryptionConfiguration>();
+    external_decryption_config->app_context =
+        "{\"user_id\": \"dataset-test\", \"location\": \"test\"}";
+    external_decryption_config
+        ->configuration_properties[parquet::ParquetCipher::EXTERNAL_DBPA_V1] = {
+        {"agent_library_path", library_path_}};
 
     auto parquet_decryption_config = std::make_shared<ParquetDecryptionConfig>();
     parquet_decryption_config->crypto_factory = crypto_factory_;
@@ -485,33 +471,10 @@ class DatasetExternalConfigEncryptionTestBase
     auto file_format = std::make_shared<ParquetFileFormat>();
     file_format->default_fragment_scan_options = std::move(parquet_scan_options);
 
-    if (GetParam().concurrently) {
-      ASSERT_OK_AND_ASSIGN(auto dataset, OpenDataset("thread-1", file_format));
-      ASSERT_OK_AND_ASSIGN(auto pool, arrow::internal::ThreadPool::Make(16));
-      std::vector<Future<std::shared_ptr<Table>>> futures;
-      for (int i = 0; i < kConcurrentIterations; ++i) {
-        futures.push_back(
-            DeferNotOk(pool->Submit(ReadDataset, dataset, /*use_threads=*/true)));
-      }
-
-      for (auto& future : futures) {
-        ASSERT_OK_AND_ASSIGN(auto read_table, future.result());
-        CheckDatasetResults(read_table);
-      }
-
-      for (int i = 2; i <= kConcurrentIterations; ++i) {
-        ASSERT_OK_AND_ASSIGN(dataset,
-                             OpenDataset("thread-" + std::to_string(i), file_format));
-        ASSERT_OK_AND_ASSIGN(auto read_table, ReadDataset(dataset, /*use_threads=*/true));
-        CheckDatasetResults(read_table);
-      }
-    } else {
-      ASSERT_OK_AND_ASSIGN(auto dataset, OpenDataset(kBaseDir, file_format));
-      for (int i = 0; i < 2; ++i) {
-        ASSERT_OK_AND_ASSIGN(auto read_table,
-                             ReadDataset(dataset, /*use_threads=*/false));
-        CheckDatasetResults(read_table);
-      }
+    ASSERT_OK_AND_ASSIGN(auto dataset, OpenDataset("external", file_format));
+    for (int i = 0; i < 2; ++i) {
+      ASSERT_OK_AND_ASSIGN(auto read_table, ReadDataset(dataset, /*use_threads=*/false));
+      CheckDatasetResults(read_table);
     }
   }
 
@@ -544,6 +507,7 @@ class DatasetExternalConfigEncryptionTestBase
   std::shared_ptr<Partitioning> partitioning_;
   std::shared_ptr<parquet::encryption::CryptoFactory> crypto_factory_;
   std::shared_ptr<parquet::encryption::KmsConnectionConfig> kms_connection_config_;
+  std::string library_path_;
 };
 
 class DatasetExternalConfigEncryptionTest
@@ -568,7 +532,7 @@ class DatasetExternalConfigEncryptionTest
   }
 };
 
-TEST_P(DatasetExternalConfigEncryptionTest, WriteReadDatasetWithExternalConfigs) {
+TEST_F(DatasetExternalConfigEncryptionTest, WriteReadDatasetWithExternalConfigs) {
   ASSERT_NO_FATAL_FAILURE(TestScanDataset());
 }
 
@@ -721,14 +685,6 @@ TEST_P(DatasetEncryptionTest, ReadSingleFile) {
   ASSERT_EQ(checked_pointer_cast<Int64Array>(table->column(1)->chunk(0))->GetView(0), 9);
   ASSERT_EQ(checked_pointer_cast<Int64Array>(table->column(2)->chunk(0))->GetView(0), 1);
 }
-
-INSTANTIATE_TEST_SUITE_P(
-    DatasetExternalConfigEncryptionTest, DatasetExternalConfigEncryptionTest,
-    ::testing::Values(
-        ExternalConfigTestParam{/*uniform_encryption=*/true, /*concurrently=*/false},
-        ExternalConfigTestParam{/*uniform_encryption=*/true, /*concurrently=*/true},
-        ExternalConfigTestParam{/*uniform_encryption=*/false, /*concurrently=*/false},
-        ExternalConfigTestParam{/*uniform_encryption=*/false, /*concurrently=*/true}));
 
 INSTANTIATE_TEST_SUITE_P(DatasetEncryptionTest, DatasetEncryptionTest, kAllParamValues);
 

@@ -100,6 +100,8 @@ parquet::ReaderProperties MakeReaderProperties(
           parquet_decrypt_config->crypto_factory->GetExternalFileDecryptionProperties(
               *parquet_decrypt_config->kms_connection_config,
               *parquet_decrypt_config->external_decryption_config, path, filesystem);
+    } else {
+      throw parquet::ParquetException("No file decryption config given");
     }
   }
 #else
