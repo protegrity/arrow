@@ -282,9 +282,7 @@ if(PARQUET_REQUIRE_ENCRYPTION)
   # DBPS interface (header-only)
   fetchcontent_declare(dbps_agent
                        GIT_REPOSITORY https://github.com/protegrity/DataBatchProtectionService.git
-                       #TODO: Change to a specific tag/commit when we have one.
-                       #https://github.com/protegrity/arrow/issues/179
-                       GIT_TAG 6206fb0e27556a0df9160364caa3819e4af3fe0f
+                       GIT_TAG release_stable_v0.1
                        GIT_SHALLOW FALSE)
 
   fetchcontent_getproperties(dbps_agent)
