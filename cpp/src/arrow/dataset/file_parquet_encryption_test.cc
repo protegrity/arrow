@@ -39,7 +39,7 @@
 #include "arrow/util/thread_pool.h"
 #include "parquet/arrow/reader.h"
 #include "parquet/encryption/crypto_factory.h"
-#include "parquet/encryption/encryption_internal.h"  // for EnsureBackendInitialized
+#include "parquet/encryption/encryption_utils.h"  // for EnsureBackendInitialized
 #include "parquet/encryption/encryption_utils.h"
 #include "parquet/encryption/external/test_utils.h"
 #include "parquet/encryption/kms_client.h"
@@ -54,6 +54,7 @@ constexpr std::string_view kFooterKeyName = "footer_key";
 const SecureString kColumnMasterKey("1234567890123450");
 constexpr std::string_view kColumnMasterKeyId = "col_key";
 constexpr std::string_view kColumnName = "a";
+constexpr std::string_view kColumnKeyMapping = "col_key: a";
 
 constexpr std::string_view kBaseDir = "";
 

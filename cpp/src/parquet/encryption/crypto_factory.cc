@@ -315,7 +315,7 @@ ColumnPathToEncryptionPropertiesMap CryptoFactory::GetColumnEncryptionProperties
           key_wrapper->GetEncryptionKeyMetadata(column_key, column_key_id, false);
 
       std::shared_ptr<ColumnEncryptionProperties> cmd =
-          ColumnEncryptionProperties::Builder()
+          ColumnEncryptionProperties::Builder(column_name)
               .key(column_key)
               ->key_metadata(column_key_key_metadata)
               ->build();

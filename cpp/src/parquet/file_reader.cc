@@ -282,7 +282,7 @@ class SerializedRowGroup : public RowGroupReader::Contents {
       throw ParquetException("Encrypted files cannot contain more than 32767 columns");
     }
 
-    const ColumnDescriptor* descr = file_metadata_->schema()->Column(i);
+    descr = file_metadata_->schema()->Column(i);
     CryptoContext ctx{
         col->has_dictionary_page(),        static_cast<int16_t>(row_group_ordinal_),
         static_cast<int16_t>(i),           descr,
