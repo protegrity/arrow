@@ -318,7 +318,7 @@ std::shared_ptr<KeyValueMetadata> ExternalDBPAEncryptorAdapter::GetKeyValueMetad
 }  // GetKeyValueMetadata()
 
 int32_t ExternalDBPAEncryptorAdapter::EncryptWithManagedBuffer(
-    ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+    std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
     std::unique_ptr<EncodingProperties> encoding_properties) {
   if (encoding_properties == nullptr) {
     ARROW_LOG(ERROR) << "ExternalDBPAEncryptorAdapter:: encoding_properties is nullptr";
@@ -331,15 +331,15 @@ int32_t ExternalDBPAEncryptorAdapter::EncryptWithManagedBuffer(
 }
 
 int32_t ExternalDBPAEncryptorAdapter::SignedFooterEncrypt(
-    ::arrow::util::span<const uint8_t> footer, ::arrow::util::span<const uint8_t> key,
-    ::arrow::util::span<const uint8_t> aad, ::arrow::util::span<const uint8_t> nonce,
-    ::arrow::util::span<uint8_t> encrypted_footer) {
+    std::span<const uint8_t> footer, std::span<const uint8_t> key,
+    std::span<const uint8_t> aad, std::span<const uint8_t> nonce,
+    std::span<uint8_t> encrypted_footer) {
   throw ParquetException(
       "ExternalDBPAEncryptorAdapter::SignedFooterEncrypt is not supported");
 }
 
 int32_t ExternalDBPAEncryptorAdapter::InvokeExternalEncrypt(
-    ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+    std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
     std::unique_ptr<EncodingProperties> encoding_properties) {
   if (::arrow::util::ArrowLog::IsLevelEnabled(
           ::arrow::util::ArrowLogLevel::ARROW_DEBUG)) {
@@ -554,7 +554,7 @@ int32_t ExternalDBPADecryptorAdapter::CiphertextLength(int32_t plaintext_len) co
 }
 
 int32_t ExternalDBPADecryptorAdapter::DecryptWithManagedBuffer(
-    ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+    std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
     std::unique_ptr<EncodingProperties> encoding_properties) {
   if (encoding_properties == nullptr) {
     ARROW_LOG(ERROR) << "ExternalDBPADecryptorAdapter:: encoding_properties is nullptr";
@@ -568,7 +568,7 @@ int32_t ExternalDBPADecryptorAdapter::DecryptWithManagedBuffer(
 }
 
 int32_t ExternalDBPADecryptorAdapter::InvokeExternalDecrypt(
-    ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+    std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
     std::map<std::string, std::string> encoding_attrs) {
   if (::arrow::util::ArrowLog::IsLevelEnabled(
           ::arrow::util::ArrowLogLevel::ARROW_DEBUG)) {

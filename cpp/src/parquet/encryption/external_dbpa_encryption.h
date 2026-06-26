@@ -20,6 +20,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <dbpa_interface.h>
@@ -55,9 +56,9 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 
   /// Encryption not supported as we cannot calculate the ciphertext before encryption.
   int32_t Encrypt(
-      ::arrow::util::span<const uint8_t> plaintext,
-      ::arrow::util::span<const uint8_t> key, ::arrow::util::span<const uint8_t> aad,
-      ::arrow::util::span<uint8_t> ciphertext,
+      std::span<const uint8_t> plaintext,
+      std::span<const uint8_t> key, std::span<const uint8_t> aad,
+      std::span<uint8_t> ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     std::stringstream ss;
     ss << "Encrypt is not supported in ExternalDBPAEncryptorAdapter, ";
@@ -68,15 +69,15 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
   /// Encrypt the plaintext and leave the results in the ciphertext buffer.
   /// The buffer will be resized to the appropriate size by the agent during encryption.
   int32_t EncryptWithManagedBuffer(
-      ::arrow::util::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+      std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
   /// Encrypts plaintext footer, in order to compute footer signature (tag).
-  int32_t SignedFooterEncrypt(::arrow::util::span<const uint8_t> footer,
-                              ::arrow::util::span<const uint8_t> key,
-                              ::arrow::util::span<const uint8_t> aad,
-                              ::arrow::util::span<const uint8_t> nonce,
-                              ::arrow::util::span<uint8_t> encrypted_footer) override;
+  int32_t SignedFooterEncrypt(std::span<const uint8_t> footer,
+                              std::span<const uint8_t> key,
+                              std::span<const uint8_t> aad,
+                              std::span<const uint8_t> nonce,
+                              std::span<uint8_t> encrypted_footer) override;
 
   std::shared_ptr<KeyValueMetadata> GetKeyValueMetadata(int8_t module_type) override;
 
@@ -91,7 +92,7 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
       std::map<std::string, std::string> configuration_properties,
       std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
 
-  int32_t InvokeExternalEncrypt(::arrow::util::span<const uint8_t> plaintext,
+  int32_t InvokeExternalEncrypt(std::span<const uint8_t> plaintext,
                                 ::arrow::ResizableBuffer* ciphertext,
                                 std::unique_ptr<EncodingProperties> encoding_properties);
 
@@ -190,9 +191,9 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   /// Decrypt is not supported as we cannot calculate the plaintext length before
   /// decryption.
   int32_t Decrypt(
-      ::arrow::util::span<const uint8_t> ciphertext,
-      ::arrow::util::span<const uint8_t> key, ::arrow::util::span<const uint8_t> aad,
-      ::arrow::util::span<uint8_t> plaintext,
+      std::span<const uint8_t> ciphertext,
+      std::span<const uint8_t> key, std::span<const uint8_t> aad,
+      std::span<uint8_t> plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     std::stringstream ss;
     ss << "Decrypt is not supported in ExternalDBPADecryptorAdapter, ";
@@ -205,7 +206,7 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   /// is used when the decryptor cannot calculate the plaintext length before
   /// decryption.
   int32_t DecryptWithManagedBuffer(
-      ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
  private:
@@ -219,7 +220,7 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
       std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance,
       std::shared_ptr<const KeyValueMetadata> key_value_metadata);
 
-  int32_t InvokeExternalDecrypt(::arrow::util::span<const uint8_t> ciphertext,
+  int32_t InvokeExternalDecrypt(std::span<const uint8_t> ciphertext,
                                 ::arrow::ResizableBuffer* plaintext,
                                 std::map<std::string, std::string> encoding_attrs);
 

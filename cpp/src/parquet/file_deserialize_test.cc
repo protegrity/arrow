@@ -24,6 +24,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -1041,17 +1042,17 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
     return plaintext_len;
   }
 
-  int32_t Decrypt(::arrow::util::span<const uint8_t> ciphertext,
-                  ::arrow::util::span<const uint8_t> /*key*/,
-                  ::arrow::util::span<const uint8_t> /*aad*/,
-                  ::arrow::util::span<uint8_t> plaintext,
+  int32_t Decrypt(std::span<const uint8_t> ciphertext,
+                  std::span<const uint8_t> /*key*/,
+                  std::span<const uint8_t> /*aad*/,
+                  std::span<uint8_t> plaintext,
                   std::unique_ptr<parquet::encryption::EncodingProperties>
                       encoding_properties) override {
     throw ParquetException("Decrypt not supported");
   }
 
   int32_t DecryptWithManagedBuffer(
-      ::arrow::util::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::unique_ptr<parquet::encryption::EncodingProperties> encoding_properties)
       override {
     PARQUET_THROW_NOT_OK(plaintext->Resize(ciphertext.size()));
@@ -1140,6 +1141,7 @@ class EncodingPropertiesSerdeTest : public TestPageSerde {
     EndStream();
     auto stream = std::make_shared<::arrow::io::BufferReader>(out_buffer_);
     page_reader_ = PageReader::Open(stream, num_rows, codec, properties,
+                                    *crypto_ctx.column_descriptor,
                                     /*always_compressed=*/false, &crypto_ctx);
   }
 };

@@ -501,8 +501,6 @@ def test_encrypted_parquet_kms_configuration():
     validate_kms_connection_config(kms_connection_config_1)
 
 
-@pytest.mark.xfail(reason="Plaintext footer - reading plaintext column subset"
-                   " reads encrypted columns too")
 def test_encrypted_parquet_write_read_plain_footer_single_wrapping(
         tempdir, data_table):
     """Write an encrypted parquet, with plaintext footer
