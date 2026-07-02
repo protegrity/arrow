@@ -31,7 +31,7 @@ using parquet::ParquetCipher;
 
 namespace parquet::encryption {
 
-class AesCryptoContext {
+class PARQUET_EXPORT AesCryptoContext {
  public:
   AesCryptoContext(ParquetCipher::type alg_id, int32_t key_len, bool metadata,
                    bool include_length);
@@ -72,8 +72,8 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
 
   /// Start of Encryptor Interface methods.
 
-  /// Signal whether the encryptor can calculate a valid ciphertext length before performing
-  /// encryption.
+  /// Signal whether the encryptor can calculate a valid ciphertext length
+  /// before performing encryption.
   [[nodiscard]] bool CanCalculateCiphertextLength() const override { return true; }
 
   /// The size of the ciphertext, for this cipher and the specified plaintext length.
@@ -106,22 +106,23 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
   /// End of Encryptor Interface methods.
 
  private:
-   [[nodiscard]] CipherContext MakeCipherContext() const;
+  [[nodiscard]] CipherContext MakeCipherContext() const;
 
-   int32_t GcmEncrypt(std::span<const uint8_t> plaintext,
-                      std::span<const uint8_t> key,
-                      std::span<const uint8_t> nonce,
-                      std::span<const uint8_t> aad,
-                      std::span<uint8_t> ciphertext);
+  int32_t GcmEncrypt(std::span<const uint8_t> plaintext,
+                     std::span<const uint8_t> key,
+                     std::span<const uint8_t> nonce,
+                     std::span<const uint8_t> aad,
+                     std::span<uint8_t> ciphertext);
 
-   int32_t CtrEncrypt(std::span<const uint8_t> plaintext,
-                      std::span<const uint8_t> key,
-                      std::span<const uint8_t> nonce,
-                      std::span<uint8_t> ciphertext);
+  int32_t CtrEncrypt(std::span<const uint8_t> plaintext,
+                     std::span<const uint8_t> key,
+                     std::span<const uint8_t> nonce,
+                     std::span<uint8_t> ciphertext);
 };
 
-// AesEncryptor supports only three key lengths: 16, 24, 32 bytes, so at most there could be
-// up to three types of meta_encryptors and data_encryptors. This factory uses a cache to
+// AesEncryptor supports only three key lengths: 16, 24, 32 bytes, so at most
+// there could be up to three types of meta_encryptors and data_encryptors.
+// This factory uses a cache to
 // store the encryptors for the different key lengths.
 class AesEncryptorFactory {
  public:
@@ -155,10 +156,10 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
 
   /// Start of Decryptor Interface methods.
 
-  /// Signal whether the decryptor can calculate a valid plaintext or ciphertext length before 
-  /// performing decryption or not. If false, a proper sized buffer cannot be allocated before 
-  /// calling the Decrypt method, and Arrow must use this decryptor's DecryptWithManagedBuffer
-  /// method instead of Decrypt.
+  /// Signal whether the decryptor can calculate a valid plaintext or ciphertext
+  /// length before performing decryption or not. If false, a proper sized buffer
+  /// cannot be allocated before calling the Decrypt method, and Arrow must use
+  /// this decryptor's DecryptWithManagedBuffer method instead of Decrypt.
   [[nodiscard]] bool CanCalculateLengths() const override { return true; }
 
   /// The size of the plaintext, for this cipher and the specified ciphertext length.

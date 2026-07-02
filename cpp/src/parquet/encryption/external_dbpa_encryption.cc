@@ -23,6 +23,10 @@
 #include <unordered_map>
 #include <vector>
 
+// Must be included before external_dbpa_encryption.h so the DBPS SDK types are
+// complete when the header's forward-declared classes are first used.
+#include <dbpa_interface.h>
+
 #include "arrow/util/key_value_metadata.h"
 #include "arrow/util/logging.h"
 #include "parquet/encryption/encryption_utils.h"
@@ -43,6 +47,11 @@ using dbps::external::DecryptionResult;
 using dbps::external::EncryptionResult;
 
 namespace parquet::encryption {
+
+// Destructor definitions for classes that hold std::unique_ptr to the forward-declared
+// DataBatchProtectionAgentInterface; defined here where the type is complete.
+ExternalDBPAEncryptorAdapter::~ExternalDBPAEncryptorAdapter() = default;
+ExternalDBPADecryptorAdapter::~ExternalDBPADecryptorAdapter() = default;
 
 namespace {
 // Utility function to load and initialize a DataBatchProtectionAgentInterface instance

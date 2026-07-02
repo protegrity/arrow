@@ -40,7 +40,6 @@
 #include "parquet/arrow/reader.h"
 #include "parquet/encryption/crypto_factory.h"
 #include "parquet/encryption/encryption_utils.h"  // for EnsureBackendInitialized
-#include "parquet/encryption/encryption_utils.h"
 #include "parquet/encryption/external/test_utils.h"
 #include "parquet/encryption/kms_client.h"
 #include "parquet/encryption/test_in_memory_kms.h"

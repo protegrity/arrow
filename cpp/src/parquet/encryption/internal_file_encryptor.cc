@@ -163,7 +163,8 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
     const ColumnChunkMetaDataBuilder* column_chunk_metadata) {
   if (algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
     if (dynamic_cast<ExternalFileEncryptionProperties*>(properties_) == nullptr) {
-      throw ParquetException("External DBPA encryption requires ExternalFileEncryptionProperties.");
+      throw ParquetException(
+          "External DBPA encryption requires ExternalFileEncryptionProperties.");
     }
 
     return external_dbpa_encryptor_factory_.GetEncryptor(

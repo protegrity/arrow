@@ -75,60 +75,55 @@ def write_parquet(table, location, encryption_config=None):
         raise ValueError(
             f"Invalid SCENARIO_ID: {scenario_id_raw!r} (must be an integer)") from e
 
-    match scenario_id:
-        case 1:
-            # Case 1: Uncompressed data, using plain data encoding.
-            print("\n!! Writing uncompressed data, with plain data encoding. !!\n")
-            pp.write_table(table, location, use_dictionary=False,
-                           encryption_properties=encryption_properties,
-                           compression="NONE")
-        case 2:
-            # Case 2: Compressed data, using RLE dictionary encoding.
-            print(
-                "\n!! Writing compressed data, with RLE dictionary encoding. !!\n")
-            pp.write_table(table, location, use_dictionary=True,
-                           encryption_properties=encryption_properties,
-                           compression="SNAPPY")
-        case 3:
-            # Case 3: Uncompressed data, using RLE dictionary encoding.
-            print(
-                "\n!! Writing uncompressed data, with RLE dictionary encoding. !!\n")
-            pp.write_table(table, location, use_dictionary=True,
-                           encryption_properties=encryption_properties,
-                           compression="NONE")
-
-        case 4:
-            # Case 4: Compressed data, using plain data encoding and data
-            # page version 1.0.
-            print("\n!! Writing compressed data, "
-                  "with plain data encoding and page version 1.0 !!\n")
-            pp.write_table(table, location, data_page_version="1.0",
-                           use_dictionary=False,
-                           encryption_properties=encryption_properties,
-                           compression="SNAPPY")
-
-        case 5:
-            # Case 5: Compressed data, using plain data encoding and data page
-            # version 2.0.
-            print("\n!! Writing compressed data, with plain data encoding "
-                  "and page version 2.0. !!\n")
-            pp.write_table(table, location, data_page_version="2.0",
-                           use_dictionary=False,
-                           encryption_properties=encryption_properties,
-                           compression="SNAPPY")
-
-        case 6:
-            # Case 6: Compressed data (using unsupported compression), using plain
-            # data encoding and data page version 2.0.
-            print("\n!! Writing compressed data (using unsupported compression), "
-                  "with plain data encoding and page version 2.0. !!\n")
-            pp.write_table(table, location, data_page_version="2.0",
-                           use_dictionary=False,
-                           encryption_properties=encryption_properties,
-                           compression="GZIP")
-
-        case _:
-            raise ValueError(f"Invalid scenario ID: {scenario_id}")
+    if scenario_id == 1:
+        # Case 1: Uncompressed data, using plain data encoding.
+        print("\n!! Writing uncompressed data, with plain data encoding. !!\n")
+        pp.write_table(table, location, use_dictionary=False,
+                       encryption_properties=encryption_properties,
+                       compression="NONE")
+    elif scenario_id == 2:
+        # Case 2: Compressed data, using RLE dictionary encoding.
+        print(
+            "\n!! Writing compressed data, with RLE dictionary encoding. !!\n")
+        pp.write_table(table, location, use_dictionary=True,
+                       encryption_properties=encryption_properties,
+                       compression="SNAPPY")
+    elif scenario_id == 3:
+        # Case 3: Uncompressed data, using RLE dictionary encoding.
+        print(
+            "\n!! Writing uncompressed data, with RLE dictionary encoding. !!\n")
+        pp.write_table(table, location, use_dictionary=True,
+                       encryption_properties=encryption_properties,
+                       compression="NONE")
+    elif scenario_id == 4:
+        # Case 4: Compressed data, using plain data encoding and data
+        # page version 1.0.
+        print("\n!! Writing compressed data, "
+              "with plain data encoding and page version 1.0 !!\n")
+        pp.write_table(table, location, data_page_version="1.0",
+                       use_dictionary=False,
+                       encryption_properties=encryption_properties,
+                       compression="SNAPPY")
+    elif scenario_id == 5:
+        # Case 5: Compressed data, using plain data encoding and data page
+        # version 2.0.
+        print("\n!! Writing compressed data, with plain data encoding "
+              "and page version 2.0. !!\n")
+        pp.write_table(table, location, data_page_version="2.0",
+                       use_dictionary=False,
+                       encryption_properties=encryption_properties,
+                       compression="SNAPPY")
+    elif scenario_id == 6:
+        # Case 6: Compressed data (using unsupported compression), using plain
+        # data encoding and data page version 2.0.
+        print("\n!! Writing compressed data (using unsupported compression), "
+              "with plain data encoding and page version 2.0. !!\n")
+        pp.write_table(table, location, data_page_version="2.0",
+                       use_dictionary=False,
+                       encryption_properties=encryption_properties,
+                       compression="GZIP")
+    else:
+        raise ValueError(f"Invalid scenario ID: {scenario_id}")
 
 
 def encrypted_data_and_footer_sample(data_table):

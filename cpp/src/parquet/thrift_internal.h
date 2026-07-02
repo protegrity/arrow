@@ -610,12 +610,12 @@ class ThriftDeserializer {
       // thrift message is not encrypted
       DeserializeUnencryptedMessage(buf, len, deserialized_msg);
     } else {
-      // This method is only used to deserialize metadata or footer data, so it is not expected 
-      // to be called with a decryptor that can't calculate lengths.
+      // This method is only used to deserialize metadata or footer data, so it
+      // is not expected to be called with a decryptor that can't calculate lengths.
       if (!decryptor->CanCalculateLengths()) {
         std::stringstream ss;
-        ss << "Decryptor can't calculate plaintext or ciphertext lengths when deserializing ";
-        ss << "metadata or footer and should not be used to deserialize metadata or footer data";
+        ss << "Decryptor can't calculate plaintext or ciphertext lengths ";
+        ss << "when deserializing metadata or footer data";
         throw ParquetException(ss.str());
       }
 
@@ -741,13 +741,16 @@ class ThriftSerializer {
     int32_t cipher_buffer_len;
     std::shared_ptr<ResizableBuffer> cipher_buffer;
     if (encryptor->CanCalculateCiphertextLength()) {
-      cipher_buffer = AllocateBuffer(encryptor->pool(), encryptor->CiphertextLength(out_length));
+      cipher_buffer = AllocateBuffer(encryptor->pool(),
+                                      encryptor->CiphertextLength(out_length));
       std::span<const uint8_t> out_span(out_buffer, out_length);
-      cipher_buffer_len = encryptor->Encrypt(out_span, cipher_buffer->mutable_span_as<uint8_t>());
+      cipher_buffer_len =
+          encryptor->Encrypt(out_span, cipher_buffer->mutable_span_as<uint8_t>());
     } else {
       cipher_buffer = AllocateBuffer(encryptor->pool(), 0);
       std::span<const uint8_t> out_span(out_buffer, out_length);
-      cipher_buffer_len = encryptor->EncryptWithManagedBuffer(out_span, cipher_buffer.get());
+      cipher_buffer_len =
+          encryptor->EncryptWithManagedBuffer(out_span, cipher_buffer.get());
     }
 
     PARQUET_THROW_NOT_OK(out->Write(cipher_buffer->data(), cipher_buffer_len));

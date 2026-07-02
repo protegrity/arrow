@@ -28,10 +28,10 @@ class PARQUET_EXPORT EncryptorInterface {
  public:
   virtual ~EncryptorInterface() = default;
 
-  /// Signal whether the encryptor can calculate a valid ciphertext length before performing
-  /// encryption or not. If false, a proper sized buffer cannot be allocated before calling the
-  /// Encrypt method, and Arrow must use this encryptor's EncryptWithManagedBuffer method 
-  /// instead of Encrypt.
+  /// Signal whether the encryptor can calculate a valid ciphertext length
+  /// before performing encryption or not. If false, a proper sized buffer cannot
+  /// be allocated before calling the Encrypt method, and Arrow must use this
+  /// encryptor's EncryptWithManagedBuffer method instead of Encrypt.
   [[nodiscard]] virtual bool CanCalculateCiphertextLength() const = 0;
 
   /// Calculate the size of the ciphertext for a given plaintext length.
@@ -54,13 +54,13 @@ class PARQUET_EXPORT EncryptorInterface {
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 
-  /// After the column_writer writes a dictionary or a data page, this method will be called
-  /// so that each encryptor can provide any encryptor-specific column metadata that should be
-  /// stored in the Parquet file. The keys and values are added to the column metadata, any
-  /// conflicting key and value pairs are overwritten. There is no need to clear the metadata
-  /// after the call.
+  /// After the column_writer writes a dictionary or a data page, this method
+  /// will be called so that each encryptor can provide any encryptor-specific
+  /// column metadata that should be stored in the Parquet file. Keys and values
+  /// are added to the column metadata; conflicting key/value pairs are
+  /// overwritten. There is no need to clear the metadata after the call.
   virtual std::shared_ptr<KeyValueMetadata> GetKeyValueMetadata(int8_t module_type) {
-    return nullptr; 
+    return nullptr;
   }
 
   /// Encrypt footer metadata for signature verification purposes only.

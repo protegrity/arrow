@@ -19,10 +19,16 @@ import base64
 import datetime
 import os
 import platform
+import pytest
 import pyarrow
 import pyarrow.parquet as pp
-import pyarrow.parquet.encryption as ppe
-import pytest
+# Skip the entire module at collection time if the encryption extension was not
+# compiled (i.e. PARQUET_REQUIRE_ENCRYPTION=OFF).
+ppe = pytest.importorskip(
+    "pyarrow.parquet.encryption",
+    reason="pyarrow.parquet.encryption not available "
+           "(built without PARQUET_REQUIRE_ENCRYPTION=ON)",
+)
 import re
 
 

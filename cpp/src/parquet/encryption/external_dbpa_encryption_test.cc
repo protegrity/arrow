@@ -29,6 +29,12 @@
 #include "parquet/encryption/external/test_utils.h"
 #include "parquet/encryption/external_dbpa_encryption.h"
 
+// Full DBPS SDK interface — provides the concrete definition of
+// dbps::external::EncryptionResult (and the span<T> alias) required by
+// StubEncryptionResult below.  The header lives in the dbps_agent FetchContent
+// source tree and is exposed via the dbps_interface CMake target.
+#include <dbpa_interface.h>
+
 namespace parquet::encryption::test {
 
 class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {

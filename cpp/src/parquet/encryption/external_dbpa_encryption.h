@@ -23,8 +23,6 @@
 #include <span>
 #include <vector>
 
-#include <dbpa_interface.h>
-
 #include "parquet/encryption/decryptor_interface.h"
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/encryption/encryptor_interface.h"
@@ -32,7 +30,14 @@
 #include "parquet/platform.h"
 #include "parquet/types.h"
 
-using dbps::external::DataBatchProtectionAgentInterface;
+// Forward declarations for DBPS SDK types so this header can be compiled
+// without the dbpa_interface.h SDK header (e.g. when PARQUET_BUILD_DBPS_LIBS=OFF).
+namespace dbps {
+namespace external {
+class DataBatchProtectionAgentInterface;
+struct EncryptionResult;
+}  // namespace external
+}  // namespace dbps
 
 namespace parquet::encryption {
 
@@ -45,7 +50,7 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
       std::map<std::string, std::string> configuration_properties,
       std::optional<int> datatype_length);
 
-  ~ExternalDBPAEncryptorAdapter() = default;
+  ~ExternalDBPAEncryptorAdapter();
 
   /// Signal whether the encryptor can calculate a valid ciphertext length before
   /// performing encryption.
@@ -90,7 +95,7 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
       Type::type data_type, Compression::type compression_type,
       std::optional<int> datatype_length, std::string app_context,
       std::map<std::string, std::string> configuration_properties,
-      std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance);
+      std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance);
 
   int32_t InvokeExternalEncrypt(std::span<const uint8_t> plaintext,
                                 ::arrow::ResizableBuffer* ciphertext,
@@ -174,7 +179,7 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
       std::optional<int> datatype_length,
       std::shared_ptr<const KeyValueMetadata> key_value_metadata);
 
-  ~ExternalDBPADecryptorAdapter() = default;
+  ~ExternalDBPADecryptorAdapter();
 
   /// Signal whether the decryptor can calculate a valid plaintext or ciphertext
   /// length before performing decryption or not. If false, a proper sized buffer
@@ -217,7 +222,7 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
       Type::type data_type, Compression::type compression_type,
       std::optional<int> datatype_length, std::string app_context,
       std::map<std::string, std::string> configuration_properties,
-      std::unique_ptr<DataBatchProtectionAgentInterface> agent_instance,
+      std::unique_ptr<dbps::external::DataBatchProtectionAgentInterface> agent_instance,
       std::shared_ptr<const KeyValueMetadata> key_value_metadata);
 
   int32_t InvokeExternalDecrypt(std::span<const uint8_t> ciphertext,

@@ -1292,4 +1292,3 @@ def create_encryption_properties(
         del builder
 
     return FileEncryptionProperties.wrap(props)
-
