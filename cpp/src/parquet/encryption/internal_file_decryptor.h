@@ -24,9 +24,9 @@
 #include <string>
 
 #include "arrow/util/secure_string.h"
-#include "parquet/metadata.h"
 #include "parquet/encryption/decryptor_interface.h"
 #include "parquet/encryption/external_dbpa_encryption.h"
+#include "parquet/metadata.h"
 
 namespace parquet {
 
@@ -53,8 +53,7 @@ class PARQUET_EXPORT Decryptor {
   [[nodiscard]] bool CanCalculateLengths() const;
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const;
   [[nodiscard]] int32_t CiphertextLength(int32_t plaintext_len) const;
-  int32_t Decrypt(std::span<const uint8_t> ciphertext,
-                  std::span<uint8_t> plaintext,
+  int32_t Decrypt(std::span<const uint8_t> ciphertext, std::span<uint8_t> plaintext,
                   std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,

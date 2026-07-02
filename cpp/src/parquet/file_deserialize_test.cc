@@ -1042,10 +1042,8 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
     return plaintext_len;
   }
 
-  int32_t Decrypt(std::span<const uint8_t> ciphertext,
-                  std::span<const uint8_t> /*key*/,
-                  std::span<const uint8_t> /*aad*/,
-                  std::span<uint8_t> plaintext,
+  int32_t Decrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> /*key*/,
+                  std::span<const uint8_t> /*aad*/, std::span<uint8_t> plaintext,
                   std::unique_ptr<parquet::encryption::EncodingProperties>
                       encoding_properties) override {
     throw ParquetException("Decrypt not supported");
