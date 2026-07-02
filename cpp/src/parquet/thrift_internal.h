@@ -255,7 +255,8 @@ static inline AadMetadata FromThrift(format::AesGcmCtrV1 aesGcmCtrV1) {
 
 static inline AadMetadata FromThrift(format::ExternalDBPAV1 externalDBPAV1) {
   // Set default values for AAD, which is not supported by ExternalDBPAV1
-  return AadMetadata{/*aad_prefix*/"", /*aad_file_unique*/"", /*supply_aad_prefix*/false};
+  return AadMetadata{/*aad_prefix*/ "", /*aad_file_unique*/ "",
+                     /*supply_aad_prefix*/ false};
 }
 
 // Selects how thrift Statistics min/max fields should populate EncodedStatistics.
@@ -741,8 +742,8 @@ class ThriftSerializer {
     int32_t cipher_buffer_len;
     std::shared_ptr<ResizableBuffer> cipher_buffer;
     if (encryptor->CanCalculateCiphertextLength()) {
-      cipher_buffer = AllocateBuffer(encryptor->pool(),
-                                      encryptor->CiphertextLength(out_length));
+      cipher_buffer =
+          AllocateBuffer(encryptor->pool(), encryptor->CiphertextLength(out_length));
       std::span<const uint8_t> out_span(out_buffer, out_length);
       cipher_buffer_len =
           encryptor->Encrypt(out_span, cipher_buffer->mutable_span_as<uint8_t>());

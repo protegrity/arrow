@@ -35,7 +35,7 @@
 namespace dbps {
 namespace external {
 class DataBatchProtectionAgentInterface;
-struct EncryptionResult;
+class EncryptionResult;
 }  // namespace external
 }  // namespace dbps
 
@@ -61,9 +61,8 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 
   /// Encryption not supported as we cannot calculate the ciphertext before encryption.
   int32_t Encrypt(
-      std::span<const uint8_t> plaintext,
-      std::span<const uint8_t> key, std::span<const uint8_t> aad,
-      std::span<uint8_t> ciphertext,
+      std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
+      std::span<const uint8_t> aad, std::span<uint8_t> ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     std::stringstream ss;
     ss << "Encrypt is not supported in ExternalDBPAEncryptorAdapter, ";
@@ -79,8 +78,7 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 
   /// Encrypts plaintext footer, in order to compute footer signature (tag).
   int32_t SignedFooterEncrypt(std::span<const uint8_t> footer,
-                              std::span<const uint8_t> key,
-                              std::span<const uint8_t> aad,
+                              std::span<const uint8_t> key, std::span<const uint8_t> aad,
                               std::span<const uint8_t> nonce,
                               std::span<uint8_t> encrypted_footer) override;
 
@@ -196,9 +194,8 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   /// Decrypt is not supported as we cannot calculate the plaintext length before
   /// decryption.
   int32_t Decrypt(
-      std::span<const uint8_t> ciphertext,
-      std::span<const uint8_t> key, std::span<const uint8_t> aad,
-      std::span<uint8_t> plaintext,
+      std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
+      std::span<const uint8_t> aad, std::span<uint8_t> plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     std::stringstream ss;
     ss << "Decrypt is not supported in ExternalDBPADecryptorAdapter, ";

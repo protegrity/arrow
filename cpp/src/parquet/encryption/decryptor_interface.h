@@ -19,8 +19,8 @@
 
 #include <span>
 
-#include "parquet/platform.h"
 #include "parquet/encryption/encoding_properties.h"
+#include "parquet/platform.h"
 
 namespace parquet::encryption {
 
@@ -44,9 +44,8 @@ class PARQUET_EXPORT DecryptorInterface {
   /// Most implementations will require the key and aad to be provided, but it is up to
   /// each decryptor whether to use them or not.
   virtual int32_t Decrypt(
-      std::span<const uint8_t> ciphertext,
-      std::span<const uint8_t> key, std::span<const uint8_t> aad,
-      std::span<uint8_t> plaintext,
+      std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
+      std::span<const uint8_t> aad, std::span<uint8_t> plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 
   /// Decrypt the ciphertext and leave the results in the plaintext buffer.

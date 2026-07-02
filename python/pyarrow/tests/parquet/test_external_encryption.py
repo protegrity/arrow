@@ -19,6 +19,7 @@ import base64
 import datetime
 import os
 import platform
+import re
 import pytest
 import pyarrow
 import pyarrow.parquet as pp
@@ -29,7 +30,6 @@ ppe = pytest.importorskip(
     reason="pyarrow.parquet.encryption not available "
            "(built without PARQUET_REQUIRE_ENCRYPTION=ON)",
 )
-import re
 
 
 def get_agent_library_path():

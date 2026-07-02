@@ -137,9 +137,9 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
       algorithm = column_prop->parquet_cipher().value();
     }
   }
-  auto encryptor_instance = metadata ? GetMetaEncryptor(algorithm, key.size())
-                                     : GetDataEncryptor(algorithm, key.size(),
-                                                        column_chunk_metadata);
+  auto encryptor_instance =
+      metadata ? GetMetaEncryptor(algorithm, key.size())
+               : GetDataEncryptor(algorithm, key.size(), column_chunk_metadata);
 
   std::string file_aad = properties_->file_aad();
   std::shared_ptr<Encryptor> encryptor =
