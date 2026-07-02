@@ -53,14 +53,14 @@ constexpr int32_t kBufferSizeLength = 4;
 AesCryptoContext::AesCryptoContext(
     ParquetCipher::type alg_id, int32_t key_len, bool metadata, bool include_length) {
   openssl::EnsureInitialized();
-  
   length_buffer_length_ = include_length ? kBufferSizeLength : 0;
   ciphertext_size_delta_ = length_buffer_length_ + kNonceLength;
 
-  // Not all encryptors support metadata encryption. When that happens, even if the ParquetCipher
-  // is not AES, the metadata is encrypted using AES. This check should pass.
-  bool is_aes_algorithm = ParquetCipher::AES_GCM_V1 == alg_id 
-                          || ParquetCipher::AES_GCM_CTR_V1 == alg_id;
+  // Not all encryptors support metadata encryption. When that happens, even if
+  // the ParquetCipher is not AES, the metadata is encrypted using AES.
+  // This check should pass.
+  bool is_aes_algorithm = ParquetCipher::AES_GCM_V1 == alg_id ||
+                          ParquetCipher::AES_GCM_CTR_V1 == alg_id;
   if (!is_aes_algorithm && !metadata) {
     std::stringstream ss;
     ss << "Crypto algorithm " << alg_id << " is not supported";
@@ -91,7 +91,7 @@ std::unique_ptr<AesEncryptor> AesEncryptor::Make(
   return std::make_unique<AesEncryptor>(alg_id, key_len, metadata, write_length);
 }
 
-int32_t AesEncryptor::CiphertextLength(int64_t plaintext_len) const {  
+int32_t AesEncryptor::CiphertextLength(int64_t plaintext_len) const {
   if (plaintext_len < 0) {
     std::stringstream ss;
     ss << "Negative plaintext length " << plaintext_len;
@@ -185,8 +185,9 @@ int32_t AesEncryptor::Encrypt(std::span<const uint8_t> plaintext,
 }
 
 int32_t AesEncryptor::GcmEncrypt(
-    std::span<const uint8_t> plaintext, std::span<const uint8_t> key, std::span<const uint8_t> nonce,
-    std::span<const uint8_t> aad, std::span<uint8_t> ciphertext) {
+    std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
+    std::span<const uint8_t> nonce, std::span<const uint8_t> aad,
+    std::span<uint8_t> ciphertext) {
   int len;
   int32_t ciphertext_len;
 
@@ -262,8 +263,8 @@ int32_t AesEncryptor::GcmEncrypt(
 }
 
 int32_t AesEncryptor::CtrEncrypt(
-    std::span<const uint8_t> plaintext, std::span<const uint8_t> key, std::span<const uint8_t> nonce,
-    std::span<uint8_t> ciphertext) {
+    std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
+    std::span<const uint8_t> nonce, std::span<uint8_t> ciphertext) {
   int len;
   int32_t ciphertext_len;
 
@@ -381,7 +382,7 @@ AesDecryptor::AesDecryptor(
 std::unique_ptr<AesDecryptor> AesDecryptor::Make(
     ParquetCipher::type alg_id, int32_t key_len, bool metadata) {
   return std::make_unique<AesDecryptor>(alg_id, key_len, metadata);
-}  
+}
 
 int32_t AesDecryptor::PlaintextLength(int32_t ciphertext_len) const {
   if (ciphertext_len < ciphertext_size_delta_) {
@@ -497,8 +498,8 @@ int32_t AesDecryptor::GetCiphertextLength(std::span<const uint8_t> ciphertext) c
 }
 
 int32_t AesDecryptor::GcmDecrypt(
-    std::span<const uint8_t> ciphertext, std::span<const uint8_t> key, std::span<const uint8_t> aad,
-    std::span<uint8_t> plaintext) {
+    std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
+    std::span<const uint8_t> aad, std::span<uint8_t> plaintext) {
   int len;
   int32_t plaintext_len;
 
@@ -571,7 +572,8 @@ int32_t AesDecryptor::GcmDecrypt(
 }
 
 int32_t AesDecryptor::CtrDecrypt(
-    std::span<const uint8_t> ciphertext, std::span<const uint8_t> key, std::span<uint8_t> plaintext) {
+    std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
+    std::span<uint8_t> plaintext) {
   int len;
   int32_t plaintext_len;
 

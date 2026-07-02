@@ -28,10 +28,10 @@ class PARQUET_EXPORT DecryptorInterface {
  public:
   virtual ~DecryptorInterface() = default;
 
-  /// Signal whether the decryptor can calculate a valid plaintext or ciphertext length before
-  /// performing decryption or not. If false, a proper sized buffer cannot be allocated before 
-  /// calling the Decrypt method, and Arrow must use this decryptor's DecryptWithManagedBuffer 
-  /// method instead of Decrypt.
+  /// Signal whether the decryptor can calculate a valid plaintext or ciphertext
+  /// length before performing decryption or not. If false, a proper sized buffer
+  /// cannot be allocated before calling the Decrypt method, and Arrow must use
+  /// this decryptor's DecryptWithManagedBuffer method instead of Decrypt.
   [[nodiscard]] virtual bool CanCalculateLengths() const = 0;
 
   /// Calculate the size of the plaintext for a given ciphertext length.

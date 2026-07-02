@@ -278,27 +278,26 @@ def write_encrypted_parquet_file(parquet_path, use_remote_service, scenario_id):
     external_file_encryption_properties = get_external_file_encryption_properties(
         encryption_config)
 
-    match scenario_id:
-        case 1:
-            # This is the simplest way to write an encrypted Parquet file. It will
-            # use the default values for compression (SNAPPY) and
-            # encoding (RLE_DICTIONARY).
-            pp.write_table(sample_data, parquet_path,
-                           encryption_properties=external_file_encryption_properties)
-        case 2:
-            # By specifying a combination of parameters that use a plain encoding
-            # (not dictionary), and no compression, we can ensure that the current
-            # external DBPA library will perform per-value encryption on the data.
-            pp.write_table(sample_data, parquet_path,
-                           encryption_properties=external_file_encryption_properties,
-                           use_dictionary=False, compression="NONE")
-        case 3:
-            # Other parameters that can be specified involve the data page version
-            # (which impacts how the data bytes are formatted), and specific
-            # column encodings.
-            pp.write_table(sample_data, parquet_path,
-                           encryption_properties=external_file_encryption_properties,
-                           data_page_version="2.0")
+    if scenario_id == 1:
+        # This is the simplest way to write an encrypted Parquet file. It will
+        # use the default values for compression (SNAPPY) and
+        # encoding (RLE_DICTIONARY).
+        pp.write_table(sample_data, parquet_path,
+                       encryption_properties=external_file_encryption_properties)
+    elif scenario_id == 2:
+        # By specifying a combination of parameters that use a plain encoding
+        # (not dictionary), and no compression, we can ensure that the current
+        # external DBPA library will perform per-value encryption on the data.
+        pp.write_table(sample_data, parquet_path,
+                       encryption_properties=external_file_encryption_properties,
+                       use_dictionary=False, compression="NONE")
+    elif scenario_id == 3:
+        # Other parameters that can be specified involve the data page version
+        # (which impacts how the data bytes are formatted), and specific
+        # column encodings.
+        pp.write_table(sample_data, parquet_path,
+                       encryption_properties=external_file_encryption_properties,
+                       data_page_version="2.0")
 
     print("\n------------------------------------------------------------")
     print(f"Encrypted parquet file written to {parquet_path}")

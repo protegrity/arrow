@@ -18,6 +18,9 @@
 #include <span>
 
 #include "parquet/encryption/aes_encryption.h"
+#include "parquet/encryption/encryption.h"
+#include "parquet/encryption/encryption_utils.h"
+#include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/exception.h"
 
 namespace parquet::encryption {
@@ -122,5 +125,34 @@ void QuickUpdatePageAad(int32_t new_page_ordinal, std::string* AAD) {
 void RandBytes(unsigned char* buf, size_t num) { ThrowOpenSSLRequiredException(); }
 
 void EnsureBackendInitialized() {}
+
+AesEncryptor* AesEncryptorFactory::GetMetaAesEncryptor(
+    ParquetCipher::type /*alg_id*/, size_t /*key_size*/) {
+  ThrowOpenSSLRequiredException();
+  return nullptr;
+}
+
+AesEncryptor* AesEncryptorFactory::GetDataAesEncryptor(
+    ParquetCipher::type /*alg_id*/, size_t /*key_size*/) {
+  ThrowOpenSSLRequiredException();
+  return nullptr;
+}
+
+ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
+    ParquetCipher::type /*algorithm*/,
+    const ColumnChunkMetaDataBuilder* /*column_chunk_metadata*/,
+    ExternalFileEncryptionProperties* /*external_file_encryption_properties*/) {
+  ThrowOpenSSLRequiredException();
+  return nullptr;
+}
+
+std::unique_ptr<DecryptorInterface> ExternalDBPADecryptorAdapterFactory::GetDecryptor(
+    ParquetCipher::type /*algorithm*/,
+    const ColumnCryptoMetaData* /*crypto_metadata*/,
+    const ColumnChunkMetaData* /*column_chunk_metadata*/,
+    ExternalFileDecryptionProperties* /*external_file_decryption_properties*/) {
+  ThrowOpenSSLRequiredException();
+  return nullptr;
+}
 
 }  // namespace parquet::encryption

@@ -611,12 +611,12 @@ class ThriftDeserializer {
       // thrift message is not encrypted
       return DeserializeUnencryptedMessage(buf, len, deserialized_msg);
     } else {
-      // This method is only used to deserialize metadata or footer data, so it is not expected 
-      // to be called with a decryptor that can't calculate lengths.
+      // This method is only used to deserialize metadata or footer data, so it
+      // is not expected to be called with a decryptor that can't calculate lengths.
       if (!decryptor->CanCalculateLengths()) {
         std::stringstream ss;
-        ss << "Decryptor can't calculate plaintext or ciphertext lengths when deserializing ";
-        ss << "metadata or footer and should not be used to deserialize metadata or footer data";
+        ss << "Decryptor can't calculate plaintext or ciphertext lengths ";
+        ss << "when deserializing metadata or footer data";
         throw ParquetException(ss.str());
       }
 

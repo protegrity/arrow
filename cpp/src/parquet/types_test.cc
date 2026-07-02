@@ -17,7 +17,6 @@
 
 #include <gtest/gtest.h>
 
-#include <magic_enum/magic_enum.hpp>
 #include <string>
 
 #include "arrow/util/endian.h"
@@ -232,8 +231,12 @@ TEST(TestInt96Timestamp, Decoding) {
 }
 
 TEST(TestIsParquetCipherSupported, SupportedCiphers) {
-  std::size_t parquet_cipher_enum_size = magic_enum::enum_count<ParquetCipher::type>();
-  EXPECT_EQ(parquet_cipher_enum_size, 3) << "Expected 3 parquet cipher types";
+  // ParquetCipher::type values are sequential from 0; EXTERNAL_DBPA_V1 is the last.
+  // If a new cipher is added, update IsParquetCipherSupported() and this test.
+  constexpr std::size_t kExpectedCipherCount = 3;
+  EXPECT_EQ(kExpectedCipherCount,
+            static_cast<std::size_t>(ParquetCipher::EXTERNAL_DBPA_V1) + 1U)
+      << "Expected 3 parquet cipher types";
 
   ASSERT_TRUE(IsParquetCipherSupported(ParquetCipher::AES_GCM_V1));
   ASSERT_TRUE(IsParquetCipherSupported(ParquetCipher::AES_GCM_CTR_V1));

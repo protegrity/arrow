@@ -46,7 +46,7 @@ Additional:
 
 Execution instructions
 ----------------------
-This script needs to be pointed the the DBPA library to be tested. It can be done by 
+This script needs to be pointed the the DBPA library to be tested. It can be done by
 setting the DBPA_LIBRARY_PATH environment variable.
 You need to ensure that the library is in the LD_LIBRARY_PATH (or its equivalent)
 
