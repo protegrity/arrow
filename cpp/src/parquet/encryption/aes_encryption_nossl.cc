@@ -54,8 +54,7 @@ int32_t AesEncryptor::CiphertextLength(int64_t plaintext_len) const {
 }
 
 int32_t AesEncryptor::Encrypt(std::span<const uint8_t> plaintext,
-                              std::span<const uint8_t> key,
-                              std::span<const uint8_t> aad,
+                              std::span<const uint8_t> key, std::span<const uint8_t> aad,
                               std::span<uint8_t> ciphertext,
                               std::unique_ptr<EncodingProperties> encoding_properties) {
   ThrowOpenSSLRequiredException();
@@ -69,8 +68,7 @@ AesEncryptor::AesEncryptor(ParquetCipher::type alg_id, int32_t key_len, bool met
 }
 
 int32_t AesDecryptor::Decrypt(std::span<const uint8_t> ciphertext,
-                              std::span<const uint8_t> key,
-                              std::span<const uint8_t> aad,
+                              std::span<const uint8_t> key, std::span<const uint8_t> aad,
                               std::span<uint8_t> plaintext,
                               std::unique_ptr<EncodingProperties> encoding_properties) {
   ThrowOpenSSLRequiredException();
@@ -126,14 +124,14 @@ void RandBytes(unsigned char* buf, size_t num) { ThrowOpenSSLRequiredException()
 
 void EnsureBackendInitialized() {}
 
-AesEncryptor* AesEncryptorFactory::GetMetaAesEncryptor(
-    ParquetCipher::type /*alg_id*/, size_t /*key_size*/) {
+AesEncryptor* AesEncryptorFactory::GetMetaAesEncryptor(ParquetCipher::type /*alg_id*/,
+                                                       size_t /*key_size*/) {
   ThrowOpenSSLRequiredException();
   return nullptr;
 }
 
-AesEncryptor* AesEncryptorFactory::GetDataAesEncryptor(
-    ParquetCipher::type /*alg_id*/, size_t /*key_size*/) {
+AesEncryptor* AesEncryptorFactory::GetDataAesEncryptor(ParquetCipher::type /*alg_id*/,
+                                                       size_t /*key_size*/) {
   ThrowOpenSSLRequiredException();
   return nullptr;
 }
@@ -147,8 +145,7 @@ ExternalDBPAEncryptorAdapter* ExternalDBPAEncryptorAdapterFactory::GetEncryptor(
 }
 
 std::unique_ptr<DecryptorInterface> ExternalDBPADecryptorAdapterFactory::GetDecryptor(
-    ParquetCipher::type /*algorithm*/,
-    const ColumnCryptoMetaData* /*crypto_metadata*/,
+    ParquetCipher::type /*algorithm*/, const ColumnCryptoMetaData* /*crypto_metadata*/,
     const ColumnChunkMetaData* /*column_chunk_metadata*/,
     ExternalFileDecryptionProperties* /*external_file_decryption_properties*/) {
   ThrowOpenSSLRequiredException();

@@ -17,15 +17,15 @@
 
 #pragma once
 
+#include <openssl/evp.h>
 #include <memory>
 #include <span>
 #include <unordered_map>
-#include <openssl/evp.h>
 
-#include "parquet/encryption/encryptor_interface.h"
 #include "parquet/encryption/decryptor_interface.h"
-#include "parquet/types.h"
+#include "parquet/encryption/encryptor_interface.h"
 #include "parquet/exception.h"
+#include "parquet/types.h"
 
 using parquet::ParquetCipher;
 
@@ -82,9 +82,8 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
   /// Encrypts plaintext with the key and aad. Key length is passed only for validation.
   /// If different from value in constructor, exception will be thrown.
   int32_t Encrypt(
-      std::span<const uint8_t> plaintext,
-      std::span<const uint8_t> key, std::span<const uint8_t> aad,
-      std::span<uint8_t> ciphertext,
+      std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
+      std::span<const uint8_t> aad, std::span<uint8_t> ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
   /// Encrypt the plaintext and leave the results in the ciphertext buffer. This method is
@@ -93,13 +92,12 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     throw ParquetException(
-      "EncryptWithManagedBuffer is not supported in AesEncryptor, use Encrypt instead");
+        "EncryptWithManagedBuffer is not supported in AesEncryptor, use Encrypt instead");
   }
 
   /// Encrypts plaintext footer, in order to compute footer signature (tag).
   int32_t SignedFooterEncrypt(std::span<const uint8_t> footer,
-                              std::span<const uint8_t> key,
-                              std::span<const uint8_t> aad,
+                              std::span<const uint8_t> key, std::span<const uint8_t> aad,
                               std::span<const uint8_t> nonce,
                               std::span<uint8_t> encrypted_footer) override;
 
@@ -108,16 +106,12 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
  private:
   [[nodiscard]] CipherContext MakeCipherContext() const;
 
-  int32_t GcmEncrypt(std::span<const uint8_t> plaintext,
-                     std::span<const uint8_t> key,
-                     std::span<const uint8_t> nonce,
-                     std::span<const uint8_t> aad,
+  int32_t GcmEncrypt(std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
+                     std::span<const uint8_t> nonce, std::span<const uint8_t> aad,
                      std::span<uint8_t> ciphertext);
 
-  int32_t CtrEncrypt(std::span<const uint8_t> plaintext,
-                     std::span<const uint8_t> key,
-                     std::span<const uint8_t> nonce,
-                     std::span<uint8_t> ciphertext);
+  int32_t CtrEncrypt(std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
+                     std::span<const uint8_t> nonce, std::span<uint8_t> ciphertext);
 };
 
 // AesEncryptor supports only three key lengths: 16, 24, 32 bytes, so at most
@@ -131,8 +125,8 @@ class AesEncryptorFactory {
 
  private:
   /// Build a cache key including algorithm id, key length, and metadata flag.
-  static uint64_t MakeCacheKey(
-     ParquetCipher::type alg_id, int32_t key_len, bool metadata);
+  static uint64_t MakeCacheKey(ParquetCipher::type alg_id, int32_t key_len,
+                               bool metadata);
 
   std::unordered_map<uint64_t, std::unique_ptr<AesEncryptor>> encryptor_cache_;
 };
@@ -173,9 +167,8 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
   /// The caller is responsible for ensuring that the plaintext buffer is at least as
   /// large as PlaintextLength(ciphertext_len).
   int32_t Decrypt(
-      std::span<const uint8_t> ciphertext,
-      std::span<const uint8_t> key, std::span<const uint8_t> aad,
-      std::span<uint8_t> plaintext,
+      std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
+      std::span<const uint8_t> aad, std::span<uint8_t> plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
   /// Decrypt the ciphertext and leave the results in the plaintext buffer. This
@@ -191,20 +184,17 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
   /// End of Decryptor Interface methods.
 
  private:
-    [[nodiscard]] CipherContext MakeCipherContext() const;
+  [[nodiscard]] CipherContext MakeCipherContext() const;
 
-    /// Get the actual ciphertext length, inclusive of the length buffer length,
-    /// and validate that the provided buffer size is large enough.
-    [[nodiscard]] int32_t GetCiphertextLength(std::span<const uint8_t> ciphertext) const;
+  /// Get the actual ciphertext length, inclusive of the length buffer length,
+  /// and validate that the provided buffer size is large enough.
+  [[nodiscard]] int32_t GetCiphertextLength(std::span<const uint8_t> ciphertext) const;
 
-    int32_t GcmDecrypt(std::span<const uint8_t> ciphertext,
-                       std::span<const uint8_t> key,
-                       std::span<const uint8_t> aad,
-                       std::span<uint8_t> plaintext);
+  int32_t GcmDecrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
+                     std::span<const uint8_t> aad, std::span<uint8_t> plaintext);
 
-    int32_t CtrDecrypt(std::span<const uint8_t> ciphertext,
-                       std::span<const uint8_t> key,
-                       std::span<uint8_t> plaintext);
+  int32_t CtrDecrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
+                     std::span<uint8_t> plaintext);
 };
 
 }  // namespace parquet::encryption
