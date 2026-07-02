@@ -71,18 +71,17 @@ std::string TestUtils::GetTestLibraryPath() {
 
   std::vector<std::string> possible_filenames = {
 #if defined(__linux__)
-    "libDBPATestAgent.so"
+      "libDBPATestAgent.so"
 #elif defined(__APPLE__)
-    "libDBPATestAgent.dylib"
+      "libDBPATestAgent.dylib"
 #elif defined(_WIN32)
-    // Windows (MSVC): no "lib" prefix for DLLs
-    "DBPATestAgent.dll",
-    // Windows (MinGW): typically uses "lib" prefix even for DLLs
-    "libDBPATestAgent.dll",
+      // Windows (MSVC): no "lib" prefix for DLLs
+      "DBPATestAgent.dll",
+      // Windows (MinGW): typically uses "lib" prefix even for DLLs
+      "libDBPATestAgent.dll",
 
-    // Some toolchains use a debug postfix (commonly "d")
-    "DBPATestAgentd.dll",
-    "libDBPATestAgentd.dll"
+      // Some toolchains use a debug postfix (commonly "d")
+      "DBPATestAgentd.dll", "libDBPATestAgentd.dll"
 #endif
   };
 

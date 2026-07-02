@@ -20,8 +20,8 @@
 #include <cassert>
 #include <map>
 #include <memory>
-#include <span>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 

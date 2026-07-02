@@ -40,6 +40,15 @@ using dbps::external::Type;
 
 class DBPAExecutorTimeoutException;
 
+// MSVC C4275: suppress "non dll-interface class used as base for dll-interface
+// class" for classes derived from external SDK interfaces or STL types.
+// Safe: DataBatchProtectionAgentInterface is a pure-virtual interface that is
+// not directly instantiated; std::runtime_error is caught by value not pointer.
+#ifdef _MSC_VER
+#  pragma warning(push)
+#  pragma warning(disable : 4275)
+#endif
+
 /**
  * DBPAExecutor - A decorator for DataBatchProtectionAgentInterface with timeout support
  * Original exceptions from wrapped agents are preserved and re-thrown unchanged.
@@ -120,5 +129,9 @@ class PARQUET_EXPORT DBPAExecutorTimeoutException : public std::runtime_error {
       : std::runtime_error("DBPAExecutor: " + operation + " operation timed out after " +
                            std::to_string(timeout_milliseconds) + " milliseconds") {}
 };
+
+#ifdef _MSC_VER
+#  pragma warning(pop)
+#endif
 
 }  // namespace parquet::encryption::external

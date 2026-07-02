@@ -48,8 +48,7 @@ class PARQUET_EXPORT Encryptor {
   [[nodiscard]] bool CanCalculateCiphertextLength() const;
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const;
 
-  int32_t Encrypt(std::span<const uint8_t> plaintext,
-                  std::span<uint8_t> ciphertext,
+  int32_t Encrypt(std::span<const uint8_t> plaintext, std::span<uint8_t> ciphertext,
                   std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
 
   int32_t EncryptWithManagedBuffer(
