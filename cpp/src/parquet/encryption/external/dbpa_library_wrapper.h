@@ -48,6 +48,12 @@ PARQUET_EXPORT void DefaultSharedLibraryClosingFn(void* library_handle);
 // In the constructor we allow to pass a function that will be used to close the shared
 // library. This simplifies testing, as we can use a mock function to avoid actually
 // closing the shared library.
+// Safe: DataBatchProtectionAgentInterface is a pure-virtual interface that is
+// not directly instantiated.
+#ifdef _MSC_VER
+#  pragma warning(push)
+#  pragma warning(disable : 4275)
+#endif
 class PARQUET_EXPORT DBPALibraryWrapper : public DataBatchProtectionAgentInterface {
  private:
   std::unique_ptr<DataBatchProtectionAgentInterface> wrapped_agent_;
@@ -98,5 +104,8 @@ class PARQUET_EXPORT DBPALibraryWrapper : public DataBatchProtectionAgentInterfa
     return wrapped_agent_->Decrypt(ciphertext, std::move(encoding_attributes));
   }
 };
+#ifdef _MSC_VER
+#  pragma warning(pop)
+#endif
 
 }  // namespace parquet::encryption::external
