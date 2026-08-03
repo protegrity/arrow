@@ -104,7 +104,7 @@ if openssl_dep.found()
     parquet_deps += openssl_dep
 
     parquet_srcs += files(
-        'encryption/aes_encryption.cc',
+        'encryption/encryption_internal.cc',
         'encryption/crypto_factory.cc',
         'encryption/encoding_properties.cc',
         'encryption/encryption_utils.cc',
@@ -168,7 +168,7 @@ if openssl_dep.found()
         endif
     endif
 else
-    parquet_srcs += files('encryption/aes_encryption_nossl.cc')
+    parquet_srcs += files('encryption/encryption_internal_nossl.cc')
 endif
 
 parquet_lib = library(
@@ -317,7 +317,7 @@ if needs_parquet_encryption
     parquet_tests += {
         'encryption-test': {
             'sources': files(
-                'encryption/aes_encryption_test.cc',
+                'encryption/encryption_internal_test.cc',
                 'encryption/crypto_factory_test.cc',
                 'encryption/encoding_properties_test.cc',
                 'encryption/external/test_utils.cc',

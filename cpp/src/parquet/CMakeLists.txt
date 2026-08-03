@@ -245,7 +245,7 @@ if(PARQUET_REQUIRE_ENCRYPTION)
   list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS ${ARROW_OPENSSL_LIBS})
   set(PARQUET_SRCS
       ${PARQUET_SRCS}
-      encryption/aes_encryption.cc
+      encryption/encryption_internal.cc
       encryption/openssl_internal.cc
       encryption/encryption_utils.cc
       encryption/external_dbpa_encryption.cc
@@ -348,7 +348,7 @@ if(PARQUET_REQUIRE_ENCRYPTION)
       encryption/key_toolkit_internal.cc
       encryption/local_wrap_kms_client.cc)
 else()
-  set(PARQUET_SRCS ${PARQUET_SRCS} encryption/aes_encryption_nossl.cc)
+  set(PARQUET_SRCS ${PARQUET_SRCS} encryption/encryption_internal_nossl.cc)
 endif()
 
 list(APPEND PARQUET_SHARED_LINK_LIBS arrow_shared)
@@ -522,7 +522,7 @@ if(PARQUET_REQUIRE_ENCRYPTION)
   add_parquet_test(encryption-test
                    SOURCES
                    encryption/bloom_filter_encryption_test.cc
-                   encryption/aes_encryption_test.cc
+                   encryption/encryption_internal_test.cc
                    encryption/encoding_properties_test.cc
                    encryption/external_dbpa_encryption_test.cc
                    encryption/write_configurations_test.cc
