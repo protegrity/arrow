@@ -22,7 +22,7 @@
 #include <span>
 #include <string>
 
-#include "parquet/encryption/aes_encryption.h"
+#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryptor_interface.h"
