@@ -104,9 +104,9 @@ if openssl_dep.found()
     parquet_deps += openssl_dep
 
     parquet_srcs += files(
-        'encryption/encryption_internal.cc',
         'encryption/crypto_factory.cc',
         'encryption/encoding_properties.cc',
+        'encryption/encryption_internal.cc',
         'encryption/encryption_utils.cc',
         'encryption/external/dbpa_enum_utils.cc',
         'encryption/external/dbpa_executor.cc',
@@ -317,9 +317,9 @@ if needs_parquet_encryption
     parquet_tests += {
         'encryption-test': {
             'sources': files(
-                'encryption/encryption_internal_test.cc',
                 'encryption/crypto_factory_test.cc',
                 'encryption/encoding_properties_test.cc',
+                'encryption/encryption_internal_test.cc',
                 'encryption/external/test_utils.cc',
                 'encryption/external_dbpa_encryption_test.cc',
                 'encryption/per_column_encryption_test.cc',
