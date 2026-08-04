@@ -22,9 +22,9 @@
 #include <span>
 #include <string>
 
-#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/encryption/encryption.h"
+#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryptor_interface.h"
 #include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/metadata.h"

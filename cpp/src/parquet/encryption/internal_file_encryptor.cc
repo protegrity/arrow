@@ -20,8 +20,8 @@
 #include <span>
 
 #include "arrow/util/secure_string.h"
-#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption.h"
+#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption_utils.h"
 
 using arrow::util::SecureString;

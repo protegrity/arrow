@@ -21,8 +21,8 @@
 
 #include "arrow/util/logging.h"
 #include "arrow/util/secure_string.h"
-#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption.h"
+#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption_utils.h"
 #include "parquet/metadata.h"
 

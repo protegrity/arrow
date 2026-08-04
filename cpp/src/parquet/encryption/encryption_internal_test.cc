@@ -18,8 +18,8 @@
 #include <gtest/gtest.h>
 #include <span>
 
-#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption.h"
+#include "parquet/encryption/encryption_internal.h"
 
 namespace parquet::encryption::test {
 
