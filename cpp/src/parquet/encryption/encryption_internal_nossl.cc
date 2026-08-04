@@ -17,8 +17,8 @@
 
 #include <span>
 
-#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption.h"
+#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption_utils.h"
 #include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/exception.h"
