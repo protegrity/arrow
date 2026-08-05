@@ -17,6 +17,7 @@
 
 #include "parquet/encryption/encryption_internal.h"
 
+#include <openssl/evp.h>
 #include <openssl/rand.h>
 
 #include <algorithm>
@@ -49,6 +50,66 @@ constexpr int32_t kBufferSizeLength = 4;
   if (1 != EVP_DecryptInit_ex(CTX, ALG, nullptr, nullptr, nullptr)) { \
     throw ParquetException("Couldn't init ALG decryption");           \
   }
+
+namespace {
+
+void DeleteCipherContext(EVP_CIPHER_CTX* ctx) { EVP_CIPHER_CTX_free(ctx); }
+
+using CipherContext = std::unique_ptr<EVP_CIPHER_CTX, decltype(&DeleteCipherContext)>;
+
+CipherContext NewCipherContext() {
+  auto ctx = CipherContext(EVP_CIPHER_CTX_new(), DeleteCipherContext);
+  if (!ctx) {
+    throw ParquetException("Couldn't init cipher context");
+  }
+  return ctx;
+}
+
+CipherContext MakeEncryptCipherContext(int32_t aes_mode, int32_t key_length) {
+  auto ctx = NewCipherContext();
+  if (kGcmMode == aes_mode) {
+    if (16 == key_length) {
+      ENCRYPT_INIT(ctx.get(), EVP_aes_128_gcm());
+    } else if (24 == key_length) {
+      ENCRYPT_INIT(ctx.get(), EVP_aes_192_gcm());
+    } else if (32 == key_length) {
+      ENCRYPT_INIT(ctx.get(), EVP_aes_256_gcm());
+    }
+  } else {
+    if (16 == key_length) {
+      ENCRYPT_INIT(ctx.get(), EVP_aes_128_ctr());
+    } else if (24 == key_length) {
+      ENCRYPT_INIT(ctx.get(), EVP_aes_192_ctr());
+    } else if (32 == key_length) {
+      ENCRYPT_INIT(ctx.get(), EVP_aes_256_ctr());
+    }
+  }
+  return ctx;
+}
+
+CipherContext MakeDecryptCipherContext(int32_t aes_mode, int32_t key_length) {
+  auto ctx = NewCipherContext();
+  if (kGcmMode == aes_mode) {
+    if (16 == key_length) {
+      DECRYPT_INIT(ctx.get(), EVP_aes_128_gcm());
+    } else if (24 == key_length) {
+      DECRYPT_INIT(ctx.get(), EVP_aes_192_gcm());
+    } else if (32 == key_length) {
+      DECRYPT_INIT(ctx.get(), EVP_aes_256_gcm());
+    }
+  } else {
+    if (16 == key_length) {
+      DECRYPT_INIT(ctx.get(), EVP_aes_128_ctr());
+    } else if (24 == key_length) {
+      DECRYPT_INIT(ctx.get(), EVP_aes_192_ctr());
+    } else if (32 == key_length) {
+      DECRYPT_INIT(ctx.get(), EVP_aes_256_ctr());
+    }
+  }
+  return ctx;
+}
+
+}  // namespace
 
 AesCryptoContext::AesCryptoContext(ParquetCipher::type alg_id, int32_t key_len,
                                    bool metadata, bool include_length) {
@@ -105,30 +166,6 @@ int32_t AesEncryptor::CiphertextLength(int64_t plaintext_len) const {
     throw ParquetException(ss.str());
   }
   return static_cast<int32_t>(plaintext_len + ciphertext_size_delta_);
-}
-
-AesCryptoContext::CipherContext AesEncryptor::MakeCipherContext() const {
-  auto ctx = NewCipherContext();
-  if (kGcmMode == aes_mode_) {
-    // Init AES-GCM with specified key length
-    if (16 == key_length_) {
-      ENCRYPT_INIT(ctx.get(), EVP_aes_128_gcm());
-    } else if (24 == key_length_) {
-      ENCRYPT_INIT(ctx.get(), EVP_aes_192_gcm());
-    } else if (32 == key_length_) {
-      ENCRYPT_INIT(ctx.get(), EVP_aes_256_gcm());
-    }
-  } else {
-    // Init AES-CTR with specified key length
-    if (16 == key_length_) {
-      ENCRYPT_INIT(ctx.get(), EVP_aes_128_ctr());
-    } else if (24 == key_length_) {
-      ENCRYPT_INIT(ctx.get(), EVP_aes_192_ctr());
-    } else if (32 == key_length_) {
-      ENCRYPT_INIT(ctx.get(), EVP_aes_256_ctr());
-    }
-  }
-  return ctx;
 }
 
 int32_t AesEncryptor::SignedFooterEncrypt(std::span<const uint8_t> footer,
@@ -201,7 +238,7 @@ int32_t AesEncryptor::GcmEncrypt(std::span<const uint8_t> plaintext,
     throw ParquetException(ss.str());
   }
 
-  auto ctx = MakeCipherContext();
+  auto ctx = MakeEncryptCipherContext(aes_mode_, key_length_);
 
   // Setting key and IV (nonce)
   if (1 != EVP_EncryptInit_ex(ctx.get(), nullptr, nullptr, key.data(), nonce.data())) {
@@ -285,7 +322,7 @@ int32_t AesEncryptor::CtrEncrypt(std::span<const uint8_t> plaintext,
   std::copy(nonce.begin(), nonce.begin() + kNonceLength, iv.begin());
   iv[kCtrIvLength - 1] = 1;
 
-  auto ctx = MakeCipherContext();
+  auto ctx = MakeEncryptCipherContext(aes_mode_, key_length_);
 
   // Setting key and IV
   if (1 != EVP_EncryptInit_ex(ctx.get(), nullptr, nullptr, key.data(), iv.data())) {
@@ -427,30 +464,6 @@ int32_t AesDecryptor::Decrypt(std::span<const uint8_t> ciphertext,
   return CtrDecrypt(ciphertext, key, plaintext);
 }
 
-AesCryptoContext::CipherContext AesDecryptor::MakeCipherContext() const {
-  auto ctx = NewCipherContext();
-  if (kGcmMode == aes_mode_) {
-    // Init AES-GCM with specified key length
-    if (16 == key_length_) {
-      DECRYPT_INIT(ctx.get(), EVP_aes_128_gcm());
-    } else if (24 == key_length_) {
-      DECRYPT_INIT(ctx.get(), EVP_aes_192_gcm());
-    } else if (32 == key_length_) {
-      DECRYPT_INIT(ctx.get(), EVP_aes_256_gcm());
-    }
-  } else {
-    // Init AES-CTR with specified key length
-    if (16 == key_length_) {
-      DECRYPT_INIT(ctx.get(), EVP_aes_128_ctr());
-    } else if (24 == key_length_) {
-      DECRYPT_INIT(ctx.get(), EVP_aes_192_ctr());
-    } else if (32 == key_length_) {
-      DECRYPT_INIT(ctx.get(), EVP_aes_256_ctr());
-    }
-  }
-  return ctx;
-}
-
 int32_t AesDecryptor::GetCiphertextLength(std::span<const uint8_t> ciphertext) const {
   if (length_buffer_length_ > 0) {
     // Note: length_buffer_length_ must be either 0 or kBufferSizeLength
@@ -528,7 +541,7 @@ int32_t AesDecryptor::GcmDecrypt(std::span<const uint8_t> ciphertext,
   std::copy(ciphertext.begin() + ciphertext_len - kGcmTagLength,
             ciphertext.begin() + ciphertext_len, tag.begin());
 
-  auto ctx = MakeCipherContext();
+  auto ctx = MakeDecryptCipherContext(aes_mode_, key_length_);
 
   // Setting key and IV
   if (1 != EVP_DecryptInit_ex(ctx.get(), nullptr, nullptr, key.data(), nonce.data())) {
@@ -604,7 +617,7 @@ int32_t AesDecryptor::CtrDecrypt(std::span<const uint8_t> ciphertext,
   // is set to 1.
   iv[kCtrIvLength - 1] = 1;
 
-  auto ctx = MakeCipherContext();
+  auto ctx = MakeDecryptCipherContext(aes_mode_, key_length_);
 
   // Setting key and IV
   if (1 != EVP_DecryptInit_ex(ctx.get(), nullptr, nullptr, key.data(), iv.data())) {
