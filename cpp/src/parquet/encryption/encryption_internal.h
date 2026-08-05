@@ -17,7 +17,6 @@
 
 #pragma once
 
-#include <openssl/evp.h>
 #include <memory>
 #include <span>
 #include <unordered_map>
@@ -39,18 +38,6 @@ class PARQUET_EXPORT AesCryptoContext {
   virtual ~AesCryptoContext() = default;
 
  protected:
-  static void DeleteCipherContext(EVP_CIPHER_CTX* ctx) { EVP_CIPHER_CTX_free(ctx); }
-
-  using CipherContext = std::unique_ptr<EVP_CIPHER_CTX, decltype(&DeleteCipherContext)>;
-
-  static CipherContext NewCipherContext() {
-    auto ctx = CipherContext(EVP_CIPHER_CTX_new(), DeleteCipherContext);
-    if (!ctx) {
-      throw ParquetException("Couldn't init cipher context");
-    }
-    return ctx;
-  }
-
   int32_t aes_mode_;
   int32_t key_length_;
   int32_t ciphertext_size_delta_;
@@ -104,8 +91,6 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
   /// End of Encryptor Interface methods.
 
  private:
-  [[nodiscard]] CipherContext MakeCipherContext() const;
-
   int32_t GcmEncrypt(std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
                      std::span<const uint8_t> nonce, std::span<const uint8_t> aad,
                      std::span<uint8_t> ciphertext);
@@ -184,8 +169,6 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
   /// End of Decryptor Interface methods.
 
  private:
-  [[nodiscard]] CipherContext MakeCipherContext() const;
-
   /// Get the actual ciphertext length, inclusive of the length buffer length,
   /// and validate that the provided buffer size is large enough.
   [[nodiscard]] int32_t GetCiphertextLength(std::span<const uint8_t> ciphertext) const;
