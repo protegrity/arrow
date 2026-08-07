@@ -243,96 +243,22 @@ list(APPEND PARQUET_STATIC_LINK_LIBS ${ARROW_XSIMD})
 
 if(PARQUET_REQUIRE_ENCRYPTION)
   list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS ${ARROW_OPENSSL_LIBS})
-  set(PARQUET_SRCS
-      ${PARQUET_SRCS}
-      encryption/encryption_internal.cc
-      encryption/openssl_internal.cc
-      encryption/encryption_utils.cc
-      encryption/external_dbpa_encryption.cc
-      encryption/external/dbpa_library_wrapper.cc
-      encryption/external/dbpa_enum_utils.cc
-      encryption/external/dbpa_executor.cc
-      encryption/external/loadable_encryptor_utils.cc)
+  set(PARQUET_SRCS ${PARQUET_SRCS} encryption/encryption_internal.cc
+                   encryption/openssl_internal.cc encryption/encryption_utils.cc)
 
-  # Header-only dependencies for external DBPA code
-  include(FetchContent)
-
-  # magic_enum
-  fetchcontent_declare(magic_enum_upstream
-                       GIT_REPOSITORY https://github.com/Neargye/magic_enum.git
-                       GIT_TAG v0.9.7)
-  fetchcontent_makeavailable(magic_enum_upstream)
-  add_library(magic_enum_header_only INTERFACE)
-  target_include_directories(magic_enum_header_only
-                             INTERFACE ${magic_enum_upstream_SOURCE_DIR}/include)
-
-  # tcb/span
-  fetchcontent_declare(tcb_span_upstream
-                       GIT_REPOSITORY https://github.com/tcbrindle/span.git
-                       GIT_TAG master)
-
-  # Populate sources only; do not add subproject/tests
-  fetchcontent_getproperties(tcb_span_upstream)
-  if(NOT tcb_span_upstream_POPULATED)
-    fetchcontent_populate(tcb_span_upstream)
-  endif()
-  add_library(tcb_span INTERFACE)
-  target_include_directories(tcb_span INTERFACE ${tcb_span_upstream_SOURCE_DIR}/include)
-
-  # DBPS interface (header-only)
-  fetchcontent_declare(dbps_agent
-                       GIT_REPOSITORY https://github.com/protegrity/DataBatchProtectionService.git
-                       GIT_TAG release_stable_v0.1
-                       GIT_SHALLOW FALSE)
-
-  fetchcontent_getproperties(dbps_agent)
-  if(NOT dbps_agent_POPULATED)
-    fetchcontent_populate(dbps_agent)
-  endif()
-  add_library(dbps_interface INTERFACE)
-  # Expose dbpa_interface.h and friends from DBPS
-  target_include_directories(dbps_interface INTERFACE ${dbps_agent_SOURCE_DIR}/src/common)
-
-  # Allows to disable building DBPS shared libraries
-  option(PARQUET_BUILD_DBPS_LIBS "Build DBPS external libraries" ON)
-
+  # When building with the legacy DBPS adapter, include the external adapter sources.
+  # These sources depend on DBPS headers and the dbpa_interface; they are excluded
+  # from default builds and preserved here for reference during DBPS-side migration.
+  option(PARQUET_BUILD_DBPS_LIBS "Build with the DBPS encryption adapter (legacy)" OFF)
   if(PARQUET_BUILD_DBPS_LIBS)
-    include(ExternalProject)
-
-    # Allow callers to inject additional CMake args for DBPS (e.g., BOOST_ROOT)
-    set(PARQUET_DBPS_CMAKE_ARGS
-        "${PARQUET_DBPS_CMAKE_ARGS}"
-        CACHE STRING "Extra CMake args for DBPS ExternalProject")
-
-    #builds DBPS shared libraries alongside Parquet
-    #same OS, same architecture, same compiler, same build type, same CMake args
-    externalproject_add(dbps_external
-                        DOWNLOAD_COMMAND "" # disables download, assumes (correctly) that sources are already fetched
-                        SOURCE_DIR ${dbps_agent_SOURCE_DIR}
-                        BINARY_DIR ${dbps_agent_BINARY_DIR}
-                        CMAKE_ARGS -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-                                   -DBUILD_SHARED_LIBS=ON
-                                   -DBUILD_TESTING=OFF
-                                   # Place DBPS outputs next to Arrow artifacts
-                                   -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
-                                   -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
-                                   -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=${BUILD_OUTPUT_ROOT_DIRECTORY}
-                                   ${PARQUET_DBPS_CMAKE_ARGS}
-                        INSTALL_COMMAND "" #disables install - artifacts already copied to BUILD_OUTPUT_ROOT_DIRECTORY
-    )
-  endif()
-
-  list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS magic_enum_header_only tcb_span)
-  list(APPEND PARQUET_STATIC_LINK_LIBS magic_enum_header_only tcb_span)
-  if(ARROW_TESTING)
     list(APPEND
-         PARQUET_TEST_LINK_LIBS
-         magic_enum_header_only
-         tcb_span
-         dbps_interface)
+         PARQUET_SRCS
+         encryption/external_dbpa_encryption.cc
+         encryption/external/dbpa_library_wrapper.cc
+         encryption/external/dbpa_enum_utils.cc
+         encryption/external/dbpa_executor.cc
+         encryption/external/loadable_encryptor_utils.cc)
   endif()
-  list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS dbps_interface)
-  list(APPEND PARQUET_STATIC_LINK_LIBS dbps_interface)
 
   # Encryption key management
   set(PARQUET_SRCS
@@ -399,11 +325,6 @@ add_arrow_lib(parquet
               STATIC_INSTALL_INTERFACE_LIBS
               ${PARQUET_STATIC_INSTALL_INTERFACE_LIBS})
 
-# Ensure DBPS builds when Parquet builds, if requested
-if(PARQUET_REQUIRE_ENCRYPTION AND PARQUET_BUILD_DBPS_LIBS)
-  foreach(LIB_TARGET ${PARQUET_LIBRARIES})
-    add_dependencies(${LIB_TARGET} dbps_external)
-  endforeach()
 endif()
 
 if(WIN32 AND NOT (ARROW_TEST_LINKAGE STREQUAL "static"))
