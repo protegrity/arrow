@@ -317,8 +317,6 @@ add_arrow_lib(parquet
               STATIC_INSTALL_INTERFACE_LIBS
               ${PARQUET_STATIC_INSTALL_INTERFACE_LIBS})
 
-endif()
-
 if(WIN32 AND NOT (ARROW_TEST_LINKAGE STREQUAL "static"))
   add_library(parquet_test_support STATIC
               "${PARQUET_THRIFT_SOURCE_DIR}/parquet_types.cpp")
