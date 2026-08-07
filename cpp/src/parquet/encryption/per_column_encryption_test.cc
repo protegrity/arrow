@@ -102,10 +102,11 @@ TEST_F(PerColumnEncryption, CTR_WriteRead) {
   EXPECT_NO_THROW(decryptor_.DecryptPageIndex(file_path, dec_props_3));
 }
 
-// The test below exercises the legacy DBPA adapter path (ExternalFileEncryptionProperties
-// with EXTERNAL_DBPA_V1 per-column cipher and a DBPS agent library). Before removing
-// the adapter sources, port this test to the DBPS repository and validate it against
-// the ExternalEncryptorProvider / ExternalDecryptorProvider interface.
+// The test below exercises the legacy external adapter path
+// (ExternalFileEncryptionProperties with EXTERNAL_DBPA_V1 per-column cipher and an
+// external agent library). Before removing the adapter sources, port this test to the
+// external encryption service repository and validate it against the
+// ExternalEncryptorProvider / ExternalDecryptorProvider interface.
 #ifdef PARQUET_BUILD_DBPS_LIBS
 TEST_F(PerColumnEncryption, PerColumnExternal_WriteRead) {
   // Build encryption properties: mix of file-level AES_GCM_V1 and per-column

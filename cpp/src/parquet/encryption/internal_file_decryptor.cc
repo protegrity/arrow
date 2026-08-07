@@ -19,16 +19,63 @@
 
 #include <span>
 
+#include "arrow/buffer.h"
 #include "arrow/util/logging.h"
 #include "arrow/util/secure_string.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption_utils.h"
+#include "parquet/exception.h"
 #include "parquet/metadata.h"
 
 using arrow::util::SecureString;
 
 namespace parquet {
+
+namespace {
+
+// Adapts ExternalDecryptorProvider to the DecryptorInterface used by Decryptor.
+// key and aad passed by Arrow are intentionally ignored — the provider resolves
+// the key internally from ColumnEncryptionParams::key_metadata.
+class ExternalDecryptorAdapter : public encryption::DecryptorInterface {
+ public:
+  ExternalDecryptorAdapter(std::shared_ptr<ExternalDecryptorProvider> provider,
+                           ColumnEncryptionParams params)
+      : provider_(std::move(provider)), params_(std::move(params)) {}
+
+  bool CanCalculateLengths() const override { return true; }
+
+  int32_t PlaintextLength(int32_t ciphertext_len) const override {
+    return provider_->PlaintextLength(ciphertext_len);
+  }
+
+  int32_t CiphertextLength(int32_t plaintext_len) const override {
+    return plaintext_len;  // placeholder — decryptors are not asked for ciphertext length
+  }
+
+  int32_t Decrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> /*key*/,
+                  std::span<const uint8_t> /*aad*/, std::span<uint8_t> plaintext,
+                  std::unique_ptr<EncodingProperties> /*props*/ = nullptr) override {
+    return provider_->Decrypt(params_, ciphertext, plaintext);
+  }
+
+  int32_t DecryptWithManagedBuffer(
+      std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::unique_ptr<EncodingProperties> /*props*/ = nullptr) override {
+    int32_t plain_len =
+        provider_->PlaintextLength(static_cast<int32_t>(ciphertext.size()));
+    PARQUET_THROW_NOT_OK(plaintext->Resize(plain_len));
+    return provider_->Decrypt(params_, ciphertext,
+                              {reinterpret_cast<uint8_t*>(plaintext->mutable_data()),
+                               static_cast<size_t>(plain_len)});
+  }
+
+ private:
+  std::shared_ptr<ExternalDecryptorProvider> provider_;
+  ColumnEncryptionParams params_;
+};
+
+}  // namespace
 
 // Decryptor
 Decryptor::Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor_instance,
@@ -77,7 +124,8 @@ InternalFileDecryptor::InternalFileDecryptor(
       file_aad_(file_aad),
       algorithm_(algorithm),
       footer_key_metadata_(footer_key_metadata),
-      pool_(pool) {}
+      pool_(pool),
+      external_decryptor_provider_(properties_->external_decryptor_provider()) {}
 
 const SecureString& InternalFileDecryptor::GetFooterKey() {
   std::unique_lock lock(mutex_);
@@ -178,9 +226,32 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
   }
 
   return [this, aad, metadata, column_key = std::move(column_key), algorithm,
-          crypto_metadata, column_chunk_metadata]() {
+          column_key_metadata, column_path, crypto_metadata, column_chunk_metadata]() {
     auto key_len = static_cast<int32_t>(column_key.size());
     std::unique_ptr<encryption::DecryptorInterface> decryptor_instance;
+
+    // Route EXTERNAL_DBPA_V1 data pages to the ExternalDecryptorProvider.
+    // Metadata pages always use AES — algorithm override is not applied for metadata.
+    if (algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
+      if (!external_decryptor_provider_) {
+        throw ParquetException(
+            "ExternalDecryptorProvider must be set when using EXTERNAL_DBPA_V1 "
+            "algorithm");
+      }
+      if (column_key_metadata.empty()) {
+        throw ParquetException(
+            "key_metadata must be set on ColumnEncryptionProperties when using "
+            "ExternalDecryptorProvider");
+      }
+      ColumnEncryptionParams params{column_key_metadata, column_path};
+      auto adapter = std::make_unique<ExternalDecryptorAdapter>(
+          external_decryptor_provider_, std::move(params));
+      auto* raw = adapter.get();
+      external_adapter_cache_.push_back(std::move(adapter));
+      return std::make_unique<Decryptor>(
+          std::unique_ptr<encryption::DecryptorInterface>(raw), SecureString{}, file_aad_,
+          aad, pool_);
+    }
 
     decryptor_instance = encryption::AesDecryptor::Make(algorithm, key_len, metadata);
     return std::make_unique<Decryptor>(std::move(decryptor_instance), column_key,

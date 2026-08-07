@@ -42,7 +42,9 @@
 // Added for encoding properties tests
 #include "parquet/encryption/decryptor_interface.h"
 #include "parquet/encryption/encoding_properties.h"
-#include "parquet/encryption/external/test_utils.h"
+#ifdef PARQUET_BUILD_DBPS_LIBS
+#  include "parquet/encryption/external/test_utils.h"
+#endif
 #include "parquet/encryption/internal_file_decryptor.h"
 #include "parquet/schema.h"
 
@@ -1294,6 +1296,12 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV2EncodingProperties) {
             std::to_string(descr->max_repetition_level()));
 }
 
+// The test below exercises the legacy external adapter path
+// (ExternalFileEncryptionProperties with EXTERNAL_DBPA_V1 per-column cipher and an
+// external agent library). Before removing the adapter sources, port this test to the
+// external encryption service repository and validate it against the
+// ExternalEncryptorProvider / ExternalDecryptorProvider interface.
+#ifdef PARQUET_BUILD_DBPS_LIBS
 TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
   using schema::GroupNode;
   using schema::NodePtr;
@@ -1384,5 +1392,6 @@ TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
   ASSERT_EQ(read, static_cast<int64_t>(values.size()));
   ASSERT_EQ(values, out);
 }
+#endif  // PARQUET_BUILD_DBPS_LIBS
 
 }  // namespace parquet
