@@ -25,7 +25,6 @@
 
 #include "arrow/util/secure_string.h"
 #include "parquet/encryption/decryptor_interface.h"
-#include "parquet/encryption/external_dbpa_encryption.h"
 #include "parquet/metadata.h"
 
 namespace parquet {
@@ -123,7 +122,6 @@ class InternalFileDecryptor {
   ParquetCipher::type algorithm_;
   std::string footer_key_metadata_;
   ::arrow::MemoryPool* pool_;
-  encryption::ExternalDBPADecryptorAdapterFactory external_dbpa_decryptor_factory_;
 
   // Protects footer_key_ updates
   std::mutex mutex_;

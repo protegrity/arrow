@@ -443,7 +443,6 @@ if(PARQUET_REQUIRE_ENCRYPTION)
                    encryption/bloom_filter_encryption_test.cc
                    encryption/encryption_internal_test.cc
                    encryption/encoding_properties_test.cc
-                   encryption/external_dbpa_encryption_test.cc
                    encryption/write_configurations_test.cc
                    encryption/read_configurations_test.cc
                    encryption/per_column_encryption_test.cc
