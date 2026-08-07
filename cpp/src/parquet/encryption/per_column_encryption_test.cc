@@ -29,7 +29,9 @@
 #include "arrow/util/config.h"
 
 #include "parquet/encryption/encryption.h"
-#include "parquet/encryption/external/test_utils.h"
+#ifdef PARQUET_BUILD_DBPS_LIBS
+#  include "parquet/encryption/external/test_utils.h"
+#endif
 #include "parquet/encryption/test_encryption_util.h"
 
 namespace parquet::encryption::test {
@@ -100,6 +102,11 @@ TEST_F(PerColumnEncryption, CTR_WriteRead) {
   EXPECT_NO_THROW(decryptor_.DecryptPageIndex(file_path, dec_props_3));
 }
 
+// The test below exercises the legacy DBPA adapter path (ExternalFileEncryptionProperties
+// with EXTERNAL_DBPA_V1 per-column cipher and a DBPS agent library). Before removing
+// the adapter sources, port this test to the DBPS repository and validate it against
+// the ExternalEncryptorProvider / ExternalDecryptorProvider interface.
+#ifdef PARQUET_BUILD_DBPS_LIBS
 TEST_F(PerColumnEncryption, PerColumnExternal_WriteRead) {
   // Build encryption properties: mix of file-level AES_GCM_V1 and per-column
   // EXTERNAL_DBPA_V1.
@@ -151,5 +158,6 @@ TEST_F(PerColumnEncryption, PerColumnExternal_WriteRead) {
   EXPECT_NO_THROW(decryptor_.DecryptFile(file_path, dec_props));
   EXPECT_NO_THROW(decryptor_.DecryptPageIndex(file_path, dec_props));
 }
+#endif  // PARQUET_BUILD_DBPS_LIBS
 
 }  // namespace parquet::encryption::test

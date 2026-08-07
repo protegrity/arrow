@@ -384,13 +384,15 @@ FileEncryptionProperties::column_encryption_properties(const std::string& column
 FileEncryptionProperties::FileEncryptionProperties(
     ParquetCipher::type cipher, SecureString footer_key, std::string footer_key_metadata,
     bool encrypted_footer, std::string aad_prefix, bool store_aad_prefix_in_file,
-    ColumnPathToEncryptionPropertiesMap encrypted_columns)
+    ColumnPathToEncryptionPropertiesMap encrypted_columns,
+    std::shared_ptr<ExternalEncryptorProvider> external_encryptor_provider)
     : footer_key_(std::move(footer_key)),
       footer_key_metadata_(std::move(footer_key_metadata)),
       encrypted_footer_(encrypted_footer),
       aad_prefix_(std::move(aad_prefix)),
       store_aad_prefix_in_file_(store_aad_prefix_in_file),
-      encrypted_columns_(std::move(encrypted_columns)) {
+      encrypted_columns_(std::move(encrypted_columns)),
+      external_encryptor_provider_(std::move(external_encryptor_provider)) {
   DCHECK(!footer_key_.empty());
   // footer_key must be either 16, 24 or 32 bytes.
   DCHECK(footer_key_.length() == 16 || footer_key_.length() == 24 ||
