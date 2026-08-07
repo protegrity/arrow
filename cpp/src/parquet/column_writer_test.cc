@@ -2146,11 +2146,11 @@ TEST_F(TestColumnWriterEncryption, AESEncryption) {
   ASSERT_EQ(values_, read_values);
 }
 
-// The tests below exercise the legacy DBPA adapter path. They are compiled only
-// when the DBPS encryption adapter is present (PARQUET_BUILD_DBPS_LIBS=ON).
-// Before removing the adapter sources, port these tests to the DBPS repository
-// and validate them against the ExternalEncryptorProvider / ExternalDecryptorProvider
-// interface using DBPSEncryptorProvider / DBPSDecryptorProvider.
+// The tests below exercise the legacy external adapter encryption path. They are compiled
+// only when the external encryption adapter is present (PARQUET_BUILD_DBPS_LIBS=ON).
+// Before removing the adapter sources, port these tests to the external encryption
+// service repository and validate them against the ExternalEncryptorProvider /
+// ExternalDecryptorProvider interface.
 #ifdef PARQUET_BUILD_DBPS_LIBS
 TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption) {
   ::arrow::util::SecureString kColumnKeyId(std::string("test_column_key1"));
