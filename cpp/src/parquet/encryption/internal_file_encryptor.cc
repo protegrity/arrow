@@ -19,14 +19,66 @@
 
 #include <span>
 
+#include "arrow/buffer.h"
 #include "arrow/util/secure_string.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption_utils.h"
+#include "parquet/exception.h"
 
 using arrow::util::SecureString;
 
 namespace parquet {
+
+namespace {
+
+// Adapts ExternalEncryptorProvider to the EncryptorInterface used by Encryptor.
+// key and aad passed by Arrow are intentionally ignored — the provider resolves
+// the key internally from ColumnEncryptionParams::key_metadata.
+class ExternalEncryptorAdapter : public encryption::EncryptorInterface {
+ public:
+  ExternalEncryptorAdapter(std::shared_ptr<ExternalEncryptorProvider> provider,
+                           ColumnEncryptionParams params)
+      : provider_(std::move(provider)), params_(std::move(params)) {}
+
+  bool CanCalculateCiphertextLength() const override { return true; }
+
+  int32_t CiphertextLength(int64_t plaintext_len) const override {
+    return provider_->CiphertextLength(plaintext_len);
+  }
+
+  int32_t Encrypt(std::span<const uint8_t> plaintext, std::span<const uint8_t> /*key*/,
+                  std::span<const uint8_t> /*aad*/, std::span<uint8_t> ciphertext,
+                  std::unique_ptr<EncodingProperties> /*props*/ = nullptr) override {
+    return provider_->Encrypt(params_, plaintext, ciphertext);
+  }
+
+  int32_t EncryptWithManagedBuffer(
+      std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+      std::unique_ptr<EncodingProperties> /*props*/ = nullptr) override {
+    int32_t cipher_len =
+        provider_->CiphertextLength(static_cast<int64_t>(plaintext.size()));
+    PARQUET_THROW_NOT_OK(ciphertext->Resize(cipher_len));
+    return provider_->Encrypt(params_, plaintext,
+                              {reinterpret_cast<uint8_t*>(ciphertext->mutable_data()),
+                               static_cast<size_t>(cipher_len)});
+  }
+
+  int32_t SignedFooterEncrypt(std::span<const uint8_t> /*footer*/,
+                              std::span<const uint8_t> /*key*/,
+                              std::span<const uint8_t> /*aad*/,
+                              std::span<const uint8_t> /*nonce*/,
+                              std::span<uint8_t> /*encrypted_footer*/) override {
+    throw ParquetException(
+        "ExternalEncryptorAdapter::SignedFooterEncrypt is not supported");
+  }
+
+ private:
+  std::shared_ptr<ExternalEncryptorProvider> provider_;
+  ColumnEncryptionParams params_;
+};
+
+}  // namespace
 
 // Encryptor
 Encryptor::Encryptor(encryption::EncryptorInterface* encryptor_instance, SecureString key,
@@ -66,7 +118,9 @@ std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_t
 // InternalFileEncryptor
 InternalFileEncryptor::InternalFileEncryptor(FileEncryptionProperties* properties,
                                              ::arrow::MemoryPool* pool)
-    : properties_(properties), pool_(pool) {}
+    : properties_(properties),
+      pool_(pool),
+      external_encryptor_provider_(properties->external_encryptor_provider()) {}
 
 std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterEncryptor() {
   if (footer_encryptor_ != nullptr) {
@@ -137,6 +191,31 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
       algorithm = column_prop->parquet_cipher().value();
     }
   }
+
+  // Route EXTERNAL_DBPA_V1 data pages to the ExternalEncryptorProvider.
+  // Metadata pages always use AES (handled by GetMetaEncryptor below).
+  if (algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
+    if (!external_encryptor_provider_) {
+      throw ParquetException(
+          "ExternalEncryptorProvider must be set when using EXTERNAL_DBPA_V1 algorithm");
+    }
+    if (column_prop->key_metadata().empty()) {
+      throw ParquetException(
+          "key_metadata must be set on ColumnEncryptionProperties when using "
+          "ExternalEncryptorProvider");
+    }
+    ColumnEncryptionParams params{column_prop->key_metadata(), column_path};
+    auto adapter = std::make_unique<ExternalEncryptorAdapter>(
+        external_encryptor_provider_, std::move(params));
+    auto* raw = adapter.get();
+    external_adapter_cache_.push_back(std::move(adapter));
+    std::string file_aad = properties_->file_aad();
+    auto encryptor =
+        std::make_shared<Encryptor>(raw, SecureString{}, file_aad, "", pool_);
+    column_data_map_[column_path] = encryptor;
+    return encryptor;
+  }
+
   auto encryptor_instance =
       metadata ? GetMetaEncryptor(algorithm, key.size())
                : GetDataEncryptor(algorithm, key.size(), column_chunk_metadata);
