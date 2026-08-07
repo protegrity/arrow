@@ -18,7 +18,9 @@
 # Headers: public api
 arrow_install_all_headers("parquet/encryption")
 
-if(PARQUET_REQUIRE_ENCRYPTION AND ARROW_TESTING)
+if(PARQUET_REQUIRE_ENCRYPTION
+   AND ARROW_TESTING
+   AND PARQUET_BUILD_DBPS_LIBS)
   # Add library for DBPATestAgent
   add_library(DBPATestAgent SHARED external/dbpa_test_agent.cc)
 
