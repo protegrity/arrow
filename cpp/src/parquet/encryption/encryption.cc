@@ -261,7 +261,7 @@ ColumnEncryptionProperties::ColumnEncryptionProperties(
     std::optional<ParquetCipher::type> parquet_cipher)
     : column_path_(std::move(column_path)),
       encrypted_(encrypted),
-      encrypted_with_footer_key_(encrypted && key.empty()),
+      encrypted_with_footer_key_(encrypted && key.empty() && key_metadata.empty()),
       key_(std::move(key)),
       key_metadata_(std::move(key_metadata)),
       parquet_cipher_(parquet_cipher) {
