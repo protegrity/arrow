@@ -244,13 +244,11 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
             "ExternalDecryptorProvider");
       }
       ColumnEncryptionParams params{column_key_metadata, column_path};
-      auto adapter = std::make_unique<ExternalDecryptorAdapter>(
-          external_decryptor_provider_, std::move(params));
-      auto* raw = adapter.get();
-      external_adapter_cache_.push_back(std::move(adapter));
+      // Decryptor takes unique_ptr ownership — do NOT also cache the raw ptr.
       return std::make_unique<Decryptor>(
-          std::unique_ptr<encryption::DecryptorInterface>(raw), SecureString{}, file_aad_,
-          aad, pool_);
+          std::make_unique<ExternalDecryptorAdapter>(external_decryptor_provider_,
+                                                     std::move(params)),
+          SecureString{}, file_aad_, aad, pool_);
     }
 
     decryptor_instance = encryption::AesDecryptor::Make(algorithm, key_len, metadata);

@@ -124,8 +124,6 @@ class InternalFileDecryptor {
   std::string footer_key_metadata_;
   ::arrow::MemoryPool* pool_;
   std::shared_ptr<ExternalDecryptorProvider> external_decryptor_provider_;
-  // Owns ExternalDecryptorAdapter instances; raw ptrs are held by Decryptor objects.
-  std::vector<std::unique_ptr<encryption::DecryptorInterface>> external_adapter_cache_;
 
   // Protects footer_key_ updates
   std::mutex mutex_;
