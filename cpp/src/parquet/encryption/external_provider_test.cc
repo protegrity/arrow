@@ -51,6 +51,8 @@ namespace parquet::encryption::test {
 namespace {
 
 using ::arrow::util::SecureString;
+using schema::GroupNode;
+using schema::PrimitiveNode;
 
 // 16-byte keys for footer and column AES metadata encryption.
 const SecureString kFooterKey("0123456789012345");
@@ -76,19 +78,19 @@ std::shared_ptr<FileDecryptionProperties> ExtDecProps(
   dec_cols[col_name] = dcb.key(kColumnAesKey)->build();
 
   FileDecryptionProperties::Builder db;
-  db.footer_key(kFooterKey)->column_keys(dec_cols)->external_decryptor_provider(
-      std::move(dec_provider));
+  db.footer_key(kFooterKey)
+      ->column_keys(dec_cols)
+      ->external_decryptor_provider(std::move(dec_provider));
   return db.build();
 }
 
 // Writes a single-INT32-column Parquet file and returns its buffer.
-std::shared_ptr<::arrow::Buffer> WriteOneColumn(
+std::shared_ptr< ::arrow::Buffer> WriteOneColumn(
     const char* col_name, const std::vector<int32_t>& values,
     std::shared_ptr<FileEncryptionProperties> enc_props) {
-  using namespace schema;
-  auto schema_node = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make(col_name, Repetition::REQUIRED, Type::INT32)});
+  auto schema_node =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make(col_name, Repetition::REQUIRED, Type::INT32)});
   auto sink = ::arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto writer_props =
       WriterProperties::Builder().encryption(std::move(enc_props))->build();
@@ -103,15 +105,15 @@ std::shared_ptr<::arrow::Buffer> WriteOneColumn(
 }
 
 // Reads back INT32 values from a single-column Parquet buffer.
-std::vector<int32_t> ReadOneColumn(std::shared_ptr<::arrow::Buffer> buf,
+std::vector<int32_t> ReadOneColumn(std::shared_ptr< ::arrow::Buffer> buf,
                                    std::shared_ptr<FileDecryptionProperties> dec_props) {
   ReaderProperties reader_props;
   if (dec_props) reader_props.file_decryption_properties(std::move(dec_props));
   auto file_reader = ParquetFileReader::Open(
-      std::make_shared<::arrow::io::BufferReader>(buf), reader_props);
+      std::make_shared< ::arrow::io::BufferReader>(buf), reader_props);
   auto rg_reader = file_reader->RowGroup(0);
   auto col_reader =
-      std::static_pointer_cast<TypedColumnReader<Int32Type>>(rg_reader->Column(0));
+      std::static_pointer_cast<TypedColumnReader<Int32Type> >(rg_reader->Column(0));
   int64_t total_rows = file_reader->metadata()->RowGroup(0)->num_rows();
   std::vector<int32_t> out(static_cast<size_t>(total_rows));
   int64_t read = 0;
@@ -123,7 +125,8 @@ std::vector<int32_t> ReadOneColumn(std::shared_ptr<::arrow::Buffer> buf,
 
 }  // namespace
 
-// TC1: MockEncryptorProvider::Encrypt() is called when writing with EXTERNAL_DBPA_V1.
+// TC1: MockEncryptorProvider::GetColumnEncryptor() is called when writing with
+// EXTERNAL_DBPA_V1.
 TEST(TestExternalEncryptionProvider, ProviderIsCalled) {
   auto mock_enc = std::make_shared<MockEncryptorProvider>();
 
@@ -170,7 +173,7 @@ TEST(TestExternalEncryptionProvider, NullProviderFallsBackToAES) {
   auto enc_props = fb.build();
 
   const std::vector<int32_t> values = {7, 8, 9};
-  std::shared_ptr<::arrow::Buffer> buf;
+  std::shared_ptr< ::arrow::Buffer> buf;
   EXPECT_NO_THROW(buf = WriteOneColumn(kColAes, values, std::move(enc_props)));
 
   ColumnPathToDecryptionPropertiesMap dec_cols;
@@ -202,7 +205,7 @@ TEST(TestExternalEncryptionProvider, ProviderLifetime) {
   }
 
   const std::vector<int32_t> values = {100, 200};
-  std::shared_ptr<::arrow::Buffer> buf;
+  std::shared_ptr< ::arrow::Buffer> buf;
   EXPECT_NO_THROW(buf = WriteOneColumn(kColExt, values, std::move(enc_props)));
   EXPECT_GT(enc_handle->call_count(), 0);
 
@@ -216,11 +219,10 @@ TEST(TestExternalEncryptionProvider, MultiColumnSameProvider) {
   auto mock_enc = std::make_shared<MockEncryptorProvider>();
   auto mock_dec = std::make_shared<MockDecryptorProvider>();
 
-  using namespace schema;
-  auto schema_node = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make("col_a", Repetition::REQUIRED, Type::INT32),
-       PrimitiveNode::Make("col_b", Repetition::REQUIRED, Type::INT32)});
+  auto schema_node =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make("col_a", Repetition::REQUIRED, Type::INT32),
+                       PrimitiveNode::Make("col_b", Repetition::REQUIRED, Type::INT32)});
 
   const SecureString kColumnAesKey2("1234567890123457");
 
@@ -269,18 +271,17 @@ TEST(TestExternalEncryptionProvider, MultiColumnSameProvider) {
     dec_cols["col_b"] = db.key(kColumnAesKey2)->build();
   }
   FileDecryptionProperties::Builder db;
-  db.footer_key(kFooterKey)->column_keys(dec_cols)->external_decryptor_provider(
-      mock_dec);
+  db.footer_key(kFooterKey)->column_keys(dec_cols)->external_decryptor_provider(mock_dec);
   auto dec_props = db.build();
 
   ReaderProperties reader_props;
   reader_props.file_decryption_properties(std::move(dec_props));
   auto file_reader = ParquetFileReader::Open(
-      std::make_shared<::arrow::io::BufferReader>(buf), reader_props);
+      std::make_shared< ::arrow::io::BufferReader>(buf), reader_props);
   auto rg_reader = file_reader->RowGroup(0);
 
   auto read_col = [&](int col_idx) {
-    auto col_reader = std::static_pointer_cast<TypedColumnReader<Int32Type>>(
+    auto col_reader = std::static_pointer_cast<TypedColumnReader<Int32Type> >(
         rg_reader->Column(col_idx));
     std::vector<int32_t> out(3);
     int64_t read = 0;
@@ -300,11 +301,10 @@ TEST(TestExternalEncryptionProvider, MixedAesAndExternalColumn) {
   auto mock_enc = std::make_shared<MockEncryptorProvider>();
   auto mock_dec = std::make_shared<MockDecryptorProvider>();
 
-  using namespace schema;
-  auto schema_node = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make(kColAes, Repetition::REQUIRED, Type::INT32),
-       PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
+  auto schema_node =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make(kColAes, Repetition::REQUIRED, Type::INT32),
+                       PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
 
   ColumnPathToEncryptionPropertiesMap cols;
   {
@@ -345,17 +345,16 @@ TEST(TestExternalEncryptionProvider, MixedAesAndExternalColumn) {
     dec_cols[kColExt] = de.key(kColumnAesKey)->build();  // for metadata decryption
   }
   FileDecryptionProperties::Builder db;
-  db.footer_key(kFooterKey)->column_keys(dec_cols)->external_decryptor_provider(
-      mock_dec);
+  db.footer_key(kFooterKey)->column_keys(dec_cols)->external_decryptor_provider(mock_dec);
 
   ReaderProperties reader_props;
   reader_props.file_decryption_properties(db.build());
   auto file_reader = ParquetFileReader::Open(
-      std::make_shared<::arrow::io::BufferReader>(buf), reader_props);
+      std::make_shared< ::arrow::io::BufferReader>(buf), reader_props);
   auto rg_reader = file_reader->RowGroup(0);
 
   auto read_col = [&](int col_idx) {
-    auto col_reader = std::static_pointer_cast<TypedColumnReader<Int32Type>>(
+    auto col_reader = std::static_pointer_cast<TypedColumnReader<Int32Type> >(
         rg_reader->Column(col_idx));
     std::vector<int32_t> out(3);
     int64_t read = 0;
@@ -425,7 +424,7 @@ TEST(TestExternalEncryptionProvider, PlaintextFooterWithExternalColumn) {
   dec_cols[kColExt] = dcb.key(kColumnAesKey)->build();
   FileDecryptionProperties::Builder db;
   db.column_keys(dec_cols)->external_decryptor_provider(mock_dec);
-  // disable_footer_signature_verification required for plaintext footers without a footer key.
+  // required when reading a plaintext footer without a footer key
   db.disable_footer_signature_verification();
 
   auto result = ReadOneColumn(buf, db.build());
@@ -433,7 +432,8 @@ TEST(TestExternalEncryptionProvider, PlaintextFooterWithExternalColumn) {
   EXPECT_GT(mock_dec->call_count(), 0);
 }
 
-// TC10: Multiple row groups — column_data_map_ cache is reused; call_count reflects all pages.
+// TC10: Multiple row groups — column_data_map_ cache is reused; call_count reflects all
+// pages.
 TEST(TestExternalEncryptionProvider, MultiRowGroupRoundTrip) {
   auto mock_enc = std::make_shared<MockEncryptorProvider>();
   auto mock_dec = std::make_shared<MockDecryptorProvider>();
@@ -444,10 +444,9 @@ TEST(TestExternalEncryptionProvider, MultiRowGroupRoundTrip) {
   FileEncryptionProperties::Builder fb(kFooterKey);
   fb.external_encryptor_provider(mock_enc)->encrypted_columns(cols);
 
-  using namespace schema;
-  auto schema_node = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
+  auto schema_node =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
 
   auto sink = ::arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto writer_props = WriterProperties::Builder().encryption(fb.build())->build();
@@ -471,13 +470,13 @@ TEST(TestExternalEncryptionProvider, MultiRowGroupRoundTrip) {
   ReaderProperties reader_props;
   reader_props.file_decryption_properties(std::move(dec_props));
   auto file_reader = ParquetFileReader::Open(
-      std::make_shared<::arrow::io::BufferReader>(buf), reader_props);
+      std::make_shared< ::arrow::io::BufferReader>(buf), reader_props);
 
   ASSERT_EQ(file_reader->metadata()->num_row_groups(), 3);
   for (int rg = 0; rg < 3; ++rg) {
     auto rg_reader = file_reader->RowGroup(rg);
     auto col_reader =
-        std::static_pointer_cast<TypedColumnReader<Int32Type>>(rg_reader->Column(0));
+        std::static_pointer_cast<TypedColumnReader<Int32Type> >(rg_reader->Column(0));
     std::vector<int32_t> out(vals.size());
     int64_t read = 0;
     col_reader->ReadBatch(vals.size(), nullptr, nullptr, out.data(), &read);
@@ -510,13 +509,13 @@ TEST(TestExternalEncryptionProvider, DecryptorProviderNotSetThrows) {
   ReaderProperties reader_props;
   reader_props.file_decryption_properties(std::move(dec_props));
   auto file_reader = ParquetFileReader::Open(
-      std::make_shared<::arrow::io::BufferReader>(buf), reader_props);
+      std::make_shared< ::arrow::io::BufferReader>(buf), reader_props);
   auto rg_reader = file_reader->RowGroup(0);
   // Throw must surface here — on column read, not on file open.
   EXPECT_THROW(
       {
-        auto col_reader = std::static_pointer_cast<TypedColumnReader<Int32Type>>(
-            rg_reader->Column(0));
+        auto col_reader =
+            std::static_pointer_cast<TypedColumnReader<Int32Type> >(rg_reader->Column(0));
         std::vector<int32_t> out(values.size());
         int64_t read = 0;
         col_reader->ReadBatch(static_cast<int>(values.size()), nullptr, nullptr,
@@ -540,7 +539,7 @@ TEST(TestExternalEncryptionProvider, ProviderIgnoredForAesAlgorithmColumn) {
   fb.external_encryptor_provider(mock_enc)->encrypted_columns(cols);
 
   const std::vector<int32_t> values = {1, 2, 3};
-  std::shared_ptr<::arrow::Buffer> buf;
+  std::shared_ptr< ::arrow::Buffer> buf;
   EXPECT_NO_THROW(buf = WriteOneColumn(kColAes, values, fb.build()));
   EXPECT_EQ(mock_enc->call_count(), 0);  // provider must NOT have been called
 
@@ -556,19 +555,36 @@ TEST(TestExternalEncryptionProvider, ProviderIgnoredForAesAlgorithmColumn) {
 // TC13: params.column_path and params.key_metadata received by the provider
 // exactly match what was set via ColumnEncryptionProperties::Builder.
 TEST(TestExternalEncryptionProvider, ColumnPathAndKeyMetadataPropagated) {
-  // Capturing provider — records params from the first Encrypt() call.
+  // Capturing provider — records params from GetColumnEncryptor().
   struct CapturingProvider : public ExternalEncryptorProvider {
     ColumnEncryptionParams last_params;
-    int32_t Encrypt(const ColumnEncryptionParams& params,
-                    std::span<const uint8_t> plaintext,
-                    std::span<uint8_t> ciphertext) override {
+    std::unique_ptr<EncryptorInterface> GetColumnEncryptor(
+        const ColumnEncryptionParams& params) override {
       last_params = params;
-      std::transform(plaintext.begin(), plaintext.end(), ciphertext.begin(),
-                     [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
-      return static_cast<int32_t>(plaintext.size());
-    }
-    int32_t CiphertextLength(int64_t n) const override {
-      return static_cast<int32_t>(n);
+      struct XorEnc : public EncryptorInterface {
+        bool CanCalculateCiphertextLength() const override { return true; }
+        int32_t CiphertextLength(int64_t n) const override {
+          return static_cast<int32_t>(n);
+        }
+        int32_t Encrypt(std::span<const uint8_t> plain, std::span<const uint8_t>,
+                        std::span<const uint8_t>, std::span<uint8_t> cipher,
+                        std::unique_ptr<EncodingProperties>) override {
+          std::transform(plain.begin(), plain.end(), cipher.begin(),
+                         [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
+          return static_cast<int32_t>(plain.size());
+        }
+        int32_t EncryptWithManagedBuffer(std::span<const uint8_t>,
+                                         ::arrow::ResizableBuffer*,
+                                         std::unique_ptr<EncodingProperties>) override {
+          throw ParquetException("not expected in this test");
+        }
+        int32_t SignedFooterEncrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                                    std::span<const uint8_t>, std::span<const uint8_t>,
+                                    std::span<uint8_t>) override {
+          throw ParquetException("not supported");
+        }
+      };
+      return std::make_unique<XorEnc>();
     }
   };
 
@@ -578,8 +594,7 @@ TEST(TestExternalEncryptionProvider, ColumnPathAndKeyMetadataPropagated) {
 
   ColumnEncryptionProperties::Builder cb(col_name);
   cb.key(kColumnAesKey);
-  cb.key_metadata(expected_key_metadata)
-      ->parquet_cipher(ParquetCipher::EXTERNAL_DBPA_V1);
+  cb.key_metadata(expected_key_metadata)->parquet_cipher(ParquetCipher::EXTERNAL_DBPA_V1);
   ColumnPathToEncryptionPropertiesMap cols;
   cols[col_name] = cb.build();
 
@@ -591,36 +606,62 @@ TEST(TestExternalEncryptionProvider, ColumnPathAndKeyMetadataPropagated) {
   EXPECT_EQ(cap->last_params.column_path, std::string(col_name));
 }
 
-// TC14: Provider returns CanCalculateCiphertextLength() = false — Arrow must use
-// EncryptWithManagedBuffer() instead of pre-allocating and calling Encrypt().
-// TC15: CiphertextLength() is delegated to the provider — a provider with
-// non-zero overhead (e.g. +16 bytes IV prepend) must be handled correctly.
+// TC15: Provider with non-zero ciphertext overhead (e.g. +4 bytes nonce).
 TEST(TestExternalEncryptionProvider, ProviderWithCiphertextOverhead) {
-  // Provider that prepends a 4-byte nonce to each ciphertext.
-  struct NoncePrependEncryptor : public ExternalEncryptorProvider {
-    enum : int32_t { kNonceLen = 4 };
-    int32_t Encrypt(const ColumnEncryptionParams&, std::span<const uint8_t> plain,
-                    std::span<uint8_t> cipher) override {
-      // Write 4-byte fixed nonce then XOR plaintext.
-      cipher[0] = 0xDE; cipher[1] = 0xAD; cipher[2] = 0xBE; cipher[3] = 0xEF;
+  static constexpr int32_t kNonceLen = 4;
+
+  struct NoncePrependEncImpl : public EncryptorInterface {
+    bool CanCalculateCiphertextLength() const override { return true; }
+    int32_t CiphertextLength(int64_t n) const override {
+      return kNonceLen + static_cast<int32_t>(n);
+    }
+    int32_t Encrypt(std::span<const uint8_t> plain, std::span<const uint8_t>,
+                    std::span<const uint8_t>, std::span<uint8_t> cipher,
+                    std::unique_ptr<EncodingProperties>) override {
+      cipher[0] = 0xDE;
+      cipher[1] = 0xAD;
+      cipher[2] = 0xBE;
+      cipher[3] = 0xEF;
       for (size_t i = 0; i < plain.size(); ++i)
         cipher[kNonceLen + i] = static_cast<uint8_t>(plain[i] ^ 0xABu);
       return kNonceLen + static_cast<int32_t>(plain.size());
     }
-    int32_t CiphertextLength(int64_t n) const override {
-      return kNonceLen + static_cast<int32_t>(n);
+    int32_t EncryptWithManagedBuffer(std::span<const uint8_t>, ::arrow::ResizableBuffer*,
+                                     std::unique_ptr<EncodingProperties>) override {
+      throw ParquetException("not expected in this test");
+    }
+    int32_t SignedFooterEncrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                                std::span<const uint8_t>, std::span<const uint8_t>,
+                                std::span<uint8_t>) override {
+      throw ParquetException("not supported");
+    }
+  };
+  struct NoncePrependDecImpl : public DecryptorInterface {
+    bool CanCalculateLengths() const override { return true; }
+    int32_t PlaintextLength(int32_t n) const override { return n - kNonceLen; }
+    int32_t CiphertextLength(int32_t n) const override { return n; }
+    int32_t Decrypt(std::span<const uint8_t> cipher, std::span<const uint8_t>,
+                    std::span<const uint8_t>, std::span<uint8_t> plain,
+                    std::unique_ptr<EncodingProperties>) override {
+      for (size_t i = 0; i < plain.size(); ++i)
+        plain[i] = static_cast<uint8_t>(cipher[kNonceLen + i] ^ 0xABu);
+      return static_cast<int32_t>(plain.size());
+    }
+    int32_t DecryptWithManagedBuffer(std::span<const uint8_t>, ::arrow::ResizableBuffer*,
+                                     std::unique_ptr<EncodingProperties>) override {
+      throw ParquetException("not expected in this test");
+    }
+  };
+  struct NoncePrependEncryptor : public ExternalEncryptorProvider {
+    std::unique_ptr<EncryptorInterface> GetColumnEncryptor(
+        const ColumnEncryptionParams&) override {
+      return std::make_unique<NoncePrependEncImpl>();
     }
   };
   struct NoncePrependDecryptor : public ExternalDecryptorProvider {
-    int32_t Decrypt(const ColumnEncryptionParams&, std::span<const uint8_t> cipher,
-                    std::span<uint8_t> plain) override {
-      // Skip 4-byte nonce, then XOR to recover plaintext.
-      for (size_t i = 0; i < plain.size(); ++i)
-        plain[i] = static_cast<uint8_t>(cipher[NoncePrependEncryptor::kNonceLen + i] ^ 0xABu);
-      return static_cast<int32_t>(plain.size());
-    }
-    int32_t PlaintextLength(int32_t ciphertext_len) const override {
-      return ciphertext_len - NoncePrependEncryptor::kNonceLen;
+    std::unique_ptr<DecryptorInterface> GetColumnDecryptor(
+        const ColumnEncryptionParams&) override {
+      return std::make_unique<NoncePrependDecImpl>();
     }
   };
 
@@ -696,7 +737,7 @@ TEST(TestExternalEncryptionProvider, FooterKeyMetadataMissingRetrieverThrows) {
       {
         ReaderProperties reader_props;
         reader_props.file_decryption_properties(db.build());
-        ParquetFileReader::Open(std::make_shared<::arrow::io::BufferReader>(buf),
+        ParquetFileReader::Open(std::make_shared< ::arrow::io::BufferReader>(buf),
                                 reader_props);
       },
       ParquetException);
@@ -709,12 +750,11 @@ TEST(TestExternalEncryptionProvider, UnencryptedColumnNotPassedToProvider) {
   auto mock_enc = std::make_shared<MockEncryptorProvider>();
   auto mock_dec = std::make_shared<MockDecryptorProvider>();
 
-  using namespace schema;
   // Two columns: only col_b is in encrypted_columns. col_a is plaintext.
-  auto schema_node = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make("col_a", Repetition::REQUIRED, Type::INT32),
-       PrimitiveNode::Make("col_b", Repetition::REQUIRED, Type::INT32)});
+  auto schema_node =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make("col_a", Repetition::REQUIRED, Type::INT32),
+                       PrimitiveNode::Make("col_b", Repetition::REQUIRED, Type::INT32)});
 
   ColumnPathToEncryptionPropertiesMap cols;
   ColumnEncryptionProperties::Builder cb("col_b");
@@ -748,17 +788,18 @@ TEST(TestExternalEncryptionProvider, UnencryptedColumnNotPassedToProvider) {
   ColumnDecryptionProperties::Builder db("col_b");
   dec_cols["col_b"] = db.key(kColumnAesKey)->build();
   FileDecryptionProperties::Builder dfb;
-  dfb.footer_key(kFooterKey)->column_keys(dec_cols)->external_decryptor_provider(
-      mock_dec);
+  dfb.footer_key(kFooterKey)
+      ->column_keys(dec_cols)
+      ->external_decryptor_provider(mock_dec);
 
   ReaderProperties reader_props;
   reader_props.file_decryption_properties(dfb.build());
   auto file_reader = ParquetFileReader::Open(
-      std::make_shared<::arrow::io::BufferReader>(buf), reader_props);
+      std::make_shared< ::arrow::io::BufferReader>(buf), reader_props);
   auto rg_reader = file_reader->RowGroup(0);
 
   auto read_int = [&](int col_idx) {
-    auto col = std::static_pointer_cast<TypedColumnReader<Int32Type>>(
+    auto col = std::static_pointer_cast<TypedColumnReader<Int32Type> >(
         rg_reader->Column(col_idx));
     std::vector<int32_t> out(3);
     int64_t n = 0;
@@ -774,66 +815,12 @@ TEST(TestExternalEncryptionProvider, UnencryptedColumnNotPassedToProvider) {
   EXPECT_GT(mock_dec->call_count(), 0);
 }
 
-// TC-Cache2: For a multi-row-group file the encryptor cache returns the same
-// Encryptor instance on repeated calls — provider call_count equals total pages,
-// not total row groups (adapter created once, reused N times).
-TEST(TestExternalEncryptionProvider, AdapterCreatedOnceReusedAcrossRowGroups) {
-  auto mock_enc = std::make_shared<MockEncryptorProvider>();
-  auto mock_dec = std::make_shared<MockDecryptorProvider>();
-
-  ColumnPathToEncryptionPropertiesMap cols;
-  cols[kColExt] = ExtColProps(kColExt);
-  FileEncryptionProperties::Builder fb(kFooterKey);
-  fb.external_encryptor_provider(mock_enc)->encrypted_columns(cols);
-
-  using namespace schema;
-  auto schema_node = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
-
-  auto sink = ::arrow::io::BufferOutputStream::Create().ValueOrDie();
-  auto writer_props = WriterProperties::Builder().encryption(fb.build())->build();
-  auto file_writer = ParquetFileWriter::Open(
-      sink, std::static_pointer_cast<GroupNode>(schema_node), writer_props);
-
-  const std::vector<int32_t> vals = {1, 2, 3};
-  const int num_row_groups = 4;
-  for (int i = 0; i < num_row_groups; ++i) {
-    auto rg = file_writer->AppendRowGroup();
-    auto* col = static_cast<Int32Writer*>(rg->NextColumn());
-    col->WriteBatch(vals.size(), nullptr, nullptr, vals.data());
-    col->Close();
-  }
-  file_writer->Close();
-  auto buf = sink->Finish().ValueOrDie();
-
-  // Dict + data page per row group; GE proves the adapter was called for all row groups.
-  const int enc_count = mock_enc->call_count();
-  EXPECT_GE(enc_count, num_row_groups);
-
-  auto dec_props = ExtDecProps(kColExt, mock_dec);
-  ReaderProperties reader_props;
-  reader_props.file_decryption_properties(std::move(dec_props));
-  auto file_reader = ParquetFileReader::Open(
-      std::make_shared<::arrow::io::BufferReader>(buf), reader_props);
-  ASSERT_EQ(file_reader->metadata()->num_row_groups(), num_row_groups);
-  for (int i = 0; i < num_row_groups; ++i) {
-    auto rg_reader = file_reader->RowGroup(i);
-    auto col = std::static_pointer_cast<TypedColumnReader<Int32Type>>(
-        rg_reader->Column(0));
-    std::vector<int32_t> out(vals.size());
-    int64_t n = 0;
-    col->ReadBatch(vals.size(), nullptr, nullptr, out.data(), &n);
-    EXPECT_EQ(vals, out) << "row group " << i;
-  }
-}
-
 // TC-Comp1: Snappy compression + external provider — compress-then-encrypt
 // ordering works end-to-end; CiphertextLength called with compressed page size.
 TEST(TestExternalEncryptionProvider, SnappyCompressionWithExternalProvider) {
-#ifndef ARROW_WITH_SNAPPY
+#  ifndef ARROW_WITH_SNAPPY
   GTEST_SKIP() << "Test requires Snappy compression";
-#endif
+#  endif
   auto mock_enc = std::make_shared<MockEncryptorProvider>();
   auto mock_dec = std::make_shared<MockDecryptorProvider>();
 
@@ -842,10 +829,9 @@ TEST(TestExternalEncryptionProvider, SnappyCompressionWithExternalProvider) {
   FileEncryptionProperties::Builder fb(kFooterKey);
   fb.external_encryptor_provider(mock_enc)->encrypted_columns(cols);
 
-  using namespace schema;
-  auto schema_node = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
+  auto schema_node =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
 
   auto sink = ::arrow::io::BufferOutputStream::Create().ValueOrDie();
   // Snappy compression: page is compressed first, then passed to external provider.
@@ -871,9 +857,9 @@ TEST(TestExternalEncryptionProvider, SnappyCompressionWithExternalProvider) {
 
 // TC-Comp2: LZ4 compression + external provider — same ordering validation.
 TEST(TestExternalEncryptionProvider, LZ4CompressionWithExternalProvider) {
-#ifndef ARROW_WITH_LZ4
+#  ifndef ARROW_WITH_LZ4
   GTEST_SKIP() << "Test requires LZ4 compression";
-#endif
+#  endif
   auto mock_enc = std::make_shared<MockEncryptorProvider>();
   auto mock_dec = std::make_shared<MockDecryptorProvider>();
 
@@ -882,10 +868,9 @@ TEST(TestExternalEncryptionProvider, LZ4CompressionWithExternalProvider) {
   FileEncryptionProperties::Builder fb(kFooterKey);
   fb.external_encryptor_provider(mock_enc)->encrypted_columns(cols);
 
-  using namespace schema;
-  auto schema_node = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
+  auto schema_node =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
 
   auto sink = ::arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto writer_props = WriterProperties::Builder()
@@ -911,32 +896,63 @@ TEST(TestExternalEncryptionProvider, LZ4CompressionWithExternalProvider) {
 // TC-Comp3: Snappy compression + nonce-prepend provider (non-zero overhead) —
 // CiphertextLength must work correctly with variable compressed page sizes.
 TEST(TestExternalEncryptionProvider, SnappyWithCiphertextOverheadProvider) {
-#ifndef ARROW_WITH_SNAPPY
+#  ifndef ARROW_WITH_SNAPPY
   GTEST_SKIP() << "Test requires Snappy compression";
-#endif
-  struct NoncePrependEncryptor : public ExternalEncryptorProvider {
-    enum : int32_t { kNonceLen = 4 };
-    int32_t Encrypt(const ColumnEncryptionParams&, std::span<const uint8_t> plain,
-                    std::span<uint8_t> cipher) override {
-      cipher[0] = 0xDE; cipher[1] = 0xAD; cipher[2] = 0xBE; cipher[3] = 0xEF;
+#  endif
+  static constexpr int32_t kNonceLen = 4;
+
+  struct NoncePrependEncImpl : public EncryptorInterface {
+    bool CanCalculateCiphertextLength() const override { return true; }
+    int32_t CiphertextLength(int64_t n) const override {
+      return kNonceLen + static_cast<int32_t>(n);
+    }
+    int32_t Encrypt(std::span<const uint8_t> plain, std::span<const uint8_t>,
+                    std::span<const uint8_t>, std::span<uint8_t> cipher,
+                    std::unique_ptr<EncodingProperties>) override {
+      cipher[0] = 0xDE;
+      cipher[1] = 0xAD;
+      cipher[2] = 0xBE;
+      cipher[3] = 0xEF;
       for (size_t i = 0; i < plain.size(); ++i)
         cipher[kNonceLen + i] = static_cast<uint8_t>(plain[i] ^ 0xABu);
       return kNonceLen + static_cast<int32_t>(plain.size());
     }
-    int32_t CiphertextLength(int64_t n) const override {
-      return kNonceLen + static_cast<int32_t>(n);
+    int32_t EncryptWithManagedBuffer(std::span<const uint8_t>, ::arrow::ResizableBuffer*,
+                                     std::unique_ptr<EncodingProperties>) override {
+      throw ParquetException("not expected in this test");
+    }
+    int32_t SignedFooterEncrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                                std::span<const uint8_t>, std::span<const uint8_t>,
+                                std::span<uint8_t>) override {
+      throw ParquetException("not supported");
+    }
+  };
+  struct NoncePrependDecImpl : public DecryptorInterface {
+    bool CanCalculateLengths() const override { return true; }
+    int32_t PlaintextLength(int32_t n) const override { return n - kNonceLen; }
+    int32_t CiphertextLength(int32_t n) const override { return n; }
+    int32_t Decrypt(std::span<const uint8_t> cipher, std::span<const uint8_t>,
+                    std::span<const uint8_t>, std::span<uint8_t> plain,
+                    std::unique_ptr<EncodingProperties>) override {
+      for (size_t i = 0; i < plain.size(); ++i)
+        plain[i] = static_cast<uint8_t>(cipher[kNonceLen + i] ^ 0xABu);
+      return static_cast<int32_t>(plain.size());
+    }
+    int32_t DecryptWithManagedBuffer(std::span<const uint8_t>, ::arrow::ResizableBuffer*,
+                                     std::unique_ptr<EncodingProperties>) override {
+      throw ParquetException("not expected in this test");
+    }
+  };
+  struct NoncePrependEncryptor : public ExternalEncryptorProvider {
+    std::unique_ptr<EncryptorInterface> GetColumnEncryptor(
+        const ColumnEncryptionParams&) override {
+      return std::make_unique<NoncePrependEncImpl>();
     }
   };
   struct NoncePrependDecryptor : public ExternalDecryptorProvider {
-    int32_t Decrypt(const ColumnEncryptionParams&, std::span<const uint8_t> cipher,
-                    std::span<uint8_t> plain) override {
-      for (size_t i = 0; i < plain.size(); ++i)
-        plain[i] = static_cast<uint8_t>(
-            cipher[NoncePrependEncryptor::kNonceLen + i] ^ 0xABu);
-      return static_cast<int32_t>(plain.size());
-    }
-    int32_t PlaintextLength(int32_t ciphertext_len) const override {
-      return ciphertext_len - NoncePrependEncryptor::kNonceLen;
+    std::unique_ptr<DecryptorInterface> GetColumnDecryptor(
+        const ColumnEncryptionParams&) override {
+      return std::make_unique<NoncePrependDecImpl>();
     }
   };
 
@@ -948,10 +964,9 @@ TEST(TestExternalEncryptionProvider, SnappyWithCiphertextOverheadProvider) {
   FileEncryptionProperties::Builder fb(kFooterKey);
   fb.external_encryptor_provider(enc)->encrypted_columns(cols);
 
-  using namespace schema;
-  auto schema_node = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
+  auto schema_node =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
 
   auto sink = ::arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto writer_props = WriterProperties::Builder()
@@ -1052,7 +1067,6 @@ TEST(TestExternalEncryptionProvider, FixedLenByteArrayColumnRoundTrip) {
   auto mock_enc = std::make_shared<MockEncryptorProvider>();
   auto mock_dec = std::make_shared<MockDecryptorProvider>();
 
-  using namespace schema;
   constexpr int kFlbaLen = 8;
   auto schema_node = GroupNode::Make(
       "schema", Repetition::REQUIRED,
@@ -1096,17 +1110,15 @@ TEST(TestExternalEncryptionProvider, FixedLenByteArrayColumnRoundTrip) {
   ColumnDecryptionProperties::Builder dcb("flba_col");
   dec_cols["flba_col"] = dcb.key(kColumnAesKey)->build();
   FileDecryptionProperties::Builder db;
-  db.footer_key(kFooterKey)
-      ->column_keys(dec_cols)
-      ->external_decryptor_provider(mock_dec);
+  db.footer_key(kFooterKey)->column_keys(dec_cols)->external_decryptor_provider(mock_dec);
 
   ReaderProperties reader_props;
   reader_props.file_decryption_properties(db.build());
   auto file_reader = ParquetFileReader::Open(
-      std::make_shared<::arrow::io::BufferReader>(buf), reader_props);
+      std::make_shared< ::arrow::io::BufferReader>(buf), reader_props);
   auto rg_reader = file_reader->RowGroup(0);
-  auto col_reader = std::static_pointer_cast<TypedColumnReader<FLBAType>>(
-      rg_reader->Column(0));
+  auto col_reader =
+      std::static_pointer_cast<TypedColumnReader<FLBAType> >(rg_reader->Column(0));
   std::vector<FixedLenByteArray> out(flba_vals.size());
   int64_t n = 0;
   col_reader->ReadBatch(static_cast<int>(flba_vals.size()), nullptr, nullptr, out.data(),
@@ -1130,14 +1142,11 @@ TEST(TestExternalEncryptionProvider, DictionaryEncodedColumnRoundTrip) {
 
   // Enable dictionary encoding — causes a dictionary page to be written.
   auto sink = ::arrow::io::BufferOutputStream::Create().ValueOrDie();
-  auto writer_props = WriterProperties::Builder()
-                          .enable_dictionary()
-                          ->encryption(fb.build())
-                          ->build();
-  using namespace schema;
-  auto schema_node = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
+  auto writer_props =
+      WriterProperties::Builder().enable_dictionary()->encryption(fb.build())->build();
+  auto schema_node =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
   auto file_writer = ParquetFileWriter::Open(
       sink, std::static_pointer_cast<GroupNode>(schema_node), writer_props);
   auto rg = file_writer->AppendRowGroup();
@@ -1171,10 +1180,9 @@ TEST(TestExternalEncryptionProvider, DataPageV2WithExternalProvider) {
                           .data_page_version(ParquetDataPageVersion::V2)
                           ->encryption(fb.build())
                           ->build();
-  using namespace schema;
-  auto schema_node = GroupNode::Make(
-      "schema", Repetition::REQUIRED,
-      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
+  auto schema_node =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
   auto file_writer = ParquetFileWriter::Open(
       sink, std::static_pointer_cast<GroupNode>(schema_node), writer_props);
   auto rg = file_writer->AppendRowGroup();
@@ -1196,7 +1204,7 @@ TEST(TestExternalEncryptionProvider, DataPageV2WithExternalProvider) {
 TEST(TestExternalEncryptionProvider, ConcurrentWritesWithSharedProvider) {
   auto mock_enc = std::make_shared<MockEncryptorProvider>();
 
-  auto write_file = [&]() -> std::shared_ptr<::arrow::Buffer> {
+  auto write_file = [&]() -> std::shared_ptr< ::arrow::Buffer> {
     ColumnPathToEncryptionPropertiesMap cols;
     cols[kColExt] = ExtColProps(kColExt);
     FileEncryptionProperties::Builder fb(kFooterKey);
@@ -1204,7 +1212,7 @@ TEST(TestExternalEncryptionProvider, ConcurrentWritesWithSharedProvider) {
     return WriteOneColumn(kColExt, {1, 2, 3}, fb.build());
   };
 
-  std::shared_ptr<::arrow::Buffer> buf1, buf2;
+  std::shared_ptr< ::arrow::Buffer> buf1, buf2;
   std::thread t1([&]() { buf1 = write_file(); });
   std::thread t2([&]() { buf2 = write_file(); });
   t1.join();
@@ -1219,15 +1227,33 @@ TEST(TestExternalEncryptionProvider, ConcurrentWritesWithSharedProvider) {
   EXPECT_EQ(expected, ReadOneColumn(buf2, ExtDecProps(kColExt, dec2)));
 }
 
-// TC-Err1: Provider::Encrypt() throws — exception propagates out of WriteOneColumn.
+// TC-Err1: Provider encryptor throws — exception propagates out of WriteOneColumn.
 TEST(TestExternalEncryptionProvider, ProviderEncryptThrowsPropagates) {
   struct ThrowingProvider : public ExternalEncryptorProvider {
-    int32_t Encrypt(const ColumnEncryptionParams&, std::span<const uint8_t>,
-                    std::span<uint8_t>) override {
-      throw std::runtime_error("provider failure");
-    }
-    int32_t CiphertextLength(int64_t n) const override {
-      return static_cast<int32_t>(n);
+    std::unique_ptr<EncryptorInterface> GetColumnEncryptor(
+        const ColumnEncryptionParams&) override {
+      struct ThrowingEncryptor : public EncryptorInterface {
+        bool CanCalculateCiphertextLength() const override { return true; }
+        int32_t CiphertextLength(int64_t n) const override {
+          return static_cast<int32_t>(n);
+        }
+        int32_t Encrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                        std::span<const uint8_t>, std::span<uint8_t>,
+                        std::unique_ptr<EncodingProperties>) override {
+          throw std::runtime_error("provider failure");
+        }
+        int32_t EncryptWithManagedBuffer(std::span<const uint8_t>,
+                                         ::arrow::ResizableBuffer*,
+                                         std::unique_ptr<EncodingProperties>) override {
+          throw std::runtime_error("provider failure");
+        }
+        int32_t SignedFooterEncrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                                    std::span<const uint8_t>, std::span<const uint8_t>,
+                                    std::span<uint8_t>) override {
+          throw ParquetException("not supported");
+        }
+      };
+      return std::make_unique<ThrowingEncryptor>();
     }
   };
 
@@ -1240,19 +1266,411 @@ TEST(TestExternalEncryptionProvider, ProviderEncryptThrowsPropagates) {
   EXPECT_THROW(WriteOneColumn(kColExt, {1, 2, 3}, fb.build()), std::exception);
 }
 
+// TC14: params.data_type passed to GetColumnEncryptor() matches the column physical type.
+TEST(TestExternalEncryptionProvider, DataTypeInParamsMatchesColumnSchema) {
+  Type::type captured_type = Type::BOOLEAN;  // sentinel; must become INT32 after write
+  struct DataTypeCapturingProvider : public ExternalEncryptorProvider {
+    Type::type& out;
+    explicit DataTypeCapturingProvider(Type::type& t) : out(t) {}
+    std::unique_ptr<EncryptorInterface> GetColumnEncryptor(
+        const ColumnEncryptionParams& params) override {
+      out = params.data_type;
+      struct XorEnc : public EncryptorInterface {
+        bool CanCalculateCiphertextLength() const override { return true; }
+        int32_t CiphertextLength(int64_t n) const override {
+          return static_cast<int32_t>(n);
+        }
+        int32_t Encrypt(std::span<const uint8_t> plain, std::span<const uint8_t>,
+                        std::span<const uint8_t>, std::span<uint8_t> cipher,
+                        std::unique_ptr<EncodingProperties>) override {
+          std::transform(plain.begin(), plain.end(), cipher.begin(),
+                         [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
+          return static_cast<int32_t>(plain.size());
+        }
+        int32_t EncryptWithManagedBuffer(std::span<const uint8_t>,
+                                         ::arrow::ResizableBuffer*,
+                                         std::unique_ptr<EncodingProperties>) override {
+          throw ParquetException("not expected in this test");
+        }
+        int32_t SignedFooterEncrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                                    std::span<const uint8_t>, std::span<const uint8_t>,
+                                    std::span<uint8_t>) override {
+          throw ParquetException("not supported");
+        }
+      };
+      return std::make_unique<XorEnc>();
+    }
+  };
+
+  auto cap = std::make_shared<DataTypeCapturingProvider>(captured_type);
+  ColumnPathToEncryptionPropertiesMap cols;
+  cols[kColExt] = ExtColProps(kColExt);
+  FileEncryptionProperties::Builder fb(kFooterKey);
+  fb.external_encryptor_provider(cap)->encrypted_columns(cols);
+
+  ASSERT_NO_THROW(WriteOneColumn(kColExt, {1, 2, 3}, fb.build()));
+  EXPECT_EQ(captured_type, Type::INT32);
+}
+
+// TC-Managed1: CanCalculateCiphertextLength()=false forces EncryptWithManagedBuffer();
+// Encrypt() is never called; EncodingProperties is non-null; round-trip recovers values.
+TEST(TestExternalEncryptionProvider, ManagedBufferPathRoundTrip) {
+  std::atomic<int> enc_managed_calls{0};
+  std::atomic<int> dec_managed_calls{0};
+
+  struct ManagedEncImpl : public EncryptorInterface {
+    std::atomic<int>& calls;
+    explicit ManagedEncImpl(std::atomic<int>& c) : calls(c) {}
+    bool CanCalculateCiphertextLength() const override { return false; }
+    int32_t CiphertextLength(int64_t) const override { return -1; }
+    int32_t Encrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                    std::span<const uint8_t>, std::span<uint8_t>,
+                    std::unique_ptr<EncodingProperties>) override {
+      throw ParquetException(
+          "Encrypt() must not be called when CanCalculateCiphertextLength=false");
+    }
+    int32_t EncryptWithManagedBuffer(std::span<const uint8_t> plain,
+                                     ::arrow::ResizableBuffer* cipher,
+                                     std::unique_ptr<EncodingProperties> props) override {
+      if (!props)
+        throw ParquetException("EncodingProperties is null in EncryptWithManagedBuffer");
+      PARQUET_THROW_NOT_OK(cipher->Resize(static_cast<int64_t>(plain.size())));
+      std::transform(plain.begin(), plain.end(), cipher->mutable_data(),
+                     [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
+      ++calls;
+      return static_cast<int32_t>(plain.size());
+    }
+    int32_t SignedFooterEncrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                                std::span<const uint8_t>, std::span<const uint8_t>,
+                                std::span<uint8_t>) override {
+      throw ParquetException("not supported");
+    }
+  };
+  struct ManagedDecImpl : public DecryptorInterface {
+    std::atomic<int>& calls;
+    explicit ManagedDecImpl(std::atomic<int>& c) : calls(c) {}
+    bool CanCalculateLengths() const override { return false; }
+    int32_t PlaintextLength(int32_t) const override { return -1; }
+    int32_t CiphertextLength(int32_t n) const override { return n; }
+    int32_t Decrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                    std::span<const uint8_t>, std::span<uint8_t>,
+                    std::unique_ptr<EncodingProperties>) override {
+      throw ParquetException(
+          "Decrypt() must not be called when CanCalculateLengths=false");
+    }
+    int32_t DecryptWithManagedBuffer(std::span<const uint8_t> cipher,
+                                     ::arrow::ResizableBuffer* plain,
+                                     std::unique_ptr<EncodingProperties> props) override {
+      if (!props)
+        throw ParquetException("EncodingProperties is null in DecryptWithManagedBuffer");
+      PARQUET_THROW_NOT_OK(plain->Resize(static_cast<int64_t>(cipher.size())));
+      std::transform(cipher.begin(), cipher.end(), plain->mutable_data(),
+                     [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
+      ++calls;
+      return static_cast<int32_t>(cipher.size());
+    }
+  };
+  struct ManagedEncProvider : public ExternalEncryptorProvider {
+    std::atomic<int>& calls;
+    explicit ManagedEncProvider(std::atomic<int>& c) : calls(c) {}
+    std::unique_ptr<EncryptorInterface> GetColumnEncryptor(
+        const ColumnEncryptionParams&) override {
+      return std::make_unique<ManagedEncImpl>(calls);
+    }
+  };
+  struct ManagedDecProvider : public ExternalDecryptorProvider {
+    std::atomic<int>& calls;
+    explicit ManagedDecProvider(std::atomic<int>& c) : calls(c) {}
+    std::unique_ptr<DecryptorInterface> GetColumnDecryptor(
+        const ColumnEncryptionParams&) override {
+      return std::make_unique<ManagedDecImpl>(calls);
+    }
+  };
+
+  auto enc = std::make_shared<ManagedEncProvider>(enc_managed_calls);
+  auto dec = std::make_shared<ManagedDecProvider>(dec_managed_calls);
+
+  ColumnPathToEncryptionPropertiesMap cols;
+  cols[kColExt] = ExtColProps(kColExt);
+  FileEncryptionProperties::Builder fb(kFooterKey);
+  fb.external_encryptor_provider(enc)->encrypted_columns(cols);
+
+  const std::vector<int32_t> values = {10, 20, 30};
+  std::shared_ptr< ::arrow::Buffer> buf;
+  ASSERT_NO_THROW(buf = WriteOneColumn(kColExt, values, fb.build()));
+  EXPECT_GT(enc_managed_calls.load(), 0);
+
+  ColumnPathToDecryptionPropertiesMap dec_cols;
+  ColumnDecryptionProperties::Builder dcb(kColExt);
+  dec_cols[kColExt] = dcb.key(kColumnAesKey)->build();
+  FileDecryptionProperties::Builder db;
+  db.footer_key(kFooterKey)->column_keys(dec_cols)->external_decryptor_provider(dec);
+
+  auto result = ReadOneColumn(buf, db.build());
+  EXPECT_EQ(values, result);
+  EXPECT_GT(dec_managed_calls.load(), 0);
+}
+
+// TC-Params1: params.compression_type reflects the file writer's configured codec.
+TEST(TestExternalEncryptionProvider, CompressionTypeInParamsPropagated) {
+#  ifndef ARROW_WITH_SNAPPY
+  GTEST_SKIP() << "Test requires Snappy compression";
+#  endif
+  Compression::type captured = Compression::UNCOMPRESSED;  // sentinel
+  struct ComprCapturingProvider : public ExternalEncryptorProvider {
+    Compression::type& out;
+    explicit ComprCapturingProvider(Compression::type& t) : out(t) {}
+    std::unique_ptr<EncryptorInterface> GetColumnEncryptor(
+        const ColumnEncryptionParams& params) override {
+      out = params.compression_type;
+      struct XorEnc : public EncryptorInterface {
+        bool CanCalculateCiphertextLength() const override { return true; }
+        int32_t CiphertextLength(int64_t n) const override {
+          return static_cast<int32_t>(n);
+        }
+        int32_t Encrypt(std::span<const uint8_t> p, std::span<const uint8_t>,
+                        std::span<const uint8_t>, std::span<uint8_t> c,
+                        std::unique_ptr<EncodingProperties>) override {
+          std::transform(p.begin(), p.end(), c.begin(),
+                         [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
+          return static_cast<int32_t>(p.size());
+        }
+        int32_t EncryptWithManagedBuffer(std::span<const uint8_t>,
+                                         ::arrow::ResizableBuffer*,
+                                         std::unique_ptr<EncodingProperties>) override {
+          throw ParquetException("not expected");
+        }
+        int32_t SignedFooterEncrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                                    std::span<const uint8_t>, std::span<const uint8_t>,
+                                    std::span<uint8_t>) override {
+          throw ParquetException("not supported");
+        }
+      };
+      return std::make_unique<XorEnc>();
+    }
+  };
+
+  auto cap = std::make_shared<ComprCapturingProvider>(captured);
+  ColumnPathToEncryptionPropertiesMap cols;
+  cols[kColExt] = ExtColProps(kColExt);
+  FileEncryptionProperties::Builder fb(kFooterKey);
+  fb.external_encryptor_provider(cap)->encrypted_columns(cols);
+
+  auto schema_node =
+      GroupNode::Make("schema", Repetition::REQUIRED,
+                      {PrimitiveNode::Make(kColExt, Repetition::REQUIRED, Type::INT32)});
+  auto sink = ::arrow::io::BufferOutputStream::Create().ValueOrDie();
+  auto writer_props = WriterProperties::Builder()
+                          .compression(Compression::SNAPPY)
+                          ->encryption(fb.build())
+                          ->build();
+  auto fw = ParquetFileWriter::Open(
+      sink, std::static_pointer_cast<GroupNode>(schema_node), writer_props);
+  auto rg = fw->AppendRowGroup();
+  auto* col = static_cast<Int32Writer*>(rg->NextColumn());
+  const std::vector<int32_t> vals = {1, 2, 3};
+  col->WriteBatch(vals.size(), nullptr, nullptr, vals.data());
+  col->Close();
+  fw->Close();
+
+  EXPECT_EQ(captured, Compression::SNAPPY);
+}
+
+// TC-Params2: params.datatype_length is set for FIXED_LEN_BYTE_ARRAY;
+// params.data_type is FIXED_LEN_BYTE_ARRAY (distinct from TC14's INT32 path).
+TEST(TestExternalEncryptionProvider, FixedLenByteArrayDataTypeLengthInParams) {
+  constexpr int kFlbaLen = 12;
+  Type::type captured_type = Type::BOOLEAN;  // sentinel
+  std::optional<int> captured_length = std::nullopt;
+
+  struct FlbaCapturingProvider : public ExternalEncryptorProvider {
+    Type::type& out_type;
+    std::optional<int>& out_len;
+    FlbaCapturingProvider(Type::type& t, std::optional<int>& l)
+        : out_type(t), out_len(l) {}
+    std::unique_ptr<EncryptorInterface> GetColumnEncryptor(
+        const ColumnEncryptionParams& params) override {
+      out_type = params.data_type;
+      out_len = params.datatype_length;
+      struct XorEnc : public EncryptorInterface {
+        bool CanCalculateCiphertextLength() const override { return true; }
+        int32_t CiphertextLength(int64_t n) const override {
+          return static_cast<int32_t>(n);
+        }
+        int32_t Encrypt(std::span<const uint8_t> p, std::span<const uint8_t>,
+                        std::span<const uint8_t>, std::span<uint8_t> c,
+                        std::unique_ptr<EncodingProperties>) override {
+          std::transform(p.begin(), p.end(), c.begin(),
+                         [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
+          return static_cast<int32_t>(p.size());
+        }
+        int32_t EncryptWithManagedBuffer(std::span<const uint8_t>,
+                                         ::arrow::ResizableBuffer*,
+                                         std::unique_ptr<EncodingProperties>) override {
+          throw ParquetException("not expected");
+        }
+        int32_t SignedFooterEncrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                                    std::span<const uint8_t>, std::span<const uint8_t>,
+                                    std::span<uint8_t>) override {
+          throw ParquetException("not supported");
+        }
+      };
+      return std::make_unique<XorEnc>();
+    }
+  };
+
+  auto cap = std::make_shared<FlbaCapturingProvider>(captured_type, captured_length);
+
+  auto schema_node = GroupNode::Make(
+      "schema", Repetition::REQUIRED,
+      {PrimitiveNode::Make("flba_col", Repetition::REQUIRED, Type::FIXED_LEN_BYTE_ARRAY,
+                           ConvertedType::NONE, kFlbaLen)});
+
+  ColumnEncryptionProperties::Builder cb("flba_col");
+  cb.key(kColumnAesKey);
+  cb.key_metadata("flba-key")->parquet_cipher(ParquetCipher::EXTERNAL_DBPA_V1);
+  ColumnPathToEncryptionPropertiesMap cols;
+  cols["flba_col"] = cb.build();
+
+  FileEncryptionProperties::Builder fb(kFooterKey);
+  fb.external_encryptor_provider(cap)->encrypted_columns(cols);
+
+  auto sink = ::arrow::io::BufferOutputStream::Create().ValueOrDie();
+  auto writer_props = WriterProperties::Builder().encryption(fb.build())->build();
+  auto fw = ParquetFileWriter::Open(
+      sink, std::static_pointer_cast<GroupNode>(schema_node), writer_props);
+  auto rg = fw->AppendRowGroup();
+  auto* col = static_cast<FixedLenByteArrayWriter*>(rg->NextColumn());
+  const std::string kVal = "ABCDEFGHIJKL";  // exactly kFlbaLen bytes
+  FixedLenByteArray flba{reinterpret_cast<const uint8_t*>(kVal.data())};
+  col->WriteBatch(1, nullptr, nullptr, &flba);
+  col->Close();
+  fw->Close();
+
+  EXPECT_EQ(captured_type, Type::FIXED_LEN_BYTE_ARRAY);
+  ASSERT_TRUE(captured_length.has_value());
+  EXPECT_EQ(*captured_length, kFlbaLen);
+}
+
+// TC-Params3: key_value_metadata stored by GetKeyValueMetadata() on write is
+// forwarded into params.key_value_metadata on the read path via GetColumnDecryptor().
+TEST(TestExternalEncryptionProvider, KeyValueMetadataRoundTripToDecryptorParams) {
+  const std::string kMetaKey = "token-lookup-key";
+  const std::string kMetaVal = "lookup-handle-abc";
+
+  // Encryptor that stores one KV pair after each page via GetKeyValueMetadata().
+  struct KvMetaEncImpl : public EncryptorInterface {
+    std::string meta_key, meta_val;
+    KvMetaEncImpl(std::string k, std::string v)
+        : meta_key(std::move(k)), meta_val(std::move(v)) {}
+    bool CanCalculateCiphertextLength() const override { return true; }
+    int32_t CiphertextLength(int64_t n) const override { return static_cast<int32_t>(n); }
+    int32_t Encrypt(std::span<const uint8_t> p, std::span<const uint8_t>,
+                    std::span<const uint8_t>, std::span<uint8_t> c,
+                    std::unique_ptr<EncodingProperties>) override {
+      std::transform(p.begin(), p.end(), c.begin(),
+                     [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
+      return static_cast<int32_t>(p.size());
+    }
+    int32_t EncryptWithManagedBuffer(std::span<const uint8_t>, ::arrow::ResizableBuffer*,
+                                     std::unique_ptr<EncodingProperties>) override {
+      throw ParquetException("not expected");
+    }
+    int32_t SignedFooterEncrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                                std::span<const uint8_t>, std::span<const uint8_t>,
+                                std::span<uint8_t>) override {
+      throw ParquetException("not supported");
+    }
+    // Returns same KV pair for every page; column_writer deduplicates identical keys.
+    std::shared_ptr< ::arrow::KeyValueMetadata> GetKeyValueMetadata(
+        int8_t /*module_type*/) override {
+      return ::arrow::key_value_metadata({meta_key}, {meta_val});
+    }
+  };
+  struct KvMetaEncProvider : public ExternalEncryptorProvider {
+    std::string k, v;
+    KvMetaEncProvider(std::string k_, std::string v_)
+        : k(std::move(k_)), v(std::move(v_)) {}
+    std::unique_ptr<EncryptorInterface> GetColumnEncryptor(
+        const ColumnEncryptionParams&) override {
+      return std::make_unique<KvMetaEncImpl>(k, v);
+    }
+  };
+
+  // Decryptor provider captures params.key_value_metadata at GetColumnDecryptor()
+  // time into a shared_ptr that outlives the reader.
+  std::shared_ptr<const ::arrow::KeyValueMetadata> captured_kv;
+  struct KvMetaDecProvider : public ExternalDecryptorProvider {
+    std::shared_ptr<const ::arrow::KeyValueMetadata>& out;
+    explicit KvMetaDecProvider(std::shared_ptr<const ::arrow::KeyValueMetadata>& o)
+        : out(o) {}
+    std::unique_ptr<DecryptorInterface> GetColumnDecryptor(
+        const ColumnEncryptionParams& params) override {
+      out = params.key_value_metadata;  // captured before returning; safe after read
+      struct XorDec : public DecryptorInterface {
+        bool CanCalculateLengths() const override { return true; }
+        int32_t PlaintextLength(int32_t n) const override { return n; }
+        int32_t CiphertextLength(int32_t n) const override { return n; }
+        int32_t Decrypt(std::span<const uint8_t> c, std::span<const uint8_t>,
+                        std::span<const uint8_t>, std::span<uint8_t> p,
+                        std::unique_ptr<EncodingProperties>) override {
+          std::transform(c.begin(), c.end(), p.begin(),
+                         [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
+          return static_cast<int32_t>(c.size());
+        }
+        int32_t DecryptWithManagedBuffer(std::span<const uint8_t>,
+                                         ::arrow::ResizableBuffer*,
+                                         std::unique_ptr<EncodingProperties>) override {
+          throw ParquetException("not expected");
+        }
+      };
+      return std::make_unique<XorDec>();
+    }
+  };
+
+  auto enc = std::make_shared<KvMetaEncProvider>(kMetaKey, kMetaVal);
+  auto dec = std::make_shared<KvMetaDecProvider>(captured_kv);
+
+  ColumnPathToEncryptionPropertiesMap cols;
+  cols[kColExt] = ExtColProps(kColExt);
+  FileEncryptionProperties::Builder fb(kFooterKey);
+  fb.external_encryptor_provider(enc)->encrypted_columns(cols);
+
+  const std::vector<int32_t> values = {1, 2, 3};
+  auto buf = WriteOneColumn(kColExt, values, fb.build());
+
+  ColumnPathToDecryptionPropertiesMap dec_cols;
+  ColumnDecryptionProperties::Builder dcb(kColExt);
+  dec_cols[kColExt] = dcb.key(kColumnAesKey)->build();
+  FileDecryptionProperties::Builder db;
+  db.footer_key(kFooterKey)->column_keys(dec_cols)->external_decryptor_provider(dec);
+
+  auto result = ReadOneColumn(buf, db.build());
+  EXPECT_EQ(values, result);
+
+  ASSERT_NE(captured_kv, nullptr);
+  const int64_t idx = captured_kv->FindKey(kMetaKey);
+  ASSERT_GE(idx, 0);
+  EXPECT_EQ(captured_kv->value(idx), kMetaVal);
+}
+
 // Symmetry contract: MockDecryptorProvider must recover exactly what
 // MockEncryptorProvider encrypted — all integration round-trip tests depend on this.
 TEST(TestMockProviderSymmetry, DecryptEncryptRoundTrip) {
-  MockEncryptorProvider enc;
-  MockDecryptorProvider dec;
+  MockEncryptorProvider enc_provider;
+  MockDecryptorProvider dec_provider;
   ColumnEncryptionParams params{"key-id", "col"};
+
+  auto enc = enc_provider.GetColumnEncryptor(params);
+  auto dec = dec_provider.GetColumnDecryptor(params);
 
   const std::vector<uint8_t> original = {0x01, 0x02, 0x03, 0x7F, 0x80, 0xFF};
   std::vector<uint8_t> cipher(original.size());
   std::vector<uint8_t> recovered(original.size());
 
-  enc.Encrypt(params, original, cipher);
-  dec.Decrypt(params, cipher, recovered);
+  // XorEncryptor/XorDecryptor ignore key and aad.
+  enc->Encrypt(original, {}, {}, cipher, nullptr);
+  dec->Decrypt(cipher, {}, {}, recovered, nullptr);
 
   EXPECT_EQ(original, recovered);
 }

@@ -18,24 +18,20 @@
 #pragma once
 
 #include <atomic>
-#include <span>
+#include <memory>
 
+#include "parquet/encryption/decryptor_interface.h"
 #include "parquet/encryption/external_decryptor_provider.h"
 
 namespace parquet::encryption::test {
 
-/// XOR-based in-process decryptor stub for unit tests only.
-/// Symmetric with MockEncryptorProvider — applying the same XOR mask recovers plaintext.
+// XOR-based decryptor factory stub for unit tests — symmetric with MockEncryptorProvider.
 class MockDecryptorProvider : public ExternalDecryptorProvider {
  public:
-  int32_t Decrypt(const ColumnEncryptionParams& params,
-                  std::span<const uint8_t> ciphertext,
-                  std::span<uint8_t> plaintext) override;
+  std::unique_ptr<DecryptorInterface> GetColumnDecryptor(
+      const ColumnEncryptionParams& params) override;
 
-  /// Plaintext is the same length as ciphertext (XOR adds no overhead).
-  int32_t PlaintextLength(int32_t ciphertext_length) const override;
-
-  /// Number of times Decrypt() has been called across all columns and pages.
+  // Total Decrypt()/DecryptWithManagedBuffer() calls across all columns and pages.
   int call_count() const { return call_count_.load(); }
 
  private:

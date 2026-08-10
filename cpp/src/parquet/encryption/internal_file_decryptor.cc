@@ -32,51 +32,6 @@ using arrow::util::SecureString;
 
 namespace parquet {
 
-namespace {
-
-// Adapts ExternalDecryptorProvider to the DecryptorInterface used by Decryptor.
-// key and aad passed by Arrow are intentionally ignored — the provider resolves
-// the key internally from ColumnEncryptionParams::key_metadata.
-class ExternalDecryptorAdapter : public encryption::DecryptorInterface {
- public:
-  ExternalDecryptorAdapter(std::shared_ptr<ExternalDecryptorProvider> provider,
-                           ColumnEncryptionParams params)
-      : provider_(std::move(provider)), params_(std::move(params)) {}
-
-  bool CanCalculateLengths() const override { return true; }
-
-  int32_t PlaintextLength(int32_t ciphertext_len) const override {
-    return provider_->PlaintextLength(ciphertext_len);
-  }
-
-  int32_t CiphertextLength(int32_t plaintext_len) const override {
-    return plaintext_len;  // placeholder — decryptors are not asked for ciphertext length
-  }
-
-  int32_t Decrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> /*key*/,
-                  std::span<const uint8_t> /*aad*/, std::span<uint8_t> plaintext,
-                  std::unique_ptr<EncodingProperties> /*props*/ = nullptr) override {
-    return provider_->Decrypt(params_, ciphertext, plaintext);
-  }
-
-  int32_t DecryptWithManagedBuffer(
-      std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
-      std::unique_ptr<EncodingProperties> /*props*/ = nullptr) override {
-    int32_t plain_len =
-        provider_->PlaintextLength(static_cast<int32_t>(ciphertext.size()));
-    PARQUET_THROW_NOT_OK(plaintext->Resize(plain_len));
-    return provider_->Decrypt(params_, ciphertext,
-                              {reinterpret_cast<uint8_t*>(plaintext->mutable_data()),
-                               static_cast<size_t>(plain_len)});
-  }
-
- private:
-  std::shared_ptr<ExternalDecryptorProvider> provider_;
-  ColumnEncryptionParams params_;
-};
-
-}  // namespace
-
 // Decryptor
 Decryptor::Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor_instance,
                      SecureString key, std::string file_aad, std::string aad,
@@ -243,12 +198,22 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
             "key_metadata must be set on ColumnEncryptionProperties when using "
             "ExternalDecryptorProvider");
       }
-      ColumnEncryptionParams params{column_key_metadata, column_path};
-      // Decryptor takes unique_ptr ownership — do NOT also cache the raw ptr.
+      ColumnEncryptionParams params;
+      params.key_metadata = column_key_metadata;
+      params.column_path = column_path;
+      if (column_chunk_metadata != nullptr) {
+        auto* descr = column_chunk_metadata->descr();
+        params.data_type = descr->physical_type();
+        params.compression_type = column_chunk_metadata->compression();
+        if (params.data_type == Type::FIXED_LEN_BYTE_ARRAY) {
+          params.datatype_length = descr->type_length();
+        }
+        params.key_value_metadata = column_chunk_metadata->key_value_metadata();
+      }
+      // Decryptor takes unique_ptr ownership directly — no separate cache needed.
       return std::make_unique<Decryptor>(
-          std::make_unique<ExternalDecryptorAdapter>(external_decryptor_provider_,
-                                                     std::move(params)),
-          SecureString{}, file_aad_, aad, pool_);
+          external_decryptor_provider_->GetColumnDecryptor(params), SecureString{},
+          file_aad_, aad, pool_);
     }
 
     decryptor_instance = encryption::AesDecryptor::Make(algorithm, key_len, metadata);
