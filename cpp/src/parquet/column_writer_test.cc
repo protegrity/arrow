@@ -35,7 +35,9 @@
 #include "parquet/column_page.h"
 #include "parquet/column_reader.h"
 #include "parquet/column_writer.h"
-#include "parquet/encryption/external/test_utils.h"
+#ifdef PARQUET_BUILD_DBPS_LIBS
+#  include "parquet/encryption/external/test_utils.h"
+#endif
 #include "parquet/file_reader.h"
 #include "parquet/file_writer.h"
 #include "parquet/geospatial/statistics.h"
@@ -2057,11 +2059,14 @@ class TestColumnWriterEncryption : public ::testing::Test {
     kFooterEncryptionKey_ = ::arrow::util::SecureString(std::string("1234567890123456"));
     values_ = {1, 2, 3, 4, 5};
 
+#ifdef PARQUET_BUILD_DBPS_LIBS
     library_path_ = parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
     app_context_ =
         "{\"user_id\": \"test_user\", \"location\": {\"lat\": 0.0, \"lon\": 0.0}}";
     connection_config_ = {{"config_path", "test/path"},
-                          {"agent_library_path", library_path_}};
+                          { "agent_library_path",
+                            library_path_ }};
+#endif
   }
 
   std::shared_ptr<::arrow::io::BufferOutputStream> sink_;
@@ -2072,9 +2077,11 @@ class TestColumnWriterEncryption : public ::testing::Test {
   ::arrow::util::SecureString kFooterEncryptionKey_;
   std::vector<int32_t> values_;
 
+#ifdef PARQUET_BUILD_DBPS_LIBS
   std::string library_path_;
   std::string app_context_;
   std::map<std::string, std::string> connection_config_;
+#endif
 };
 
 TEST_F(TestColumnWriterEncryption, AESEncryption) {
@@ -2139,6 +2146,12 @@ TEST_F(TestColumnWriterEncryption, AESEncryption) {
   ASSERT_EQ(values_, read_values);
 }
 
+// The tests below exercise the legacy external adapter encryption path. They are compiled
+// only when the external encryption adapter is present (PARQUET_BUILD_DBPS_LIBS=ON).
+// Before removing the adapter sources, port these tests to the external encryption
+// service repository and validate them against the ExternalEncryptorProvider /
+// ExternalDecryptorProvider interface.
+#ifdef PARQUET_BUILD_DBPS_LIBS
 TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption) {
   ::arrow::util::SecureString kColumnKeyId(std::string("test_column_key1"));
 
@@ -2322,6 +2335,7 @@ TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption_ConflictingMetadataThr
       col_writer->WriteBatch(many_values.size(), nullptr, nullptr, many_values.data()),
       ParquetException);
 }
+#endif  // PARQUET_BUILD_DBPS_LIBS
 
 #ifdef ARROW_WITH_ZSTD
 TEST_F(TestValuesWriterInt32Type, AvoidCompressedInDataPageV2) {

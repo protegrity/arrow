@@ -19,10 +19,12 @@
 
 #include <span>
 
+#include "arrow/buffer.h"
 #include "arrow/util/secure_string.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption_utils.h"
+#include "parquet/exception.h"
 
 using arrow::util::SecureString;
 
@@ -66,7 +68,9 @@ std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_t
 // InternalFileEncryptor
 InternalFileEncryptor::InternalFileEncryptor(FileEncryptionProperties* properties,
                                              ::arrow::MemoryPool* pool)
-    : properties_(properties), pool_(pool) {}
+    : properties_(properties),
+      pool_(pool),
+      external_encryptor_provider_(properties->external_encryptor_provider()) {}
 
 std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterEncryptor() {
   if (footer_encryptor_ != nullptr) {
@@ -137,6 +141,41 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
       algorithm = column_prop->parquet_cipher().value();
     }
   }
+
+  // Route EXTERNAL_DBPA_V1 data pages to the ExternalEncryptorProvider.
+  // Metadata pages always use AES (handled by GetMetaEncryptor below).
+  if (algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
+    if (!external_encryptor_provider_) {
+      throw ParquetException(
+          "ExternalEncryptorProvider must be set when using EXTERNAL_DBPA_V1 algorithm");
+    }
+    if (column_prop->key_metadata().empty()) {
+      throw ParquetException(
+          "key_metadata must be set on ColumnEncryptionProperties when using "
+          "ExternalEncryptorProvider");
+    }
+    ColumnEncryptionParams params;
+    params.key_metadata = column_prop->key_metadata();
+    params.column_path = column_path;
+    if (column_chunk_metadata != nullptr) {
+      auto* descr = column_chunk_metadata->descr();
+      params.data_type = descr->physical_type();
+      params.compression_type =
+          column_chunk_metadata->properties()->compression(descr->path());
+      if (params.data_type == Type::FIXED_LEN_BYTE_ARRAY) {
+        params.datatype_length = descr->type_length();
+      }
+    }
+    auto encryptor_instance = external_encryptor_provider_->GetColumnEncryptor(params);
+    auto* raw = encryptor_instance.get();
+    external_encryptor_cache_.push_back(std::move(encryptor_instance));
+    std::string file_aad = properties_->file_aad();
+    auto encryptor =
+        std::make_shared<Encryptor>(raw, SecureString{}, file_aad, "", pool_);
+    column_data_map_[column_path] = encryptor;
+    return encryptor;
+  }
+
   auto encryptor_instance =
       metadata ? GetMetaEncryptor(algorithm, key.size())
                : GetDataEncryptor(algorithm, key.size(), column_chunk_metadata);
@@ -161,16 +200,6 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetMetaEncryptor(
 encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
     ParquetCipher::type algorithm, size_t key_size,
     const ColumnChunkMetaDataBuilder* column_chunk_metadata) {
-  if (algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
-    if (dynamic_cast<ExternalFileEncryptionProperties*>(properties_) == nullptr) {
-      throw ParquetException(
-          "External DBPA encryption requires ExternalFileEncryptionProperties.");
-    }
-
-    return external_dbpa_encryptor_factory_.GetEncryptor(
-        algorithm, column_chunk_metadata,
-        dynamic_cast<ExternalFileEncryptionProperties*>(properties_));
-  }
   return aes_encryptor_factory_.GetDataAesEncryptor(algorithm, key_size);
 }
 

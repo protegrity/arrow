@@ -19,6 +19,21 @@
 arrow_install_all_headers("parquet/encryption")
 
 if(PARQUET_REQUIRE_ENCRYPTION AND ARROW_TESTING)
+  # Validates ExternalEncryptorProvider and ExternalDecryptorProvider using
+  # in-process XOR mock implementations. No external dependencies required.
+  add_parquet_test(external-provider-test
+                   SOURCES
+                   external_provider_test.cc
+                   mock_encryptor_provider.cc
+                   mock_decryptor_provider.cc
+                   LABELS
+                   "parquet-tests"
+                   "encryption-tests")
+endif()
+
+if(PARQUET_REQUIRE_ENCRYPTION
+   AND ARROW_TESTING
+   AND PARQUET_BUILD_DBPS_LIBS)
   # Add library for DBPATestAgent
   add_library(DBPATestAgent SHARED external/dbpa_test_agent.cc)
 

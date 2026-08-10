@@ -26,7 +26,7 @@
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryptor_interface.h"
-#include "parquet/encryption/external_dbpa_encryption.h"
+#include "parquet/encryption/external_encryptor_provider.h"
 #include "parquet/metadata.h"
 
 namespace parquet {
@@ -105,7 +105,10 @@ class InternalFileEncryptor {
 
   ::arrow::MemoryPool* pool_;
   encryption::AesEncryptorFactory aes_encryptor_factory_;
-  encryption::ExternalDBPAEncryptorAdapterFactory external_dbpa_encryptor_factory_;
+  std::shared_ptr<ExternalEncryptorProvider> external_encryptor_provider_;
+  // Owns EncryptorInterface instances returned by the external provider; raw ptrs
+  // are held by Encryptor objects and must not outlive this cache.
+  std::vector<std::unique_ptr<encryption::EncryptorInterface>> external_encryptor_cache_;
 
   std::shared_ptr<Encryptor> GetColumnEncryptor(
       const std::string& column_path, bool metadata,

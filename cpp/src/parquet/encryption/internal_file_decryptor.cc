@@ -19,11 +19,13 @@
 
 #include <span>
 
+#include "arrow/buffer.h"
 #include "arrow/util/logging.h"
 #include "arrow/util/secure_string.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption_utils.h"
+#include "parquet/exception.h"
 #include "parquet/metadata.h"
 
 using arrow::util::SecureString;
@@ -77,7 +79,8 @@ InternalFileDecryptor::InternalFileDecryptor(
       file_aad_(file_aad),
       algorithm_(algorithm),
       footer_key_metadata_(footer_key_metadata),
-      pool_(pool) {}
+      pool_(pool),
+      external_decryptor_provider_(properties_->external_decryptor_provider()) {}
 
 const SecureString& InternalFileDecryptor::GetFooterKey() {
   std::unique_lock lock(mutex_);
@@ -178,21 +181,42 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
   }
 
   return [this, aad, metadata, column_key = std::move(column_key), algorithm,
-          crypto_metadata, column_chunk_metadata]() {
+          column_key_metadata, column_path, crypto_metadata, column_chunk_metadata]() {
     auto key_len = static_cast<int32_t>(column_key.size());
     std::unique_ptr<encryption::DecryptorInterface> decryptor_instance;
 
+    // Route EXTERNAL_DBPA_V1 data pages to the ExternalDecryptorProvider.
+    // Metadata pages always use AES — algorithm override is not applied for metadata.
     if (algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
-      if (dynamic_cast<ExternalFileDecryptionProperties*>(properties_.get()) == nullptr) {
+      if (!external_decryptor_provider_) {
         throw ParquetException(
-            "External DBPA decryption requires ExternalFileDecryptionProperties");
+            "ExternalDecryptorProvider must be set when using EXTERNAL_DBPA_V1 "
+            "algorithm");
       }
-      decryptor_instance = external_dbpa_decryptor_factory_.GetDecryptor(
-          algorithm, crypto_metadata, column_chunk_metadata,
-          dynamic_cast<ExternalFileDecryptionProperties*>(properties_.get()));
-    } else {
-      decryptor_instance = encryption::AesDecryptor::Make(algorithm, key_len, metadata);
+      if (column_key_metadata.empty()) {
+        throw ParquetException(
+            "key_metadata must be set on ColumnEncryptionProperties when using "
+            "ExternalDecryptorProvider");
+      }
+      ColumnEncryptionParams params;
+      params.key_metadata = column_key_metadata;
+      params.column_path = column_path;
+      if (column_chunk_metadata != nullptr) {
+        auto* descr = column_chunk_metadata->descr();
+        params.data_type = descr->physical_type();
+        params.compression_type = column_chunk_metadata->compression();
+        if (params.data_type == Type::FIXED_LEN_BYTE_ARRAY) {
+          params.datatype_length = descr->type_length();
+        }
+        params.key_value_metadata = column_chunk_metadata->key_value_metadata();
+      }
+      // Decryptor takes unique_ptr ownership directly — no separate cache needed.
+      return std::make_unique<Decryptor>(
+          external_decryptor_provider_->GetColumnDecryptor(params), SecureString{},
+          file_aad_, aad, pool_);
     }
+
+    decryptor_instance = encryption::AesDecryptor::Make(algorithm, key_len, metadata);
     return std::make_unique<Decryptor>(std::move(decryptor_instance), column_key,
                                        file_aad_, aad, pool_);
   };

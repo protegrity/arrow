@@ -26,6 +26,8 @@
 #include <utility>
 
 #include "arrow/util/secure_string.h"
+#include "parquet/encryption/external_decryptor_provider.h"
+#include "parquet/encryption/external_encryptor_provider.h"
 #include "parquet/exception.h"
 #include "parquet/schema.h"
 #include "parquet/types.h"
@@ -312,10 +314,21 @@ class PARQUET_EXPORT FileDecryptionProperties {
       return this;
     }
 
+    /// Set an external decryptor provider for columns using the EXTERNAL_DBPA_V1
+    /// algorithm. The provider manages its own keys; it is called once per column
+    /// page with ColumnEncryptionParams containing the key identifier and column
+    /// path. Implementations must be thread-safe.
+    Builder* external_decryptor_provider(
+        std::shared_ptr<ExternalDecryptorProvider> provider) {
+      external_decryptor_provider_ = std::move(provider);
+      return this;
+    }
+
     std::shared_ptr<FileDecryptionProperties> build() {
       return std::shared_ptr<FileDecryptionProperties>(new FileDecryptionProperties(
           footer_key_, key_retriever_, check_plaintext_footer_integrity_, aad_prefix_,
-          aad_prefix_verifier_, column_decryption_properties_, plaintext_files_allowed_));
+          aad_prefix_verifier_, column_decryption_properties_, plaintext_files_allowed_,
+          external_decryptor_provider_));
     }
 
    protected:
@@ -327,6 +340,7 @@ class PARQUET_EXPORT FileDecryptionProperties {
     std::shared_ptr<DecryptionKeyRetriever> key_retriever_;
     bool check_plaintext_footer_integrity_;
     bool plaintext_files_allowed_;
+    std::shared_ptr<ExternalDecryptorProvider> external_decryptor_provider_;
   };
 
   const ::arrow::util::SecureString& column_key(const std::string& column_path) const;
@@ -349,6 +363,11 @@ class PARQUET_EXPORT FileDecryptionProperties {
     return aad_prefix_verifier_;
   }
 
+  /// Returns the external decryptor provider, or nullptr if none was set.
+  const std::shared_ptr<ExternalDecryptorProvider>& external_decryptor_provider() const {
+    return external_decryptor_provider_;
+  }
+
  private:
   ::arrow::util::SecureString footer_key_;
   std::string aad_prefix_;
@@ -357,6 +376,7 @@ class PARQUET_EXPORT FileDecryptionProperties {
   std::shared_ptr<DecryptionKeyRetriever> key_retriever_;
   bool check_plaintext_footer_integrity_;
   bool plaintext_files_allowed_;
+  std::shared_ptr<ExternalDecryptorProvider> external_decryptor_provider_;
 
  protected:
   FileDecryptionProperties(
@@ -365,7 +385,8 @@ class PARQUET_EXPORT FileDecryptionProperties {
       bool check_plaintext_footer_integrity, std::string aad_prefix,
       std::shared_ptr<AADPrefixVerifier> aad_prefix_verifier,
       ColumnPathToDecryptionPropertiesMap column_decryption_properties,
-      bool plaintext_files_allowed);
+      bool plaintext_files_allowed,
+      std::shared_ptr<ExternalDecryptorProvider> external_decryptor_provider = nullptr);
 
  public:
   virtual ~FileDecryptionProperties() = default;
@@ -496,10 +517,21 @@ class PARQUET_EXPORT FileEncryptionProperties {
     /// If called, the file columns not in the list will be left unencrypted.
     Builder* encrypted_columns(ColumnPathToEncryptionPropertiesMap encrypted_columns);
 
+    /// Set an external encryptor provider for columns using the EXTERNAL_DBPA_V1
+    /// algorithm. The provider manages its own keys; it is called once per column
+    /// page with ColumnEncryptionParams containing the key identifier and column
+    /// path. Implementations must be thread-safe.
+    Builder* external_encryptor_provider(
+        std::shared_ptr<ExternalEncryptorProvider> provider) {
+      external_encryptor_provider_ = std::move(provider);
+      return this;
+    }
+
     std::shared_ptr<FileEncryptionProperties> build() {
       return std::shared_ptr<FileEncryptionProperties>(new FileEncryptionProperties(
           parquet_cipher_, footer_key_, footer_key_metadata_, encrypted_footer_,
-          aad_prefix_, store_aad_prefix_in_file_, encrypted_columns_));
+          aad_prefix_, store_aad_prefix_in_file_, encrypted_columns_,
+          external_encryptor_provider_));
     }
 
    protected:
@@ -511,6 +543,7 @@ class PARQUET_EXPORT FileEncryptionProperties {
     std::string aad_prefix_;
     bool store_aad_prefix_in_file_;
     ColumnPathToEncryptionPropertiesMap encrypted_columns_;
+    std::shared_ptr<ExternalEncryptorProvider> external_encryptor_provider_;
   };
 
   bool encrypted_footer() const { return encrypted_footer_; }
@@ -530,6 +563,11 @@ class PARQUET_EXPORT FileEncryptionProperties {
     return encrypted_columns_;
   }
 
+  /// Returns the external encryptor provider, or nullptr if none was set.
+  const std::shared_ptr<ExternalEncryptorProvider>& external_encryptor_provider() const {
+    return external_encryptor_provider_;
+  }
+
  private:
   EncryptionAlgorithm algorithm_;
   ::arrow::util::SecureString footer_key_;
@@ -539,13 +577,15 @@ class PARQUET_EXPORT FileEncryptionProperties {
   std::string aad_prefix_;
   bool store_aad_prefix_in_file_;
   ColumnPathToEncryptionPropertiesMap encrypted_columns_;
+  std::shared_ptr<ExternalEncryptorProvider> external_encryptor_provider_;
 
  protected:
-  FileEncryptionProperties(ParquetCipher::type cipher,
-                           ::arrow::util::SecureString footer_key,
-                           std::string footer_key_metadata, bool encrypted_footer,
-                           std::string aad_prefix, bool store_aad_prefix_in_file,
-                           ColumnPathToEncryptionPropertiesMap encrypted_columns);
+  FileEncryptionProperties(
+      ParquetCipher::type cipher, ::arrow::util::SecureString footer_key,
+      std::string footer_key_metadata, bool encrypted_footer, std::string aad_prefix,
+      bool store_aad_prefix_in_file,
+      ColumnPathToEncryptionPropertiesMap encrypted_columns,
+      std::shared_ptr<ExternalEncryptorProvider> external_encryptor_provider = nullptr);
 
  public:
   virtual ~FileEncryptionProperties() = default;

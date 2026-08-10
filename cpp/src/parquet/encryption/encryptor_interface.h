@@ -53,20 +53,15 @@ class PARQUET_EXPORT EncryptorInterface {
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 
-  /// After the column_writer writes a dictionary or a data page, this method
-  /// will be called so that each encryptor can provide any encryptor-specific
-  /// column metadata that should be stored in the Parquet file. Keys and values
-  /// are added to the column metadata; conflicting key/value pairs are
-  /// overwritten. There is no need to clear the metadata after the call.
-  virtual std::shared_ptr<KeyValueMetadata> GetKeyValueMetadata(int8_t module_type) {
+  /// Return column-level metadata accumulated during encryption of a single page.
+  ///
+  /// Called by the column writer after each dictionary or data page write.
+  virtual std::shared_ptr<::arrow::KeyValueMetadata> GetKeyValueMetadata(
+      int8_t module_type) {
     return nullptr;
   }
 
-  /// Encrypt footer metadata for signature verification purposes only.
-  /// This method is used specifically for footer signature verification in encrypted
-  /// Parquet files with plaintext footers. It encrypts the footer metadata using
-  /// the provided key, AAD, and nonce to generate an authentication tag that can
-  /// be compared against a stored signature.
+  /// Encrypt footer bytes to produce the authentication tag for plaintext-footer files.
   virtual int32_t SignedFooterEncrypt(std::span<const uint8_t> footer,
                                       std::span<const uint8_t> key,
                                       std::span<const uint8_t> aad,

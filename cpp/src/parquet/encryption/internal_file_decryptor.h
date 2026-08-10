@@ -25,7 +25,7 @@
 
 #include "arrow/util/secure_string.h"
 #include "parquet/encryption/decryptor_interface.h"
-#include "parquet/encryption/external_dbpa_encryption.h"
+#include "parquet/encryption/external_decryptor_provider.h"
 #include "parquet/metadata.h"
 
 namespace parquet {
@@ -36,9 +36,9 @@ class FileDecryptionProperties;
 
 using parquet::encryption::EncodingProperties;
 
-// An object handling decryption using well-known encryption parameters
-//
-// CAUTION: Decryptor objects are not thread-safe.
+/// Decryptor for a single Parquet column or footer.
+///
+/// Not thread-safe.
 class PARQUET_EXPORT Decryptor {
  public:
   Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor,
@@ -123,7 +123,7 @@ class InternalFileDecryptor {
   ParquetCipher::type algorithm_;
   std::string footer_key_metadata_;
   ::arrow::MemoryPool* pool_;
-  encryption::ExternalDBPADecryptorAdapterFactory external_dbpa_decryptor_factory_;
+  std::shared_ptr<ExternalDecryptorProvider> external_decryptor_provider_;
 
   // Protects footer_key_ updates
   std::mutex mutex_;
