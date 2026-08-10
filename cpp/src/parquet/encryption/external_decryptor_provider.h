@@ -17,33 +17,37 @@
 
 #pragma once
 
-#include <cstdint>
-#include <span>
+#include <memory>
 
 #include "parquet/encryption/external_encryptor_provider.h"
 #include "parquet/platform.h"
 
+namespace parquet::encryption {
+class DecryptorInterface;
+}  // namespace parquet::encryption
+
 namespace parquet {
 
-/// Pure-virtual interface for plugging an external decryption provider into
-/// Parquet column decryption. Implement this interface to replace the built-in
-/// AES decryptor with a third-party key-management or HSM-backed decryptor.
+/// Pure-virtual factory interface for external column decryption.
 ///
-/// Thread safety: implementations must be thread-safe. Arrow may call Decrypt()
+/// Implement this interface to replace the built-in AES decryptor with a
+/// third-party key-management or HSM-backed decryptor.
+///
+/// Thread safety: GetColumnDecryptor() must be thread-safe. Parquet may call it
 /// concurrently for different columns during parallel row-group reads.
 class PARQUET_EXPORT ExternalDecryptorProvider {
  public:
   virtual ~ExternalDecryptorProvider() = default;
 
-  /// Decrypt \p ciphertext using the key identified by \p params.key_metadata.
-  /// \p plaintext must be at least PlaintextLength(ciphertext.size()) bytes.
-  /// Returns the number of bytes written to \p plaintext.
-  virtual int32_t Decrypt(const ColumnEncryptionParams& params,
-                          std::span<const uint8_t> ciphertext,
-                          std::span<uint8_t> plaintext) = 0;
-
-  /// Returns the maximum plaintext size in bytes for the given ciphertext length.
-  virtual int32_t PlaintextLength(int32_t ciphertext_length) const = 0;
+  /// Return a decryptor for the given column.
+  ///
+  /// Called once per column per read sequence. The returned object is used for
+  /// all pages of the column in that read.
+  ///
+  /// \param params Column path, key identifier, and footer metadata.
+  /// \return Caller-owned decryptor for this column.
+  virtual std::unique_ptr<encryption::DecryptorInterface> GetColumnDecryptor(
+      const ColumnEncryptionParams& params) = 0;
 };
 
 }  // namespace parquet

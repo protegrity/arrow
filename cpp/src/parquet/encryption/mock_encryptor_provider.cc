@@ -18,20 +18,58 @@
 #include "parquet/encryption/mock_encryptor_provider.h"
 
 #include <algorithm>
+#include <span>
+
+#include "arrow/buffer.h"
+#include "parquet/encryption/encoding_properties.h"
+#include "parquet/exception.h"
 
 namespace parquet::encryption::test {
 
-int32_t MockEncryptorProvider::Encrypt(const ColumnEncryptionParams& /*params*/,
-                                       std::span<const uint8_t> plaintext,
-                                       std::span<uint8_t> ciphertext) {
-  std::transform(plaintext.begin(), plaintext.end(), ciphertext.begin(),
-                 [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
-  call_count_++;
-  return static_cast<int32_t>(plaintext.size());
-}
+namespace {
 
-int32_t MockEncryptorProvider::CiphertextLength(int64_t plaintext_length) const {
-  return static_cast<int32_t>(plaintext_length);
+class XorEncryptor : public EncryptorInterface {
+ public:
+  explicit XorEncryptor(std::atomic<int>& counter) : counter_(counter) {}
+
+  bool CanCalculateCiphertextLength() const override { return true; }
+
+  int32_t CiphertextLength(int64_t n) const override { return static_cast<int32_t>(n); }
+
+  int32_t Encrypt(std::span<const uint8_t> plain, std::span<const uint8_t> /*key*/,
+                  std::span<const uint8_t> /*aad*/, std::span<uint8_t> cipher,
+                  std::unique_ptr<EncodingProperties> /*props*/) override {
+    std::transform(plain.begin(), plain.end(), cipher.begin(),
+                   [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
+    ++counter_;
+    return static_cast<int32_t>(plain.size());
+  }
+
+  int32_t EncryptWithManagedBuffer(
+      std::span<const uint8_t> plain, ::arrow::ResizableBuffer* cipher,
+      std::unique_ptr<EncodingProperties> /*props*/) override {
+    PARQUET_THROW_NOT_OK(cipher->Resize(static_cast<int64_t>(plain.size())));
+    std::transform(plain.begin(), plain.end(), cipher->mutable_data(),
+                   [](uint8_t b) { return static_cast<uint8_t>(b ^ 0xABu); });
+    ++counter_;
+    return static_cast<int32_t>(plain.size());
+  }
+
+  int32_t SignedFooterEncrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                              std::span<const uint8_t>, std::span<const uint8_t>,
+                              std::span<uint8_t>) override {
+    throw ParquetException("XorEncryptor: SignedFooterEncrypt not supported");
+  }
+
+ private:
+  std::atomic<int>& counter_;
+};
+
+}  // namespace
+
+std::unique_ptr<EncryptorInterface> MockEncryptorProvider::GetColumnEncryptor(
+    const ColumnEncryptionParams& /*params*/) {
+  return std::make_unique<XorEncryptor>(call_count_);
 }
 
 }  // namespace parquet::encryption::test

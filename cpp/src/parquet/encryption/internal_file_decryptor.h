@@ -36,9 +36,9 @@ class FileDecryptionProperties;
 
 using parquet::encryption::EncodingProperties;
 
-// An object handling decryption using well-known encryption parameters
-//
-// CAUTION: Decryptor objects are not thread-safe.
+/// Decryptor for a single Parquet column or footer.
+///
+/// Not thread-safe.
 class PARQUET_EXPORT Decryptor {
  public:
   Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor,

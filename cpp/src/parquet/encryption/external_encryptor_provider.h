@@ -17,45 +17,60 @@
 
 #pragma once
 
-#include <cstdint>
-#include <span>
+#include <memory>
+#include <optional>
 #include <string>
 
+#include "arrow/util/compression.h"
+#include "arrow/util/key_value_metadata.h"
 #include "parquet/platform.h"
+#include "parquet/types.h"
+
+namespace parquet::encryption {
+class EncryptorInterface;
+}  // namespace parquet::encryption
 
 namespace parquet {
 
-/// Parameters passed to an external encryptor for a single column.
-/// key_metadata is an opaque key identifier (not key material) used by the
-/// provider's key management system to look up the actual encryption key.
+/// Parameters identifying a single column for external encryption or decryption.
 struct PARQUET_EXPORT ColumnEncryptionParams {
   /// Opaque key identifier set via ColumnEncryptionProperties::Builder::key_metadata().
-  /// The provider uses this to look up the actual encryption key — it is NOT
-  /// KMS-wrapped key material and NOT raw key bytes.
+  /// Not raw key bytes and not KMS-wrapped key material.
   std::string key_metadata;
   /// Dot-separated Parquet column path (e.g. "address.zip").
   std::string column_path;
+  /// Physical type of the column.
+  parquet::Type::type data_type = parquet::Type::BYTE_ARRAY;
+  /// Compression codec applied to the page before encryption (or after decryption).
+  ::arrow::Compression::type compression_type = ::arrow::Compression::UNCOMPRESSED;
+  /// Byte width for FIXED_LEN_BYTE_ARRAY columns; nullopt for all other types.
+  std::optional<int> datatype_length;
+  /// Column-level key/value metadata from the file footer. Null on the write path.
+  std::shared_ptr<const ::arrow::KeyValueMetadata> key_value_metadata;
+  /// ABI version — increment when new fields are appended to this struct.
+  uint32_t abi_version = 1;
 };
 
-/// Pure-virtual interface for plugging an external encryption provider into
-/// Parquet column encryption. Implement this interface to replace the built-in
-/// AES encryptor with a third-party key-management or HSM-backed encryptor.
+/// Pure-virtual factory interface for external column encryption.
 ///
-/// Thread safety: implementations must be thread-safe. Arrow may call Encrypt()
+/// Implement this interface to replace the built-in AES encryptor with a
+/// third-party key-management or HSM-backed encryptor.
+///
+/// Thread safety: GetColumnEncryptor() must be thread-safe. Parquet may call it
 /// concurrently for different columns during parallel row-group writes.
 class PARQUET_EXPORT ExternalEncryptorProvider {
  public:
   virtual ~ExternalEncryptorProvider() = default;
 
-  /// Encrypt \p plaintext using the key identified by \p params.key_metadata.
-  /// \p ciphertext must be at least CiphertextLength(plaintext.size()) bytes.
-  /// Returns the number of bytes written to \p ciphertext.
-  virtual int32_t Encrypt(const ColumnEncryptionParams& params,
-                          std::span<const uint8_t> plaintext,
-                          std::span<uint8_t> ciphertext) = 0;
-
-  /// Returns the maximum ciphertext size in bytes for the given plaintext length.
-  virtual int32_t CiphertextLength(int64_t plaintext_length) const = 0;
+  /// Return an encryptor for the given column.
+  ///
+  /// Called once per column per row-group write. The returned object is used for
+  /// all pages of the column in that row group.
+  ///
+  /// \param params Column path, key identifier, and schema metadata.
+  /// \return Caller-owned encryptor for this column.
+  virtual std::unique_ptr<encryption::EncryptorInterface> GetColumnEncryptor(
+      const ColumnEncryptionParams& params) = 0;
 };
 
 }  // namespace parquet
