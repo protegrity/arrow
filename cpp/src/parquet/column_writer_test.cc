@@ -2085,6 +2085,9 @@ class TestColumnWriterEncryption : public ::testing::Test {
 };
 
 TEST_F(TestColumnWriterEncryption, AESEncryption) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   auto column_properties_builder =
       ColumnEncryptionProperties::Builder("encrypted_column");
   column_properties_builder.key(kColumnEncryptionKey_)
