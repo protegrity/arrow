@@ -1147,6 +1147,9 @@ class EncodingPropertiesSerdeTest : public TestPageSerde {
 };
 
 TEST_F(EncodingPropertiesSerdeTest, CapturesDictionaryPageEncodingProperties) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   // Prepare a small dictionary page
   const int32_t num_rows = 5;
   dictionary_page_header_.encoding = format::Encoding::PLAIN;
@@ -1195,6 +1198,9 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDictionaryPageEncodingProperties) {
 }
 
 TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV1EncodingProperties) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   // Prepare a small V1 data page
   const int32_t num_values = 42;
   data_page_header_.encoding = format::Encoding::PLAIN;
@@ -1244,6 +1250,9 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV1EncodingProperties) {
 }
 
 TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV2EncodingProperties) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   // Prepare a small V2 data page
   data_page_header_v2_.encoding = format::Encoding::PLAIN;
   data_page_header_v2_.num_values = 12;

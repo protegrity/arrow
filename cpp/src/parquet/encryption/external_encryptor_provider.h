@@ -21,8 +21,7 @@
 #include <optional>
 #include <string>
 
-#include "arrow/util/compression.h"
-#include "arrow/util/key_value_metadata.h"
+#include "arrow/util/type_fwd.h"
 #include "parquet/platform.h"
 #include "parquet/types.h"
 
