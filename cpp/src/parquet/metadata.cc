@@ -896,7 +896,7 @@ class FileMetaData::FileMetaDataImpl {
       int32_t encrypted_len;
       if (encryptor->CanCalculateCiphertextLength()) {
         encrypted_data =
-            std::vector<uint8_t>(encryptor->CiphertextLength(serialized_len));
+            std::vector<uint8_t>(encryptor->CiphertextLength(serialized_data_len));
         encrypted_len = encryptor->Encrypt(serialized_data_span, encrypted_data);
       } else {
         auto resizable_buffer = ::arrow::AllocateResizableBuffer(0);
@@ -1828,18 +1828,16 @@ class ColumnChunkMetaDataBuilder::ColumnChunkMetaDataBuilderImpl {
         // Serialize and encrypt ColumnMetadata separately
         // Thrift-serialize the ColumnMetaData structure,
         // encrypt it with the column key, and write to encrypted_column_metadata
-        uint8_t* serialized_data;
-        uint32_t serialized_len;
-
-        serializer.SerializeToBuffer(&column_chunk_->meta_data, &serialized_len,
-                                     &serialized_data);
-        std::span<const uint8_t> serialized_data_span(serialized_data, serialized_len);
+        const auto serialized_data_span =
+            serializer.SerializeToBuffer(&column_chunk_->meta_data);
+        const auto serialized_data_len =
+            static_cast<int64_t>(serialized_data_span.size());
 
         std::vector<uint8_t> encrypted_data;
         int32_t encrypted_len;
         if (encryptor->CanCalculateCiphertextLength()) {
           encrypted_data =
-              std::vector<uint8_t>(encryptor->CiphertextLength(serialized_len));
+              std::vector<uint8_t>(encryptor->CiphertextLength(serialized_data_len));
           encrypted_len = encryptor->Encrypt(serialized_data_span, encrypted_data);
         } else {
           auto resizable_buffer = ::arrow::AllocateResizableBuffer(0);

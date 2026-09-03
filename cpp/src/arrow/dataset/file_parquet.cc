@@ -105,9 +105,7 @@ parquet::ReaderProperties MakeReaderProperties(
     }
   }
 #else
-  if (parquet_scan_options->parquet_decryption_config != nullptr ||
-      parquet_scan_options->parquet_decryption_config->external_decryption_config !=
-          nullptr) {
+  if (parquet_scan_options->parquet_decryption_config != nullptr) {
     parquet::ParquetException::NYI("Encryption is not supported in this build.");
   }
 #endif
@@ -779,8 +777,7 @@ Result<std::shared_ptr<FileWriter>> ParquetFileFormat::MakeWriter(
                             writer_properties, parquet_options->arrow_writer_properties));
   }
 #else
-  if (parquet_options->parquet_encryption_config != nullptr ||
-      parquet_options->parquet_encryption_config->external_encryption_config != nullptr) {
+  if (parquet_options->parquet_encryption_config != nullptr) {
     return Status::NotImplemented("Encryption is not supported in this build.");
   }
 #endif

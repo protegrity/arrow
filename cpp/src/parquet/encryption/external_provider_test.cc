@@ -24,6 +24,7 @@
 #include "arrow/io/memory.h"
 #include "arrow/testing/gtest_util.h"
 #include "arrow/util/config.h"
+#include "arrow/util/key_value_metadata.h"
 #include "arrow/util/secure_string.h"
 
 #include "parquet/column_reader.h"

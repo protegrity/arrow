@@ -755,13 +755,14 @@ class ThriftSerializer {
     int32_t cipher_buffer_len;
     std::shared_ptr<ResizableBuffer> cipher_buffer;
     if (encryptor->CanCalculateCiphertextLength()) {
-      cipher_buffer =
-          AllocateBuffer(encryptor->pool(), encryptor->CiphertextLength(serialized.size()));
+      cipher_buffer = AllocateBuffer(encryptor->pool(),
+                                     encryptor->CiphertextLength(serialized.size()));
       cipher_buffer_len =
           encryptor->Encrypt(serialized, cipher_buffer->mutable_span_as<uint8_t>());
     } else {
       cipher_buffer = AllocateBuffer(encryptor->pool(), 0);
-      cipher_buffer_len = encryptor->EncryptWithManagedBuffer(serialized, cipher_buffer.get());
+      cipher_buffer_len =
+          encryptor->EncryptWithManagedBuffer(serialized, cipher_buffer.get());
     }
 
     PARQUET_THROW_NOT_OK(out->Write(cipher_buffer->data(), cipher_buffer_len));
