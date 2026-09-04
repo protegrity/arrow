@@ -124,7 +124,7 @@ cdef class ParquetDecryptionConfig(_Weakrefable):
         Shared pointer to a `DecryptionConfiguration` object, specifying decryption settings
         for reading encrypted Parquet data. If this is set, external_decryption_config
         cannot be set.
-    external_decryption_config: pyarrow.parquet.encryption.ExternalDecryptionConfiguration
+    external_decryption_config : pyarrow.parquet.encryption.ExternalDecryptionConfiguration
         Shared pointer to an `ExternalDecryptionConfiguration` object, defining specific
         decryption settings for reading Parquet data which was encrypted with an
         ExternalEncryptionConfiguration. If this is set, decryption_config cannot be set.

@@ -283,6 +283,12 @@ list(APPEND PARQUET_SHARED_LINK_LIBS arrow_shared)
 list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS simdjson::simdjson)
 list(APPEND PARQUET_STATIC_LINK_LIBS simdjson::simdjson)
 
+# encryption/encryption.cc uses RapidJSON to validate app_context JSON.
+if(ARROW_WITH_RAPIDJSON)
+  list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS RapidJSON)
+  list(APPEND PARQUET_STATIC_LINK_LIBS RapidJSON)
+endif()
+
 # These are libraries that we will link privately with parquet_shared (as they
 # do not need to be linked transitively by other linkers)
 list(APPEND PARQUET_SHARED_PRIVATE_LINK_LIBS thrift::thrift)

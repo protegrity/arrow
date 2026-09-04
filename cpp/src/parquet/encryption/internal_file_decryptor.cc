@@ -181,7 +181,7 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
   }
 
   return [this, aad, metadata, column_key = std::move(column_key), algorithm,
-          column_key_metadata, column_path, crypto_metadata, column_chunk_metadata]() {
+          column_key_metadata, column_path, column_chunk_metadata]() {
     auto key_len = static_cast<int32_t>(column_key.size());
     std::unique_ptr<encryption::DecryptorInterface> decryptor_instance;
 
