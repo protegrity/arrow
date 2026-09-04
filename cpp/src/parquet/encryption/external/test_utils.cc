@@ -30,6 +30,8 @@
 #  include <windows.h>
 #endif
 
+#include "parquet/windows_fixup.h"  // for OPTIONAL; leaks from <windows.h> in Unity builds
+
 namespace parquet::encryption::external::test {
 
 std::string TestUtils::GetExecutableDirectory() {

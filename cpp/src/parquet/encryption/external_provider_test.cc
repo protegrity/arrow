@@ -1660,7 +1660,7 @@ TEST(TestExternalEncryptionProvider, KeyValueMetadataRoundTripToDecryptorParams)
 TEST(TestMockProviderSymmetry, DecryptEncryptRoundTrip) {
   MockEncryptorProvider enc_provider;
   MockDecryptorProvider dec_provider;
-  ColumnEncryptionParams params{"key-id", "col"};
+  ColumnEncryptionParams params{.key_metadata = "key-id", .column_path = "col"};
 
   auto enc = enc_provider.GetColumnEncryptor(params);
   auto dec = dec_provider.GetColumnDecryptor(params);
