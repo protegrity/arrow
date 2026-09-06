@@ -458,7 +458,7 @@ class AesGcmV1;
 
 class AesGcmCtrV1;
 
-class ExternalDBPAV1;
+class ExternalProtectV1;
 
 class EncryptionAlgorithm;
 
@@ -2989,23 +2989,23 @@ void swap(AesGcmCtrV1 &a, AesGcmCtrV1 &b) noexcept;
 std::ostream& operator<<(std::ostream& out, const AesGcmCtrV1& obj);
 
 
-class ExternalDBPAV1 {
+class ExternalProtectV1 {
  public:
 
-  ExternalDBPAV1(const ExternalDBPAV1&) noexcept;
-  ExternalDBPAV1(ExternalDBPAV1&&) noexcept;
-  ExternalDBPAV1& operator=(const ExternalDBPAV1&) noexcept;
-  ExternalDBPAV1& operator=(ExternalDBPAV1&&) noexcept;
-  ExternalDBPAV1() noexcept;
+  ExternalProtectV1(const ExternalProtectV1&) noexcept;
+  ExternalProtectV1(ExternalProtectV1&&) noexcept;
+  ExternalProtectV1& operator=(const ExternalProtectV1&) noexcept;
+  ExternalProtectV1& operator=(ExternalProtectV1&&) noexcept;
+  ExternalProtectV1() noexcept;
 
-  ~ExternalDBPAV1() noexcept;
+  ~ExternalProtectV1() noexcept;
 
-  bool operator == (const ExternalDBPAV1 & /* rhs */) const;
-  bool operator != (const ExternalDBPAV1 &rhs) const {
+  bool operator == (const ExternalProtectV1 & /* rhs */) const;
+  bool operator != (const ExternalProtectV1 &rhs) const {
     return !(*this == rhs);
   }
 
-  bool operator < (const ExternalDBPAV1 & ) const;
+  bool operator < (const ExternalProtectV1 & ) const;
 
   template <class Protocol_>
   uint32_t read(Protocol_* iprot);
@@ -3015,15 +3015,15 @@ class ExternalDBPAV1 {
   void printTo(std::ostream& out) const;
 };
 
-void swap(ExternalDBPAV1 &a, ExternalDBPAV1 &b) noexcept;
+void swap(ExternalProtectV1 &a, ExternalProtectV1 &b) noexcept;
 
-std::ostream& operator<<(std::ostream& out, const ExternalDBPAV1& obj);
+std::ostream& operator<<(std::ostream& out, const ExternalProtectV1& obj);
 
 typedef struct _EncryptionAlgorithm__isset {
-  _EncryptionAlgorithm__isset() : AES_GCM_V1(false), AES_GCM_CTR_V1(false), EXTERNAL_DBPA_V1(false) {}
+  _EncryptionAlgorithm__isset() : AES_GCM_V1(false), AES_GCM_CTR_V1(false), EXTERNAL_PROTECT_V1(false) {}
   bool AES_GCM_V1 :1;
   bool AES_GCM_CTR_V1 :1;
-  bool EXTERNAL_DBPA_V1 :1;
+  bool EXTERNAL_PROTECT_V1 :1;
 } _EncryptionAlgorithm__isset;
 
 class EncryptionAlgorithm {
@@ -3038,7 +3038,7 @@ class EncryptionAlgorithm {
   ~EncryptionAlgorithm() noexcept;
   AesGcmV1 AES_GCM_V1;
   AesGcmCtrV1 AES_GCM_CTR_V1;
-  ExternalDBPAV1 EXTERNAL_DBPA_V1;
+  ExternalProtectV1 EXTERNAL_PROTECT_V1;
 
   _EncryptionAlgorithm__isset __isset;
 
@@ -3046,7 +3046,7 @@ class EncryptionAlgorithm {
 
   void __set_AES_GCM_CTR_V1(const AesGcmCtrV1& val);
 
-  void __set_EXTERNAL_DBPA_V1(const ExternalDBPAV1& val);
+  void __set_EXTERNAL_PROTECT_V1(const ExternalProtectV1& val);
 
   bool operator == (const EncryptionAlgorithm & rhs) const;
   bool operator != (const EncryptionAlgorithm &rhs) const {

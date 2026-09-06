@@ -406,13 +406,13 @@ class DatasetExternalConfigEncryptionTestBase : public testing::Test {
     external_encryption_config->column_keys = kColumnKeyMapping;
     // Encrypt column "c" using the external algorithm.
     external_encryption_config->per_column_encryption.emplace(
-        "c",
-        parquet::encryption::ColumnEncryptionAttributes{
-            parquet::ParquetCipher::EXTERNAL_DBPA_V1, std::string(kColumnMasterKeyId)});
+        "c", parquet::encryption::ColumnEncryptionAttributes{
+                 parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
+                 std::string(kColumnMasterKeyId)});
     external_encryption_config->app_context =
         "{\"user_id\": \"dataset-test\", \"location\": \"test\"}";
     external_encryption_config
-        ->configuration_properties[parquet::ParquetCipher::EXTERNAL_DBPA_V1] = {
+        ->configuration_properties[parquet::ParquetCipher::EXTERNAL_PROTECT_V1] = {
         {"agent_library_path", library_path_}};
 
     auto file_format = std::make_shared<ParquetFileFormat>();
@@ -469,7 +469,7 @@ class DatasetExternalConfigEncryptionTestBase : public testing::Test {
     external_decryption_config->app_context =
         "{\"user_id\": \"dataset-test\", \"location\": \"test\"}";
     external_decryption_config
-        ->configuration_properties[parquet::ParquetCipher::EXTERNAL_DBPA_V1] = {
+        ->configuration_properties[parquet::ParquetCipher::EXTERNAL_PROTECT_V1] = {
         {"agent_library_path", library_path_}};
 
     auto parquet_decryption_config = std::make_shared<ParquetDecryptionConfig>();

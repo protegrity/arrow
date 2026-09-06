@@ -103,14 +103,14 @@ TEST_F(PerColumnEncryption, CTR_WriteRead) {
 }
 
 // The test below exercises the legacy external adapter path
-// (ExternalFileEncryptionProperties with EXTERNAL_DBPA_V1 per-column cipher and an
+// (ExternalFileEncryptionProperties with EXTERNAL_PROTECT_V1 per-column cipher and an
 // external agent library). Before removing the adapter sources, port this test to the
 // external encryption service repository and validate it against the
 // ExternalEncryptorProvider / ExternalDecryptorProvider interface.
 #ifdef PARQUET_BUILD_DBPS_LIBS
 TEST_F(PerColumnEncryption, PerColumnExternal_WriteRead) {
   // Build encryption properties: mix of file-level AES_GCM_V1 and per-column
-  // EXTERNAL_DBPA_V1.
+  // EXTERNAL_PROTECT_V1.
   std::map<std::string, std::shared_ptr<parquet::ColumnEncryptionProperties>>
       encryption_cols;
   parquet::ColumnEncryptionProperties::Builder col_builder_double(kDoubleFieldName);
@@ -118,7 +118,7 @@ TEST_F(PerColumnEncryption, PerColumnExternal_WriteRead) {
   col_builder_double.key(kColumnEncryptionKey1)->key_id("kc1");
   col_builder_double.parquet_cipher(parquet::ParquetCipher::AES_GCM_V1);
   col_builder_float.key(kColumnEncryptionKey2)->key_id("kc2");
-  col_builder_float.parquet_cipher(parquet::ParquetCipher::EXTERNAL_DBPA_V1);
+  col_builder_float.parquet_cipher(parquet::ParquetCipher::EXTERNAL_PROTECT_V1);
   encryption_cols[kDoubleFieldName] = col_builder_double.build();
   encryption_cols[kFloatFieldName] = col_builder_float.build();
 
@@ -136,7 +136,7 @@ TEST_F(PerColumnEncryption, PerColumnExternal_WriteRead) {
                                         ->encrypted_columns(encryption_cols)
                                         ->algorithm(parquet::ParquetCipher::AES_GCM_V1)
                                         ->configuration_properties(
-                                            {{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
+                                            {{parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
                                               {{"agent_library_path", library_path},
                                                {"file_path", "/tmp/test"},
                                                {"other_config", "value"}}}})
@@ -150,7 +150,7 @@ TEST_F(PerColumnEncryption, PerColumnExternal_WriteRead) {
   parquet::ExternalFileDecryptionProperties::Builder file_decryption_builder;
   file_decryption_builder.key_retriever(retriever);
   file_decryption_builder.configuration_properties(
-      {{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
+      {{parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
         {{"agent_library_path", library_path},
          {"file_path", "/tmp/test"},
          {"other_config", "value"}}}});

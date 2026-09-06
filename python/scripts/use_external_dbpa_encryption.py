@@ -129,11 +129,11 @@ def get_external_encryption_config(use_remote_service):
                 "encryption_key": "orderid_key"
             },
             "price": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": "price_key"
             },
             "customer_name": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": "customer_key"
             }
         },
@@ -218,7 +218,7 @@ authentication credentials, which the application must procure on its own.
 
 def get_dbpa_configuration_properties(use_remote_service):
     configuration_properties = {
-        "EXTERNAL_DBPA_V1": {
+        "EXTERNAL_PROTECT_V1": {
             "agent_init_timeout_ms": "15000",
             "agent_encrypt_timeout_ms": "35000",
             "agent_decrypt_timeout_ms": "35000"
@@ -229,12 +229,12 @@ def get_dbpa_configuration_properties(use_remote_service):
             'libdbpsRemoteAgent.so'
             if platform.system() == 'Linux'
             else 'libdbpsRemoteAgent.dylib')
-        configuration_properties["EXTERNAL_DBPA_V1"][
+        configuration_properties["EXTERNAL_PROTECT_V1"][
             "agent_library_path"
         ] = agent_library_path
         # Make sure this is the absolute path to the connection config file.
         remote_path = '/arrowdev/python/scripts/test_connection_config_file.json'
-        configuration_properties["EXTERNAL_DBPA_V1"][
+        configuration_properties["EXTERNAL_PROTECT_V1"][
             "connection_config_file_path"
         ] = remote_path
     else:
@@ -242,7 +242,7 @@ def get_dbpa_configuration_properties(use_remote_service):
             'libdbpsLocalAgent.so'
             if platform.system() == 'Linux'
             else 'libdbpsLocalAgent.dylib')
-        configuration_properties["EXTERNAL_DBPA_V1"][
+        configuration_properties["EXTERNAL_PROTECT_V1"][
             "agent_library_path"
         ] = agent_library_path
 

@@ -1306,7 +1306,7 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV2EncodingProperties) {
 }
 
 // The test below exercises the legacy external adapter path
-// (ExternalFileEncryptionProperties with EXTERNAL_DBPA_V1 per-column cipher and an
+// (ExternalFileEncryptionProperties with EXTERNAL_PROTECT_V1 per-column cipher and an
 // external agent library). Before removing the adapter sources, port this test to the
 // external encryption service repository and validate it against the
 // ExternalEncryptorProvider / ExternalDecryptorProvider interface.
@@ -1336,7 +1336,7 @@ TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
   auto col_enc_builder = parquet::ColumnEncryptionProperties::Builder(column_name);
   col_enc_builder.key(column_key_id)
       ->key_id(std::string(column_key_id.as_view()))
-      ->parquet_cipher(parquet::ParquetCipher::EXTERNAL_DBPA_V1);
+      ->parquet_cipher(parquet::ParquetCipher::EXTERNAL_PROTECT_V1);
   enc_cols[column_name] = col_enc_builder.build();
 
   auto fep_builder = parquet::ExternalFileEncryptionProperties::Builder(footer_key);
@@ -1345,7 +1345,7 @@ TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
       ->algorithm(parquet::ParquetCipher::AES_GCM_CTR_V1)
       ->encrypted_columns(enc_cols)
       ->app_context(app_context)
-      ->configuration_properties({{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
+      ->configuration_properties({{parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
                                    {{"agent_library_path", library_path}}}});
   auto file_enc_props = fep_builder.build_external();
 
@@ -1371,7 +1371,7 @@ TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
   dep_builder.footer_key(footer_key)
       ->column_keys(dec_cols)
       ->app_context(app_context)
-      ->configuration_properties({{parquet::ParquetCipher::EXTERNAL_DBPA_V1,
+      ->configuration_properties({{parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
                                    {{"agent_library_path", library_path}}}});
   reader_props.file_decryption_properties(dep_builder.build_external());
 
@@ -1389,7 +1389,7 @@ TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
   ASSERT_NE(crypto_md, nullptr);
   ASSERT_TRUE(crypto_md->is_encryption_algorithm_set());
   EXPECT_EQ(crypto_md->encryption_algorithm().algorithm,
-            parquet::ParquetCipher::EXTERNAL_DBPA_V1);
+            parquet::ParquetCipher::EXTERNAL_PROTECT_V1);
 
   auto rg_reader = file_reader->RowGroup(0);
   auto col_reader =

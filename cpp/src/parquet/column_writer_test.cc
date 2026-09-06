@@ -2162,7 +2162,7 @@ TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption) {
       ColumnEncryptionProperties::Builder("encrypted_column");
   column_properties_builder.key(kColumnKeyId)
       ->key_id(std::string(kColumnKeyId.as_view()))
-      ->parquet_cipher(ParquetCipher::EXTERNAL_DBPA_V1);
+      ->parquet_cipher(ParquetCipher::EXTERNAL_PROTECT_V1);
   auto column_properties = column_properties_builder.build();
 
   std::map<std::string, std::shared_ptr<ColumnEncryptionProperties>> encryption_columns;
@@ -2174,7 +2174,8 @@ TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption) {
       ->set_plaintext_footer()
       ->algorithm(ParquetCipher::AES_GCM_V1)
       ->app_context(app_context_)
-      ->configuration_properties({{ParquetCipher::EXTERNAL_DBPA_V1, connection_config_}});
+      ->configuration_properties(
+          {{ParquetCipher::EXTERNAL_PROTECT_V1, connection_config_}});
   auto file_encryption_properties = fep_builder.build_external();
 
   auto writer_properties_builder = WriterProperties::Builder();
@@ -2195,7 +2196,7 @@ TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption) {
   std::map<std::string, std::shared_ptr<ColumnDecryptionProperties>> decryption_columns;
   auto decryption_column_builder =
       ColumnDecryptionProperties::Builder("encrypted_column");
-  decryption_column_builder.parquet_cipher(ParquetCipher::EXTERNAL_DBPA_V1);
+  decryption_column_builder.parquet_cipher(ParquetCipher::EXTERNAL_PROTECT_V1);
   decryption_columns["encrypted_column"] =
       decryption_column_builder.key(kColumnKeyId)->build();
 
@@ -2204,7 +2205,8 @@ TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption) {
   decryption_properties_builder.footer_key(kFooterEncryptionKey_)
       ->column_keys(decryption_columns)
       ->app_context(app_context_)
-      ->configuration_properties({{ParquetCipher::EXTERNAL_DBPA_V1, connection_config_}});
+      ->configuration_properties(
+          {{ParquetCipher::EXTERNAL_PROTECT_V1, connection_config_}});
   reader_properties.file_decryption_properties(
       decryption_properties_builder.build_external());
 
@@ -2243,7 +2245,7 @@ TEST_F(TestColumnWriterEncryption,
       ColumnEncryptionProperties::Builder("encrypted_column");
   column_properties_builder.key(kColumnKeyId)
       ->key_id(std::string(kColumnKeyId.as_view()))
-      ->parquet_cipher(ParquetCipher::EXTERNAL_DBPA_V1);
+      ->parquet_cipher(ParquetCipher::EXTERNAL_PROTECT_V1);
   auto column_properties = column_properties_builder.build();
 
   std::map<std::string, std::shared_ptr<ColumnEncryptionProperties>> encryption_columns;
@@ -2255,7 +2257,8 @@ TEST_F(TestColumnWriterEncryption,
       ->set_plaintext_footer()
       ->algorithm(ParquetCipher::AES_GCM_V1)
       ->app_context(app_context_)
-      ->configuration_properties({{ParquetCipher::EXTERNAL_DBPA_V1, connection_config_}});
+      ->configuration_properties(
+          {{ParquetCipher::EXTERNAL_PROTECT_V1, connection_config_}});
   auto file_encryption_properties = fep_builder.build_external();
 
   auto writer_properties_builder = WriterProperties::Builder();
@@ -2295,7 +2298,7 @@ TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption_ConflictingMetadataThr
       ColumnEncryptionProperties::Builder("encrypted_column");
   column_properties_builder.key(kColumnKeyId)
       ->key_id(std::string(kColumnKeyId.as_view()))
-      ->parquet_cipher(ParquetCipher::EXTERNAL_DBPA_V1);
+      ->parquet_cipher(ParquetCipher::EXTERNAL_PROTECT_V1);
   auto column_properties = column_properties_builder.build();
 
   std::map<std::string, std::shared_ptr<ColumnEncryptionProperties>> encryption_columns;
@@ -2307,7 +2310,7 @@ TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption_ConflictingMetadataThr
       ->set_plaintext_footer()
       ->algorithm(ParquetCipher::AES_GCM_V1)
       ->app_context(app_context_)
-      ->configuration_properties({{ParquetCipher::EXTERNAL_DBPA_V1,
+      ->configuration_properties({{ParquetCipher::EXTERNAL_PROTECT_V1,
                                    {{"dbpa_test_force_conflicting_metadata", "1"},
                                     {"agent_library_path", library_path_}}}});
 

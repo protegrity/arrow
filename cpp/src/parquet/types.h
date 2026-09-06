@@ -569,7 +569,7 @@ PARQUET_EXPORT
 std::unique_ptr<Codec> GetCodec(Compression::type codec, int compression_level);
 
 struct ParquetCipher {
-  enum type { AES_GCM_V1 = 0, AES_GCM_CTR_V1 = 1, EXTERNAL_DBPA_V1 = 2 };
+  enum type { AES_GCM_V1 = 0, AES_GCM_CTR_V1 = 1, EXTERNAL_PROTECT_V1 = 2 };
 };
 
 /// Check whether a requested encryption algorithm is supported by the Parquet

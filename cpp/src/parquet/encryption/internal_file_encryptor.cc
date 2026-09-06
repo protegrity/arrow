@@ -142,12 +142,13 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
     }
   }
 
-  // Route EXTERNAL_DBPA_V1 data pages to the ExternalEncryptorProvider.
+  // Route EXTERNAL_PROTECT_V1 data pages to the ExternalEncryptorProvider.
   // Metadata pages always use AES (handled by GetMetaEncryptor below).
-  if (algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
+  if (algorithm == ParquetCipher::EXTERNAL_PROTECT_V1) {
     if (!external_encryptor_provider_) {
       throw ParquetException(
-          "ExternalEncryptorProvider must be set when using EXTERNAL_DBPA_V1 algorithm");
+          "ExternalEncryptorProvider must be set when using EXTERNAL_PROTECT_V1 "
+          "algorithm");
     }
     if (column_prop->key_metadata().empty()) {
       throw ParquetException(

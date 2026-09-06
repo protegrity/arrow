@@ -38,8 +38,8 @@ cdef ParquetCipher cipher_from_name(name):
         return ParquetCipher_AES_GCM_V1
     elif name == 'AES_GCM_CTR_V1':
         return ParquetCipher_AES_GCM_CTR_V1
-    elif name == 'EXTERNAL_DBPA_V1':
-        return ParquetCipher_EXTERNAL_DBPA_V1
+    elif name == 'EXTERNAL_PROTECT_V1':
+        return ParquetCipher_EXTERNAL_PROTECT_V1
     else:
         raise ValueError(f'Invalid cipher name: {name}')
 
@@ -49,8 +49,8 @@ cdef cipher_to_name(ParquetCipher cipher):
         return 'AES_GCM_V1'
     elif ParquetCipher_AES_GCM_CTR_V1 == cipher:
         return 'AES_GCM_CTR_V1'
-    elif ParquetCipher_EXTERNAL_DBPA_V1 == cipher:
-        return 'EXTERNAL_DBPA_V1'
+    elif ParquetCipher_EXTERNAL_PROTECT_V1 == cipher:
+        return 'EXTERNAL_PROTECT_V1'
     else:
         raise ValueError(f'Invalid cipher value: {cipher}')
 

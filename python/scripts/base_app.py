@@ -298,19 +298,19 @@ def get_external_encryption_config(plaintext_footer=True):
         plaintext_footer=plaintext_footer,
         per_column_encryption={
             "orderId": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": "orderid_key"
             },
             "price": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",  # "AES_GCM_CTR_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",  # "AES_GCM_CTR_V1",
                 "encryption_key": "price_key"
             },
             "customer_name": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": "customer_key"
             },
             "has_subscription": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": "has_subscription_key"
             }
         },
@@ -385,7 +385,7 @@ def get_dbpa_configuration_properties():
         if platform.system() == 'Linux' else 'libDBPATestAgent.dylib')
 
     configuration_properties = {
-        "EXTERNAL_DBPA_V1": {
+        "EXTERNAL_PROTECT_V1": {
             "agent_library_path": agent_library_path,
             "agent_init_timeout_ms": "15000",
             "agent_encrypt_timeout_ms": "35000",
@@ -398,7 +398,7 @@ def get_dbpa_configuration_properties():
 
     if (config_file_required):
         config_path = get_config_file()
-        configuration_properties["EXTERNAL_DBPA_V1"][
+        configuration_properties["EXTERNAL_PROTECT_V1"][
             "connection_config_file_path"
         ] = config_path
 

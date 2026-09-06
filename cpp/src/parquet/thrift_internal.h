@@ -254,8 +254,8 @@ static inline AadMetadata FromThrift(format::AesGcmCtrV1 aesGcmCtrV1) {
                      aesGcmCtrV1.supply_aad_prefix};
 }
 
-static inline AadMetadata FromThrift(format::ExternalDBPAV1 externalDBPAV1) {
-  // Set default values for AAD, which is not supported by ExternalDBPAV1
+static inline AadMetadata FromThrift(format::ExternalProtectV1 externalProtectV1) {
+  // Set default values for AAD, which is not supported by ExternalProtectV1
   return AadMetadata{/*aad_prefix*/ "", /*aad_file_unique*/ "",
                      /*supply_aad_prefix*/ false};
 }
@@ -380,9 +380,9 @@ static inline EncryptionAlgorithm FromThrift(format::EncryptionAlgorithm encrypt
   } else if (encryption.__isset.AES_GCM_CTR_V1) {
     encryption_algorithm.algorithm = ParquetCipher::AES_GCM_CTR_V1;
     encryption_algorithm.aad = FromThrift(encryption.AES_GCM_CTR_V1);
-  } else if (encryption.__isset.EXTERNAL_DBPA_V1) {
-    encryption_algorithm.algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
-    encryption_algorithm.aad = FromThrift(encryption.EXTERNAL_DBPA_V1);
+  } else if (encryption.__isset.EXTERNAL_PROTECT_V1) {
+    encryption_algorithm.algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+    encryption_algorithm.aad = FromThrift(encryption.EXTERNAL_PROTECT_V1);
   } else {
     throw ParquetException("Unsupported algorithm");
   }
@@ -559,9 +559,9 @@ static inline format::AesGcmCtrV1 ToAesGcmCtrV1Thrift(AadMetadata aad) {
   return aesGcmCtrV1;
 }
 
-static inline format::ExternalDBPAV1 ToExternalDBPAV1Thrift() {
-  format::ExternalDBPAV1 externalDBPAV1;
-  return externalDBPAV1;
+static inline format::ExternalProtectV1 ToExternalProtectV1Thrift() {
+  format::ExternalProtectV1 externalProtectV1;
+  return externalProtectV1;
 }
 
 static inline format::EncryptionAlgorithm ToThrift(EncryptionAlgorithm encryption) {
@@ -571,7 +571,7 @@ static inline format::EncryptionAlgorithm ToThrift(EncryptionAlgorithm encryptio
   } else if (encryption.algorithm == ParquetCipher::AES_GCM_CTR_V1) {
     encryption_algorithm.__set_AES_GCM_CTR_V1(ToAesGcmCtrV1Thrift(encryption.aad));
   } else {
-    encryption_algorithm.__set_EXTERNAL_DBPA_V1(ToExternalDBPAV1Thrift());
+    encryption_algorithm.__set_EXTERNAL_PROTECT_V1(ToExternalProtectV1Thrift());
   }
   return encryption_algorithm;
 }

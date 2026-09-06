@@ -185,12 +185,12 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
     auto key_len = static_cast<int32_t>(column_key.size());
     std::unique_ptr<encryption::DecryptorInterface> decryptor_instance;
 
-    // Route EXTERNAL_DBPA_V1 data pages to the ExternalDecryptorProvider.
+    // Route EXTERNAL_PROTECT_V1 data pages to the ExternalDecryptorProvider.
     // Metadata pages always use AES — algorithm override is not applied for metadata.
-    if (algorithm == ParquetCipher::EXTERNAL_DBPA_V1) {
+    if (algorithm == ParquetCipher::EXTERNAL_PROTECT_V1) {
       if (!external_decryptor_provider_) {
         throw ParquetException(
-            "ExternalDecryptorProvider must be set when using EXTERNAL_DBPA_V1 "
+            "ExternalDecryptorProvider must be set when using EXTERNAL_PROTECT_V1 "
             "algorithm");
       }
       if (column_key_metadata.empty()) {

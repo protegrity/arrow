@@ -129,7 +129,7 @@ TEST_F(CryptoFactoryTest, BasicEncryptionConfig) {
 
 TEST_F(CryptoFactoryTest, EncryptionConfigWithExternalDbpaAlgorithmThrowsException) {
   EncryptionConfiguration config("kf");
-  config.encryption_algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
 
   try {
     auto properties = crypto_factory_.GetFileEncryptionProperties(kms_config_, config);
@@ -138,7 +138,7 @@ TEST_F(CryptoFactoryTest, EncryptionConfigWithExternalDbpaAlgorithmThrowsExcepti
     EXPECT_THAT(
         xcp.what(),
         HasSubstr(
-            "EXTERNAL_DBPA_V1 algorithm is not supported for file level encryption"));
+            "EXTERNAL_PROTECT_V1 algorithm is not supported for file level encryption"));
   } catch (...) {
     FAIL() << "Caught unexpected exception type";
   }
@@ -164,7 +164,7 @@ TEST_F(CryptoFactoryTest, ExternalEncryptionConfig) {
   config.app_context =
       "{\"user_id\": \"abc123\", \"location\": {\"lat\": 9.7489, \"lon\": -83.7534}}";
   config.configuration_properties = {
-      {ParquetCipher::EXTERNAL_DBPA_V1, {{"file_path", "path/to/file"}}}};
+      {ParquetCipher::EXTERNAL_PROTECT_V1, {{"file_path", "path/to/file"}}}};
 
   auto properties =
       crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
@@ -200,17 +200,19 @@ TEST_F(CryptoFactoryTest, ExternalEncryptionConfig) {
   EXPECT_FALSE(properties->app_context().empty());
   EXPECT_FALSE(properties->configuration_properties().empty());
   EXPECT_EQ(properties->app_context(), config.app_context);
-  EXPECT_NE(properties->configuration_properties().find(ParquetCipher::EXTERNAL_DBPA_V1),
-            properties->configuration_properties().end());
+  EXPECT_NE(
+      properties->configuration_properties().find(ParquetCipher::EXTERNAL_PROTECT_V1),
+      properties->configuration_properties().end());
   EXPECT_EQ(properties->configuration_properties().find(ParquetCipher::AES_GCM_CTR_V1),
             properties->configuration_properties().end());
-  EXPECT_NE(
-      properties->configuration_properties()
-          .at(ParquetCipher::EXTERNAL_DBPA_V1)
-          .find("file_path"),
-      properties->configuration_properties().at(ParquetCipher::EXTERNAL_DBPA_V1).end());
+  EXPECT_NE(properties->configuration_properties()
+                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
+                .find("file_path"),
+            properties->configuration_properties()
+                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
+                .end());
   EXPECT_EQ(properties->configuration_properties()
-                .at(ParquetCipher::EXTERNAL_DBPA_V1)
+                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
                 .at("file_path"),
             "path/to/file");
 }
@@ -220,7 +222,7 @@ TEST_F(CryptoFactoryTest,
   ExternalEncryptionConfiguration config("kf");
   config.plaintext_footer = true;
   config.column_keys = "kc3:col3,col4";
-  config.encryption_algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
 
   try {
     auto properties =
@@ -230,7 +232,7 @@ TEST_F(CryptoFactoryTest,
     EXPECT_THAT(
         xcp.what(),
         HasSubstr(
-            "EXTERNAL_DBPA_V1 algorithm is not supported for file level encryption"));
+            "EXTERNAL_PROTECT_V1 algorithm is not supported for file level encryption"));
   } catch (...) {
     FAIL() << "Caught unexpected exception type";
   }
@@ -284,7 +286,7 @@ TEST_F(CryptoFactoryTest, ExternalDecryptionConfig) {
   config.app_context =
       "{\"user_id\": \"abc123\", \"location\": {\"lat\": 9.7489, \"lon\": -83.7534}}";
   config.configuration_properties = {
-      {ParquetCipher::EXTERNAL_DBPA_V1, {{"file_path", "path/to/file"}}}};
+      {ParquetCipher::EXTERNAL_PROTECT_V1, {{"file_path", "path/to/file"}}}};
 
   auto properties =
       crypto_factory_.GetExternalFileDecryptionProperties(kms_config_, config);
@@ -294,17 +296,19 @@ TEST_F(CryptoFactoryTest, ExternalDecryptionConfig) {
   EXPECT_FALSE(properties->app_context().empty());
   EXPECT_FALSE(properties->configuration_properties().empty());
   EXPECT_EQ(properties->app_context(), config.app_context);
-  EXPECT_NE(properties->configuration_properties().find(ParquetCipher::EXTERNAL_DBPA_V1),
-            properties->configuration_properties().end());
+  EXPECT_NE(
+      properties->configuration_properties().find(ParquetCipher::EXTERNAL_PROTECT_V1),
+      properties->configuration_properties().end());
   EXPECT_EQ(properties->configuration_properties().find(ParquetCipher::AES_GCM_CTR_V1),
             properties->configuration_properties().end());
-  EXPECT_NE(
-      properties->configuration_properties()
-          .at(ParquetCipher::EXTERNAL_DBPA_V1)
-          .find("file_path"),
-      properties->configuration_properties().at(ParquetCipher::EXTERNAL_DBPA_V1).end());
+  EXPECT_NE(properties->configuration_properties()
+                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
+                .find("file_path"),
+            properties->configuration_properties()
+                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
+                .end());
   EXPECT_EQ(properties->configuration_properties()
-                .at(ParquetCipher::EXTERNAL_DBPA_V1)
+                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
                 .at("file_path"),
             "path/to/file");
 }

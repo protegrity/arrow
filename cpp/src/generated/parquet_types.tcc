@@ -3854,7 +3854,7 @@ uint32_t AesGcmCtrV1::write(Protocol_* oprot) const {
 }
 
 template <class Protocol_>
-uint32_t ExternalDBPAV1::read(Protocol_* iprot) {
+uint32_t ExternalProtectV1::read(Protocol_* iprot) {
 
   ::apache::thrift::protocol::TInputRecursionTracker tracker(*iprot);
   uint32_t xfer = 0;
@@ -3883,10 +3883,10 @@ uint32_t ExternalDBPAV1::read(Protocol_* iprot) {
 }
 
 template <class Protocol_>
-uint32_t ExternalDBPAV1::write(Protocol_* oprot) const {
+uint32_t ExternalProtectV1::write(Protocol_* oprot) const {
   uint32_t xfer = 0;
   ::apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
-  xfer += oprot->writeStructBegin("ExternalDBPAV1");
+  xfer += oprot->writeStructBegin("ExternalProtectV1");
 
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
@@ -3933,8 +3933,8 @@ uint32_t EncryptionAlgorithm::read(Protocol_* iprot) {
         break;
       case 3:
         if (ftype == ::apache::thrift::protocol::T_STRUCT) {
-          xfer += this->EXTERNAL_DBPA_V1.read(iprot);
-          this->__isset.EXTERNAL_DBPA_V1 = true;
+          xfer += this->EXTERNAL_PROTECT_V1.read(iprot);
+          this->__isset.EXTERNAL_PROTECT_V1 = true;
         } else {
           xfer += iprot->skip(ftype);
         }
@@ -3967,9 +3967,9 @@ uint32_t EncryptionAlgorithm::write(Protocol_* oprot) const {
     xfer += this->AES_GCM_CTR_V1.write(oprot);
     xfer += oprot->writeFieldEnd();
   }
-  if (this->__isset.EXTERNAL_DBPA_V1) {
-    xfer += oprot->writeFieldBegin("EXTERNAL_DBPA_V1", ::apache::thrift::protocol::T_STRUCT, 3);
-    xfer += this->EXTERNAL_DBPA_V1.write(oprot);
+  if (this->__isset.EXTERNAL_PROTECT_V1) {
+    xfer += oprot->writeFieldBegin("EXTERNAL_PROTECT_V1", ::apache::thrift::protocol::T_STRUCT, 3);
+    xfer += this->EXTERNAL_PROTECT_V1.write(oprot);
     xfer += oprot->writeFieldEnd();
   }
   xfer += oprot->writeFieldStop();

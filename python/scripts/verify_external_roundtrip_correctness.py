@@ -25,7 +25,7 @@ Parquet physical type, then writes → reads it back for every combination of:
 
     dictionary encoding  ×  compression  ×  data-page version
 
-All columns are encrypted with EXTERNAL_DBPA_V1, each with its own key.
+All columns are encrypted with EXTERNAL_PROTECT_V1, each with its own key.
 Roundtrip correctness is verified column-by-column after every read-back.
 
 Tested dimensions
@@ -207,7 +207,7 @@ def _dbpa_configuration_properties() -> dict:
     )
 
     props: dict = {
-        "EXTERNAL_DBPA_V1": {
+        "EXTERNAL_PROTECT_V1": {
             "agent_library_path": agent_library_path,
             "agent_init_timeout_ms": "15000",
             "agent_encrypt_timeout_ms": "35000",
@@ -225,7 +225,7 @@ def _dbpa_configuration_properties() -> dict:
                          config_file_name),
         ]:
             if os.path.exists(candidate):
-                props["EXTERNAL_DBPA_V1"][
+                props["EXTERNAL_PROTECT_V1"][
                     "connection_config_file_path"
                 ] = candidate
                 break
@@ -240,7 +240,7 @@ def _dbpa_configuration_properties() -> dict:
 def _encryption_config() -> pe.ExternalEncryptionConfiguration:
     per_column = {
         col_name: {
-            "encryption_algorithm": "EXTERNAL_DBPA_V1",
+            "encryption_algorithm": "EXTERNAL_PROTECT_V1",
             "encryption_key": key_name,
         }
         for col_name, _, key_name, _ in COLUMNS

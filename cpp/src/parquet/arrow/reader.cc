@@ -154,7 +154,7 @@ class FileReaderImpl : public FileReader {
         reader_properties_(std::move(properties)) {}
 
   Status Init() {
-    // If the file is encrypted using EXTERNAL_DBPA_V1 on any of its columns, then it
+    // If the file is encrypted using EXTERNAL_PROTECT_V1 on any of its columns, then it
     // is not safe to use multiple threads to read the file.
     if (reader_properties_.use_threads()) {
       auto metadata = reader_->metadata();

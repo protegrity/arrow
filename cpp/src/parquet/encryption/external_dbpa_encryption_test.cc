@@ -144,7 +144,7 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
 };
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, RoundtripEncryptionSucceeds) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -157,7 +157,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, RoundtripEncryptionSucceeds) {
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, RoundtripEncryption_EmptyPlaintextDoesNotCrash) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -170,7 +170,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, RoundtripEncryption_EmptyPlaintextDoesN
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, GetKeyValueMetadataReturnsNullWhenEmpty) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -188,7 +188,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, GetKeyValueMetadataReturnsNullWhenEmpty
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, SignedFooterEncryptionThrowsException) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -203,7 +203,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, SignedFooterEncryptionThrowsException) 
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptWithoutBuildEncodingPropertiesThrows) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -222,7 +222,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptWithoutBuildEncodingPropertiesTh
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithoutBuildEncodingPropertiesThrows) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -242,7 +242,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithoutBuildEncodingPropertiesTh
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorUnsupportedAlgorithmThrows) {
   // Use AES_GCM_V1 (unsupported) to verify the adapter rejects algorithms other
-  // than EXTERNAL_DBPA_V1
+  // than EXTERNAL_PROTECT_V1
   ParquetCipher::type unsupported_algo = ParquetCipher::AES_GCM_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
@@ -262,7 +262,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorUnsupportedAlgorithmThrows) {
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorUnsupportedAlgorithmThrows) {
   // Use AES_GCM_V1 (unsupported) to verify the adapter rejects algorithms other
-  // than EXTERNAL_DBPA_V1
+  // than EXTERNAL_PROTECT_V1
   ParquetCipher::type unsupported_algo = ParquetCipher::AES_GCM_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
@@ -283,7 +283,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorUnsupportedAlgorithmThrows) {
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorMissingLibraryPathThrows) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -299,7 +299,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorMissingLibraryPathThrows) {
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorInvalidLibraryPathThrows) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -316,7 +316,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorInvalidLibraryPathThrows) {
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorInvalidTimeoutValuesThrows) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -338,7 +338,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptorInvalidTimeoutValuesThrows) {
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorMissingLibraryPathThrows) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -354,7 +354,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorMissingLibraryPathThrows) {
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorInvalidLibraryPathThrows) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -371,7 +371,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorInvalidLibraryPathThrows) {
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptorInvalidTimeoutValuesThrows) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -468,7 +468,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, UpdateEncryptorMetadataAccumulatesByMod
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string correct_key_id = "employee_name_key";
   std::string wrong_key_id = "wrong_key_id";
@@ -534,7 +534,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptCallShouldFail) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;
@@ -554,7 +554,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, EncryptCallShouldFail) {
 }
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptCallShouldFail) {
-  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_DBPA_V1;
+  ParquetCipher::type algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
   std::string column_name = "employee_name";
   std::string key_id = "employee_name_key";
   Type::type data_type = Type::BYTE_ARRAY;

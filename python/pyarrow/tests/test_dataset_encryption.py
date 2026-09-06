@@ -123,13 +123,13 @@ def create_external_encryption_config():
         data_key_length_bits=256,
         per_column_encryption={
             "animal": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": COL_KEY_NAME,
             }
         },
         app_context={"user_id": "dataset-test"},
         configuration_properties={
-            "EXTERNAL_DBPA_V1": {
+            "EXTERNAL_PROTECT_V1": {
                 "config_file": "path/to/config/file",
                 "config_file_decryption_key": "some_key",
                 "agent_library_path": get_agent_library_path(),
@@ -143,7 +143,7 @@ def create_external_decryption_config():
         cache_lifetime=300,
         app_context={"user_id": "dataset-test"},
         configuration_properties={
-            "EXTERNAL_DBPA_V1": {
+            "EXTERNAL_PROTECT_V1": {
                 "config_file": "path/to/config/file",
                 "config_file_decryption_key": "some_key",
                 "agent_library_path": get_agent_library_path(),

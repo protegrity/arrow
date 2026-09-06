@@ -36,7 +36,7 @@ from pyarrow._parquet cimport (ParquetCipher,
                                ExternalFileDecryptionProperties,
                                ParquetCipher_AES_GCM_V1,
                                ParquetCipher_AES_GCM_CTR_V1,
-                               ParquetCipher_EXTERNAL_DBPA_V1)
+                               ParquetCipher_EXTERNAL_PROTECT_V1)
 from pyarrow.lib cimport _Weakrefable
 
 cdef class CryptoFactory(_Weakrefable):

@@ -4404,46 +4404,46 @@ void AesGcmCtrV1::printTo(std::ostream& out) const {
 }
 
 
-ExternalDBPAV1::~ExternalDBPAV1() noexcept {
+ExternalProtectV1::~ExternalProtectV1() noexcept {
 }
 
-ExternalDBPAV1::ExternalDBPAV1() noexcept {
+ExternalProtectV1::ExternalProtectV1() noexcept {
 }
-std::ostream& operator<<(std::ostream& out, const ExternalDBPAV1& obj)
+std::ostream& operator<<(std::ostream& out, const ExternalProtectV1& obj)
 {
   obj.printTo(out);
   return out;
 }
 
 
-void swap(ExternalDBPAV1 &a, ExternalDBPAV1 &b) noexcept {
+void swap(ExternalProtectV1 &a, ExternalProtectV1 &b) noexcept {
   using ::std::swap;
   (void) a;
   (void) b;
 }
 
-bool ExternalDBPAV1::operator==(const ExternalDBPAV1 & /* rhs */) const
+bool ExternalProtectV1::operator==(const ExternalProtectV1 & /* rhs */) const
 {
   return true;
 }
 
-ExternalDBPAV1::ExternalDBPAV1(const ExternalDBPAV1& other237) noexcept {
+ExternalProtectV1::ExternalProtectV1(const ExternalProtectV1& other237) noexcept {
   (void) other237;
 }
-ExternalDBPAV1::ExternalDBPAV1(ExternalDBPAV1&& other238) noexcept {
+ExternalProtectV1::ExternalProtectV1(ExternalProtectV1&& other238) noexcept {
   (void) other238;
 }
-ExternalDBPAV1& ExternalDBPAV1::operator=(const ExternalDBPAV1& other239) noexcept {
+ExternalProtectV1& ExternalProtectV1::operator=(const ExternalProtectV1& other239) noexcept {
   (void) other239;
   return *this;
 }
-ExternalDBPAV1& ExternalDBPAV1::operator=(ExternalDBPAV1&& other240) noexcept {
+ExternalProtectV1& ExternalProtectV1::operator=(ExternalProtectV1&& other240) noexcept {
   (void) other240;
   return *this;
 }
-void ExternalDBPAV1::printTo(std::ostream& out) const {
+void ExternalProtectV1::printTo(std::ostream& out) const {
   using ::apache::thrift::to_string;
-  out << "ExternalDBPAV1(";
+  out << "ExternalProtectV1(";
   out << ")";
 }
 
@@ -4464,9 +4464,9 @@ void EncryptionAlgorithm::__set_AES_GCM_CTR_V1(const AesGcmCtrV1& val) {
 __isset.AES_GCM_CTR_V1 = true;
 }
 
-void EncryptionAlgorithm::__set_EXTERNAL_DBPA_V1(const ExternalDBPAV1& val) {
-  this->EXTERNAL_DBPA_V1 = val;
-__isset.EXTERNAL_DBPA_V1 = true;
+void EncryptionAlgorithm::__set_EXTERNAL_PROTECT_V1(const ExternalProtectV1& val) {
+  this->EXTERNAL_PROTECT_V1 = val;
+__isset.EXTERNAL_PROTECT_V1 = true;
 }
 std::ostream& operator<<(std::ostream& out, const EncryptionAlgorithm& obj)
 {
@@ -4479,7 +4479,7 @@ void swap(EncryptionAlgorithm &a, EncryptionAlgorithm &b) noexcept {
   using ::std::swap;
   swap(a.AES_GCM_V1, b.AES_GCM_V1);
   swap(a.AES_GCM_CTR_V1, b.AES_GCM_CTR_V1);
-  swap(a.EXTERNAL_DBPA_V1, b.EXTERNAL_DBPA_V1);
+  swap(a.EXTERNAL_PROTECT_V1, b.EXTERNAL_PROTECT_V1);
   swap(a.__isset, b.__isset);
 }
 
@@ -4493,9 +4493,9 @@ bool EncryptionAlgorithm::operator==(const EncryptionAlgorithm & rhs) const
     return false;
   else if (__isset.AES_GCM_CTR_V1 && !(AES_GCM_CTR_V1 == rhs.AES_GCM_CTR_V1))
     return false;
-  if (__isset.EXTERNAL_DBPA_V1 != rhs.__isset.EXTERNAL_DBPA_V1)
+  if (__isset.EXTERNAL_PROTECT_V1 != rhs.__isset.EXTERNAL_PROTECT_V1)
     return false;
-  else if (__isset.EXTERNAL_DBPA_V1 && !(EXTERNAL_DBPA_V1 == rhs.EXTERNAL_DBPA_V1))
+  else if (__isset.EXTERNAL_PROTECT_V1 && !(EXTERNAL_PROTECT_V1 == rhs.EXTERNAL_PROTECT_V1))
     return false;
   return true;
 }
@@ -4503,26 +4503,26 @@ bool EncryptionAlgorithm::operator==(const EncryptionAlgorithm & rhs) const
 EncryptionAlgorithm::EncryptionAlgorithm(const EncryptionAlgorithm& other241) {
   AES_GCM_V1 = other241.AES_GCM_V1;
   AES_GCM_CTR_V1 = other241.AES_GCM_CTR_V1;
-  EXTERNAL_DBPA_V1 = other241.EXTERNAL_DBPA_V1;
+  EXTERNAL_PROTECT_V1 = other241.EXTERNAL_PROTECT_V1;
   __isset = other241.__isset;
 }
 EncryptionAlgorithm::EncryptionAlgorithm(EncryptionAlgorithm&& other242) noexcept {
   AES_GCM_V1 = std::move(other242.AES_GCM_V1);
   AES_GCM_CTR_V1 = std::move(other242.AES_GCM_CTR_V1);
-  EXTERNAL_DBPA_V1 = std::move(other242.EXTERNAL_DBPA_V1);
+  EXTERNAL_PROTECT_V1 = std::move(other242.EXTERNAL_PROTECT_V1);
   __isset = other242.__isset;
 }
 EncryptionAlgorithm& EncryptionAlgorithm::operator=(const EncryptionAlgorithm& other243) {
   AES_GCM_V1 = other243.AES_GCM_V1;
   AES_GCM_CTR_V1 = other243.AES_GCM_CTR_V1;
-  EXTERNAL_DBPA_V1 = other243.EXTERNAL_DBPA_V1;
+  EXTERNAL_PROTECT_V1 = other243.EXTERNAL_PROTECT_V1;
   __isset = other243.__isset;
   return *this;
 }
 EncryptionAlgorithm& EncryptionAlgorithm::operator=(EncryptionAlgorithm&& other244) noexcept {
   AES_GCM_V1 = std::move(other244.AES_GCM_V1);
   AES_GCM_CTR_V1 = std::move(other244.AES_GCM_CTR_V1);
-  EXTERNAL_DBPA_V1 = std::move(other244.EXTERNAL_DBPA_V1);
+  EXTERNAL_PROTECT_V1 = std::move(other244.EXTERNAL_PROTECT_V1);
   __isset = other244.__isset;
   return *this;
 }
@@ -4531,7 +4531,7 @@ void EncryptionAlgorithm::printTo(std::ostream& out) const {
   out << "EncryptionAlgorithm(";
   out << "AES_GCM_V1="; (__isset.AES_GCM_V1 ? (out << to_string(AES_GCM_V1)) : (out << "<null>"));
   out << ", " << "AES_GCM_CTR_V1="; (__isset.AES_GCM_CTR_V1 ? (out << to_string(AES_GCM_CTR_V1)) : (out << "<null>"));
-  out << ", " << "EXTERNAL_DBPA_V1="; (__isset.EXTERNAL_DBPA_V1 ? (out << to_string(EXTERNAL_DBPA_V1)) : (out << "<null>"));
+  out << ", " << "EXTERNAL_PROTECT_V1="; (__isset.EXTERNAL_PROTECT_V1 ? (out << to_string(EXTERNAL_PROTECT_V1)) : (out << "<null>"));
   out << ")";
 }
 

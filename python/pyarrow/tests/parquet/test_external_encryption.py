@@ -130,7 +130,7 @@ def get_external_encryption_config(plaintext_footer=True):
         plaintext_footer=plaintext_footer,
         per_column_encryption={
             "orderId": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": "orderid_key"
             },
         },
@@ -139,7 +139,7 @@ def get_external_encryption_config(plaintext_footer=True):
             "location": "Presidio"
         },
         configuration_properties={
-            "EXTERNAL_DBPA_V1": {
+            "EXTERNAL_PROTECT_V1": {
                 "config_file": "path/to/config/file",
                 "config_file_decryption_key": "some_key",
                 "agent_library_path": get_agent_library_path()
@@ -175,7 +175,7 @@ def get_external_decryption_config():
             "location": "Presidio"
         },
         configuration_properties={
-            "EXTERNAL_DBPA_V1": {
+            "EXTERNAL_PROTECT_V1": {
                 "config_file": "path/to/config/file",
                 "config_file_decryption_key": "some_key",
                 "agent_library_path": get_agent_library_path(),
@@ -226,7 +226,7 @@ def test_encryption_configuration_properties():
         column_keys={
             "key_1": ["a"],
         },
-        encryption_algorithm="EXTERNAL_DBPA_V1",
+        encryption_algorithm="EXTERNAL_PROTECT_V1",
         plaintext_footer=True,
         double_wrapping=True,
         cache_lifetime=datetime.timedelta(minutes=5.0),
@@ -240,7 +240,7 @@ def test_encryption_configuration_properties():
     assert config.column_keys == {
         "key_1": ["a"]
     }
-    assert config.encryption_algorithm == "EXTERNAL_DBPA_V1"
+    assert config.encryption_algorithm == "EXTERNAL_PROTECT_V1"
     assert config.plaintext_footer is True
     assert config.double_wrapping is True
     assert config.cache_lifetime == datetime.timedelta(minutes=5.0)
@@ -273,7 +273,7 @@ def test_external_encryption_configuration_properties():
     }
 
     assert external_encryption_config.configuration_properties == {
-        "EXTERNAL_DBPA_V1": {
+        "EXTERNAL_PROTECT_V1": {
             "config_file": "path/to/config/file",
             "config_file_decryption_key": "some_key",
             "agent_library_path": get_agent_library_path()
@@ -282,7 +282,7 @@ def test_external_encryption_configuration_properties():
 
     assert external_encryption_config.per_column_encryption == {
         "orderId": {
-            "encryption_algorithm": "EXTERNAL_DBPA_V1",
+            "encryption_algorithm": "EXTERNAL_PROTECT_V1",
             "encryption_key": "orderid_key"
         },
     }
@@ -322,7 +322,7 @@ def test_external_encryption_per_column_encryption_new_algorithm():
         footer_key="key",
         per_column_encryption={
             "a": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": "key_2"
             }
         }
@@ -338,7 +338,7 @@ def test_external_encryption_configuration_properties_invalid_types():
             footer_key="key"
         )
         config.configuration_properties = {
-            "EXTERNAL_DBPA_V1": {
+            "EXTERNAL_PROTECT_V1": {
                 "config_file": "path/to/file",
                 123: "should-fail"  # Invalid: key is not a string
             }
@@ -351,7 +351,7 @@ def test_external_encryption_configuration_properties_invalid_types():
             footer_key="key"
         )
         config.configuration_properties = {
-            "EXTERNAL_DBPA_V1": {
+            "EXTERNAL_PROTECT_V1": {
                 # Invalid: value is not a string
                 "config_file": ["not", "a", "string"]
             }
@@ -432,7 +432,7 @@ def test_external_decryption_configuration_properties():
         "location": "Presidio"
     }
     assert external_decryption_config.configuration_properties == {
-        "EXTERNAL_DBPA_V1": {
+        "EXTERNAL_PROTECT_V1": {
             "config_file": "path/to/config/file",
             "config_file_decryption_key": "some_key",
             "agent_library_path": get_agent_library_path()
@@ -525,7 +525,7 @@ def get_custom_external_encryption_properties(
             "location": "Presidio"
         },
         configuration_properties={
-            "EXTERNAL_DBPA_V1": {
+            "EXTERNAL_PROTECT_V1": {
                 "config_file": "path/to/config/file",
                 "config_file_decryption_key": "some_key",
                 "agent_library_path": get_agent_library_path()
@@ -546,7 +546,7 @@ def test_encrypt_aes_gcm_file_all_algorithms_in_columns_plaintext_footer(tmp_pat
                 "encryption_key": "orderid_key"
             },
             "price": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": "price_key"
             },
             "vat": {
@@ -569,7 +569,7 @@ def test_encrypt_aes_gcm_file_all_algorithms_in_columns_encrypted_footer(tmp_pat
                 "encryption_key": "orderid_key"
             },
             "price": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": "price_key"
             },
             "vat": {
@@ -593,7 +593,7 @@ def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_plaintext_footer(
                 "encryption_key": "orderid_key"
             },
             "price": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": "price_key"
             },
             "vat": {
@@ -617,7 +617,7 @@ def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_encrypted_footer(
                 "encryption_key": "orderid_key"
             },
             "price": {
-                "encryption_algorithm": "EXTERNAL_DBPA_V1",
+                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
                 "encryption_key": "price_key"
             },
             "vat": {
@@ -634,7 +634,7 @@ def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_encrypted_footer(
 def test_encrypt_external_dbpa_file_raises_error():
     with pytest.raises(OSError, match="not supported for file level encryption"):
         get_custom_external_encryption_properties(
-            "EXTERNAL_DBPA_V1",  # encryption_algorithm
+            "EXTERNAL_PROTECT_V1",  # encryption_algorithm
             {
                 "orderId": {
                     "encryption_algorithm": "AES_GCM_CTR_V1",

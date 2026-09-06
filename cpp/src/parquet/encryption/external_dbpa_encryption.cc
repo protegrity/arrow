@@ -243,7 +243,7 @@ ExternalDBPAEncryptorAdapter::ExternalDBPAEncryptorAdapter(
       app_context_(app_context),
       configuration_properties_(configuration_properties),
       agent_instance_(std::move(agent_instance)) {
-  if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+  if (algorithm != ParquetCipher::EXTERNAL_PROTECT_V1) {
     throw ParquetException(
         "ExternalDBPAEncryptorAdapter -- Only algorithm ExternalDBPA_V1 is supported");
   }
@@ -272,7 +272,7 @@ std::unique_ptr<ExternalDBPAEncryptorAdapter> ExternalDBPAEncryptorAdapter::Make
     }
   }
 
-  if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+  if (algorithm != ParquetCipher::EXTERNAL_PROTECT_V1) {
     throw ParquetException(
         "ExternalDBPAEncryptorAdapter::Make() -- Only algorithm ExternalDBPA_V1 is "
         "supported");
@@ -482,7 +482,7 @@ ExternalDBPADecryptorAdapter::ExternalDBPADecryptorAdapter(
       app_context_(app_context),
       configuration_properties_(configuration_properties),
       agent_instance_(std::move(agent_instance)) {
-  if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+  if (algorithm != ParquetCipher::EXTERNAL_PROTECT_V1) {
     throw ParquetException(
         "ExternalDBPADecryptorAdapter -- Only algorithm ExternalDBPA_V1 is supported");
   }
@@ -497,7 +497,7 @@ std::unique_ptr<ExternalDBPADecryptorAdapter> ExternalDBPADecryptorAdapter::Make
     std::map<std::string, std::string> configuration_properties,
     std::optional<int> datatype_length,
     std::shared_ptr<const KeyValueMetadata> key_value_metadata) {
-  if (algorithm != ParquetCipher::EXTERNAL_DBPA_V1) {
+  if (algorithm != ParquetCipher::EXTERNAL_PROTECT_V1) {
     throw ParquetException(
         "ExternalDBPADecryptorAdapter::Make() -- Only algorithm ExternalDBPA_V1 is "
         "supported");

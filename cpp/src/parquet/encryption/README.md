@@ -86,7 +86,7 @@ For decryption, supply the matching keys via `FileDecryptionProperties`.
 To use an HSM, KMS, or any other external encryptor, implement
 `ExternalEncryptorProvider` and `ExternalDecryptorProvider` and inject them
 into the properties builders. Arrow calls the provider once per column per page;
-the AES path is unaffected for columns that do not use `EXTERNAL_DBPA_V1`.
+the AES path is unaffected for columns that do not use `EXTERNAL_PROTECT_V1`.
 
 ### Interface
 
@@ -213,7 +213,7 @@ parquet::ColumnPathToEncryptionPropertiesMap cols;
 cols["ssn"] = parquet::ColumnEncryptionProperties::Builder("ssn")
     .key(col_aes_key)           // AES key for column metadata (statistics, min/max)
     .key_metadata("my-key-id")  // forwarded to GetColumnEncryptor() as params.key_metadata
-    ->parquet_cipher(parquet::ParquetCipher::EXTERNAL_DBPA_V1)
+    ->parquet_cipher(parquet::ParquetCipher::EXTERNAL_PROTECT_V1)
     ->build();
 
 auto enc_props = parquet::FileEncryptionProperties::Builder(footer_key)
@@ -224,7 +224,7 @@ auto enc_props = parquet::FileEncryptionProperties::Builder(footer_key)
 
 > **Note:** `key()` sets the AES key used for column *metadata* (statistics,
 > min/max values). Column *data pages* go through the `EncryptorInterface`
-> returned by `GetColumnEncryptor()`. Both are required when using `EXTERNAL_DBPA_V1`.
+> returned by `GetColumnEncryptor()`. Both are required when using `EXTERNAL_PROTECT_V1`.
 
 ### Reading with an external provider
 

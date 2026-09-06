@@ -314,7 +314,7 @@ class PARQUET_EXPORT FileDecryptionProperties {
       return this;
     }
 
-    /// Set an external decryptor provider for columns using the EXTERNAL_DBPA_V1
+    /// Set an external decryptor provider for columns using the EXTERNAL_PROTECT_V1
     /// algorithm. The provider manages its own keys; it is called once per column
     /// page with ColumnEncryptionParams containing the key identifier and column
     /// path. Implementations must be thread-safe.
@@ -517,7 +517,7 @@ class PARQUET_EXPORT FileEncryptionProperties {
     /// If called, the file columns not in the list will be left unencrypted.
     Builder* encrypted_columns(ColumnPathToEncryptionPropertiesMap encrypted_columns);
 
-    /// Set an external encryptor provider for columns using the EXTERNAL_DBPA_V1
+    /// Set an external encryptor provider for columns using the EXTERNAL_PROTECT_V1
     /// algorithm. The provider manages its own keys; it is called once per column
     /// page with ColumnEncryptionParams containing the key identifier and column
     /// path. Implementations must be thread-safe.
