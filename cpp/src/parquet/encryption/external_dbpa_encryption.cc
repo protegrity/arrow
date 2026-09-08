@@ -328,6 +328,7 @@ std::shared_ptr<KeyValueMetadata> ExternalDBPAEncryptorAdapter::GetKeyValueMetad
 
 int32_t ExternalDBPAEncryptorAdapter::EncryptWithManagedBuffer(
     std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+    std::span<const uint8_t> aad,
     std::unique_ptr<EncodingProperties> encoding_properties) {
   if (encoding_properties == nullptr) {
     ARROW_LOG(ERROR) << "ExternalDBPAEncryptorAdapter:: encoding_properties is nullptr";

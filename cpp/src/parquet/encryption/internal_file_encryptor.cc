@@ -57,8 +57,8 @@ int32_t Encryptor::Encrypt(std::span<const uint8_t> plaintext,
 int32_t Encryptor::EncryptWithManagedBuffer(
     std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
     std::unique_ptr<EncodingProperties> encoding_properties) {
-  return encryptor_instance_->EncryptWithManagedBuffer(plaintext, ciphertext,
-                                                       std::move(encoding_properties));
+  return encryptor_instance_->EncryptWithManagedBuffer(
+      plaintext, ciphertext, str2span(aad_), std::move(encoding_properties));
 }
 
 std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_type) {

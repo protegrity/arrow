@@ -255,9 +255,8 @@ static inline AadMetadata FromThrift(format::AesGcmCtrV1 aesGcmCtrV1) {
 }
 
 static inline AadMetadata FromThrift(format::ExternalProtectV1 externalProtectV1) {
-  // Set default values for AAD, which is not supported by ExternalProtectV1
-  return AadMetadata{/*aad_prefix*/ "", /*aad_file_unique*/ "",
-                     /*supply_aad_prefix*/ false};
+  return AadMetadata{externalProtectV1.aad_prefix, externalProtectV1.aad_file_unique,
+                     externalProtectV1.supply_aad_prefix};
 }
 
 // Selects how thrift Statistics min/max fields should populate EncodedStatistics.
@@ -559,8 +558,17 @@ static inline format::AesGcmCtrV1 ToAesGcmCtrV1Thrift(AadMetadata aad) {
   return aesGcmCtrV1;
 }
 
-static inline format::ExternalProtectV1 ToExternalProtectV1Thrift() {
+static inline format::ExternalProtectV1 ToExternalProtectV1Thrift(
+    const AadMetadata& aad) {
   format::ExternalProtectV1 externalProtectV1;
+  // aad_file_unique/supply_aad_prefix are always set, mirroring
+  // AesGcmV1/AesGcmCtrV1, so vendor ciphers with positional binding can
+  // reconstruct file_aad on read.
+  externalProtectV1.__set_aad_file_unique(aad.aad_file_unique);
+  externalProtectV1.__set_supply_aad_prefix(aad.supply_aad_prefix);
+  if (!aad.aad_prefix.empty()) {
+    externalProtectV1.__set_aad_prefix(aad.aad_prefix);
+  }
   return externalProtectV1;
 }
 
@@ -571,7 +579,8 @@ static inline format::EncryptionAlgorithm ToThrift(EncryptionAlgorithm encryptio
   } else if (encryption.algorithm == ParquetCipher::AES_GCM_CTR_V1) {
     encryption_algorithm.__set_AES_GCM_CTR_V1(ToAesGcmCtrV1Thrift(encryption.aad));
   } else {
-    encryption_algorithm.__set_EXTERNAL_PROTECT_V1(ToExternalProtectV1Thrift());
+    encryption_algorithm.__set_EXTERNAL_PROTECT_V1(
+        ToExternalProtectV1Thrift(encryption.aad));
   }
   return encryption_algorithm;
 }

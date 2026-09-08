@@ -2989,18 +2989,46 @@ void swap(AesGcmCtrV1 &a, AesGcmCtrV1 &b) noexcept;
 std::ostream& operator<<(std::ostream& out, const AesGcmCtrV1& obj);
 
 
+typedef struct _ExternalProtectV1__isset {
+  _ExternalProtectV1__isset() : aad_prefix(false), aad_file_unique(false), supply_aad_prefix(false) {}
+  bool aad_prefix :1;
+  bool aad_file_unique :1;
+  bool supply_aad_prefix :1;
+} _ExternalProtectV1__isset;
+
 class ExternalProtectV1 {
  public:
 
-  ExternalProtectV1(const ExternalProtectV1&) noexcept;
+  ExternalProtectV1(const ExternalProtectV1&);
   ExternalProtectV1(ExternalProtectV1&&) noexcept;
-  ExternalProtectV1& operator=(const ExternalProtectV1&) noexcept;
+  ExternalProtectV1& operator=(const ExternalProtectV1&);
   ExternalProtectV1& operator=(ExternalProtectV1&&) noexcept;
   ExternalProtectV1() noexcept;
 
   ~ExternalProtectV1() noexcept;
+  /**
+   * AAD prefix *
+   */
+  std::string aad_prefix;
+  /**
+   * Unique file identifier part of AAD suffix *
+   */
+  std::string aad_file_unique;
+  /**
+   * In files encrypted with AAD prefix without storing it,
+   * readers must supply the prefix *
+   */
+  bool supply_aad_prefix;
 
-  bool operator == (const ExternalProtectV1 & /* rhs */) const;
+  _ExternalProtectV1__isset __isset;
+
+  void __set_aad_prefix(const std::string& val);
+
+  void __set_aad_file_unique(const std::string& val);
+
+  void __set_supply_aad_prefix(const bool val);
+
+  bool operator == (const ExternalProtectV1 & rhs) const;
   bool operator != (const ExternalProtectV1 &rhs) const {
     return !(*this == rhs);
   }

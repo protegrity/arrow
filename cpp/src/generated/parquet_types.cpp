@@ -4407,7 +4407,25 @@ void AesGcmCtrV1::printTo(std::ostream& out) const {
 ExternalProtectV1::~ExternalProtectV1() noexcept {
 }
 
-ExternalProtectV1::ExternalProtectV1() noexcept {
+ExternalProtectV1::ExternalProtectV1() noexcept
+   : aad_prefix(),
+     aad_file_unique(),
+     supply_aad_prefix(0) {
+}
+
+void ExternalProtectV1::__set_aad_prefix(const std::string& val) {
+  this->aad_prefix = val;
+__isset.aad_prefix = true;
+}
+
+void ExternalProtectV1::__set_aad_file_unique(const std::string& val) {
+  this->aad_file_unique = val;
+__isset.aad_file_unique = true;
+}
+
+void ExternalProtectV1::__set_supply_aad_prefix(const bool val) {
+  this->supply_aad_prefix = val;
+__isset.supply_aad_prefix = true;
 }
 std::ostream& operator<<(std::ostream& out, const ExternalProtectV1& obj)
 {
@@ -4418,32 +4436,61 @@ std::ostream& operator<<(std::ostream& out, const ExternalProtectV1& obj)
 
 void swap(ExternalProtectV1 &a, ExternalProtectV1 &b) noexcept {
   using ::std::swap;
-  (void) a;
-  (void) b;
+  swap(a.aad_prefix, b.aad_prefix);
+  swap(a.aad_file_unique, b.aad_file_unique);
+  swap(a.supply_aad_prefix, b.supply_aad_prefix);
+  swap(a.__isset, b.__isset);
 }
 
-bool ExternalProtectV1::operator==(const ExternalProtectV1 & /* rhs */) const
+bool ExternalProtectV1::operator==(const ExternalProtectV1 & rhs) const
 {
+  if (__isset.aad_prefix != rhs.__isset.aad_prefix)
+    return false;
+  else if (__isset.aad_prefix && !(aad_prefix == rhs.aad_prefix))
+    return false;
+  if (__isset.aad_file_unique != rhs.__isset.aad_file_unique)
+    return false;
+  else if (__isset.aad_file_unique && !(aad_file_unique == rhs.aad_file_unique))
+    return false;
+  if (__isset.supply_aad_prefix != rhs.__isset.supply_aad_prefix)
+    return false;
+  else if (__isset.supply_aad_prefix && !(supply_aad_prefix == rhs.supply_aad_prefix))
+    return false;
   return true;
 }
 
-ExternalProtectV1::ExternalProtectV1(const ExternalProtectV1& other237) noexcept {
-  (void) other237;
+ExternalProtectV1::ExternalProtectV1(const ExternalProtectV1& other237) {
+  aad_prefix = other237.aad_prefix;
+  aad_file_unique = other237.aad_file_unique;
+  supply_aad_prefix = other237.supply_aad_prefix;
+  __isset = other237.__isset;
 }
 ExternalProtectV1::ExternalProtectV1(ExternalProtectV1&& other238) noexcept {
-  (void) other238;
+  aad_prefix = std::move(other238.aad_prefix);
+  aad_file_unique = std::move(other238.aad_file_unique);
+  supply_aad_prefix = other238.supply_aad_prefix;
+  __isset = other238.__isset;
 }
-ExternalProtectV1& ExternalProtectV1::operator=(const ExternalProtectV1& other239) noexcept {
-  (void) other239;
+ExternalProtectV1& ExternalProtectV1::operator=(const ExternalProtectV1& other239) {
+  aad_prefix = other239.aad_prefix;
+  aad_file_unique = other239.aad_file_unique;
+  supply_aad_prefix = other239.supply_aad_prefix;
+  __isset = other239.__isset;
   return *this;
 }
 ExternalProtectV1& ExternalProtectV1::operator=(ExternalProtectV1&& other240) noexcept {
-  (void) other240;
+  aad_prefix = std::move(other240.aad_prefix);
+  aad_file_unique = std::move(other240.aad_file_unique);
+  supply_aad_prefix = other240.supply_aad_prefix;
+  __isset = other240.__isset;
   return *this;
 }
 void ExternalProtectV1::printTo(std::ostream& out) const {
   using ::apache::thrift::to_string;
   out << "ExternalProtectV1(";
+  out << "aad_prefix="; (__isset.aad_prefix ? (out << to_string(aad_prefix)) : (out << "<null>"));
+  out << ", " << "aad_file_unique="; (__isset.aad_file_unique ? (out << to_string(aad_file_unique)) : (out << "<null>"));
+  out << ", " << "supply_aad_prefix="; (__isset.supply_aad_prefix ? (out << to_string(supply_aad_prefix)) : (out << "<null>"));
   out << ")";
 }
 

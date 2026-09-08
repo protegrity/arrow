@@ -3873,7 +3873,36 @@ uint32_t ExternalProtectV1::read(Protocol_* iprot) {
     if (ftype == ::apache::thrift::protocol::T_STOP) {
       break;
     }
-    xfer += iprot->skip(ftype);
+    switch (fid)
+    {
+      case 1:
+        if (ftype == ::apache::thrift::protocol::T_STRING) {
+          xfer += iprot->readBinary(this->aad_prefix);
+          this->__isset.aad_prefix = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 2:
+        if (ftype == ::apache::thrift::protocol::T_STRING) {
+          xfer += iprot->readBinary(this->aad_file_unique);
+          this->__isset.aad_file_unique = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 3:
+        if (ftype == ::apache::thrift::protocol::T_BOOL) {
+          xfer += iprot->readBool(this->supply_aad_prefix);
+          this->__isset.supply_aad_prefix = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      default:
+        xfer += iprot->skip(ftype);
+        break;
+    }
     xfer += iprot->readFieldEnd();
   }
 
@@ -3888,6 +3917,21 @@ uint32_t ExternalProtectV1::write(Protocol_* oprot) const {
   ::apache::thrift::protocol::TOutputRecursionTracker tracker(*oprot);
   xfer += oprot->writeStructBegin("ExternalProtectV1");
 
+  if (this->__isset.aad_prefix) {
+    xfer += oprot->writeFieldBegin("aad_prefix", ::apache::thrift::protocol::T_STRING, 1);
+    xfer += oprot->writeBinary(this->aad_prefix);
+    xfer += oprot->writeFieldEnd();
+  }
+  if (this->__isset.aad_file_unique) {
+    xfer += oprot->writeFieldBegin("aad_file_unique", ::apache::thrift::protocol::T_STRING, 2);
+    xfer += oprot->writeBinary(this->aad_file_unique);
+    xfer += oprot->writeFieldEnd();
+  }
+  if (this->__isset.supply_aad_prefix) {
+    xfer += oprot->writeFieldBegin("supply_aad_prefix", ::apache::thrift::protocol::T_BOOL, 3);
+    xfer += oprot->writeBool(this->supply_aad_prefix);
+    xfer += oprot->writeFieldEnd();
+  }
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   return xfer;

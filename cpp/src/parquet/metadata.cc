@@ -1812,6 +1812,15 @@ class ColumnChunkMetaDataBuilder::ColumnChunkMetaDataBuilderImpl {
         if (encrypt_md->parquet_cipher().has_value()) {
           EncryptionAlgorithm column_encryption_algorithm{};
           column_encryption_algorithm.algorithm = encrypt_md->parquet_cipher().value();
+          // Thread the file-wide AAD metadata through so a reader can
+          // reconstruct file_aad from this per-column algorithm too.
+          const AadMetadata& file_aad =
+              properties_->file_encryption_properties()->algorithm().aad;
+          column_encryption_algorithm.aad.aad_file_unique = file_aad.aad_file_unique;
+          column_encryption_algorithm.aad.supply_aad_prefix = file_aad.supply_aad_prefix;
+          if (!file_aad.supply_aad_prefix) {
+            column_encryption_algorithm.aad.aad_prefix = file_aad.aad_prefix;
+          }
           eck.__set_encryption_algorithm(ToThrift(column_encryption_algorithm));
         }
         ccmd.__isset.ENCRYPTION_WITH_COLUMN_KEY = true;

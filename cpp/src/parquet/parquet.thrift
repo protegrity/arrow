@@ -977,7 +977,20 @@ struct AesGcmCtrV1 {
   3: optional bool supply_aad_prefix
 }
 
-struct ExternalProtectV1 {}
+struct ExternalProtectV1 {
+  /** AAD prefix. Mirrors AesGcmV1/AesGcmCtrV1 — the anti-file-swap binding is
+   * cipher-agnostic **/
+  1: optional binary aad_prefix
+
+  /** Unique file identifier part of AAD suffix. Threaded through so vendor
+   * ciphers with positional binding (e.g. AES-GCM) can reconstruct file_aad
+   * on read, mirroring AesGcmV1/AesGcmCtrV1 **/
+  2: optional binary aad_file_unique
+
+  /** In files encrypted with AAD prefix without storing it,
+   * readers must supply the prefix **/
+  3: optional bool supply_aad_prefix
+}
 
 union EncryptionAlgorithm {
   1: AesGcmV1 AES_GCM_V1

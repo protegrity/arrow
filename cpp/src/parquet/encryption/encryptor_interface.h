@@ -49,8 +49,13 @@ class PARQUET_EXPORT EncryptorInterface {
   /// The buffer will be resized to the appropriate size by the encryptor during
   /// encryption. This method is used when the encryptor cannot calculate the
   /// ciphertext length before encryption.
+  ///
+  /// \param aad The positional binding for this call (e.g. Encryptor::UpdateAad()'s
+  ///     CreateModuleAad() result, already updated per-page). Implementations
+  ///     without AEAD-style binding may ignore it.
   virtual int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+      std::span<const uint8_t> aad = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 
   /// Return column-level metadata accumulated during encryption of a single page.

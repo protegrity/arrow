@@ -77,6 +77,7 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
   /// not supported as we can calculate the ciphertext length before encryption.
   int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+      std::span<const uint8_t> aad = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override {
     throw ParquetException(
         "EncryptWithManagedBuffer is not supported in AesEncryptor, use Encrypt instead");
