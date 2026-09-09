@@ -26,7 +26,8 @@
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryptor_interface.h"
-#include "parquet/encryption/external_encryptor_provider.h"
+#include "parquet/encryption/parquet_crypto_provider.h"
+#include "parquet/encryption/parquet_crypto_provider_adapter_internal.h"
 #include "parquet/metadata.h"
 
 namespace parquet {
@@ -105,10 +106,10 @@ class InternalFileEncryptor {
 
   ::arrow::MemoryPool* pool_;
   encryption::AesEncryptorFactory aes_encryptor_factory_;
-  std::shared_ptr<ExternalEncryptorProvider> external_encryptor_provider_;
-  // Owns EncryptorInterface instances returned by the external provider; raw ptrs
-  // are held by Encryptor objects and must not outlive this cache.
-  std::vector<std::unique_ptr<encryption::EncryptorInterface>> external_encryptor_cache_;
+  std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider_;
+  // Owns ParquetCryptoProviderAdapter instances; raw ptrs are held by Encryptor
+  // objects and must not outlive this cache.
+  std::vector<std::unique_ptr<encryption::EncryptorInterface>> encryptor_cache_;
 
   std::shared_ptr<Encryptor> GetColumnEncryptor(
       const std::string& column_path, bool metadata,
@@ -120,6 +121,14 @@ class InternalFileEncryptor {
   encryption::EncryptorInterface* GetDataEncryptor(
       ParquetCipher::type algorithm, size_t key_len,
       const ColumnChunkMetaDataBuilder* column_chunk_metadata = nullptr);
+
+  // Builds a ParquetCryptoProviderAdapter for ctx, owns it in encryptor_cache_, and
+  // returns the raw pointer — the EXTERNAL_PROTECT_V1 counterpart to GetMetaEncryptor/
+  // GetDataEncryptor. Unlike those, each call always creates a new adapter: ctx is
+  // per-column/footer, so instances cannot be shared by (algorithm, key_size) the way
+  // AesEncryptor is.
+  encryption::EncryptorInterface* GetParquetCryptoProviderEncryptor(
+      ParquetCryptoContext ctx);
 };
 
 }  // namespace parquet
