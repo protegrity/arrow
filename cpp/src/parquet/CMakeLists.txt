@@ -173,6 +173,7 @@ set(PARQUET_SRCS
     encryption/internal_file_decryptor.cc
     encryption/internal_file_encryptor.cc
     encryption/parquet_crypto_provider_adapter_internal.cc
+    encryption/parquet_page_decoder_internal.cc
     exception.cc
     file_reader.cc
     file_writer.cc
