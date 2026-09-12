@@ -25,7 +25,7 @@
 
 #include "arrow/util/secure_string.h"
 #include "parquet/encryption/decryptor_interface.h"
-#include "parquet/encryption/external_decryptor_provider.h"
+#include "parquet/encryption/parquet_crypto_provider.h"
 #include "parquet/metadata.h"
 
 namespace parquet {
@@ -123,7 +123,7 @@ class InternalFileDecryptor {
   ParquetCipher::type algorithm_;
   std::string footer_key_metadata_;
   ::arrow::MemoryPool* pool_;
-  std::shared_ptr<ExternalDecryptorProvider> external_decryptor_provider_;
+  std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider_;
 
   // Protects footer_key_ updates
   std::mutex mutex_;

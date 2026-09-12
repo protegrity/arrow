@@ -323,7 +323,7 @@ FileDecryptionProperties::FileDecryptionProperties(
     std::shared_ptr<AADPrefixVerifier> aad_prefix_verifier,
     ColumnPathToDecryptionPropertiesMap column_decryption_properties,
     bool plaintext_files_allowed,
-    std::shared_ptr<ExternalDecryptorProvider> external_decryptor_provider)
+    std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider)
     : footer_key_(std::move(footer_key)),
       aad_prefix_(std::move(aad_prefix)),
       aad_prefix_verifier_(std::move(aad_prefix_verifier)),
@@ -331,7 +331,7 @@ FileDecryptionProperties::FileDecryptionProperties(
       key_retriever_(std::move(key_retriever)),
       check_plaintext_footer_integrity_(check_plaintext_footer_integrity),
       plaintext_files_allowed_(plaintext_files_allowed),
-      external_decryptor_provider_(std::move(external_decryptor_provider)) {
+      parquet_crypto_provider_(std::move(parquet_crypto_provider)) {
   DCHECK(!footer_key_.empty() || nullptr != key_retriever_ ||
          0 != column_decryption_properties_.size());
   if (!footer_key_.empty()) {
