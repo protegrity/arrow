@@ -51,8 +51,15 @@ class PARQUET_EXPORT DecryptorInterface {
   /// Decrypt the ciphertext and leave the results in the plaintext buffer.
   /// The buffer will be resized to the correct size during decryption. This method
   /// is used when the decryptor cannot calculate the plaintext length before decryption.
+  ///
+  /// \param aad The positional binding for this call (e.g. Decryptor::UpdateAad()'s
+  ///     CreateModuleAad() result, already updated per-page). Implementations
+  ///     without AEAD-style binding may ignore it.
+  /// \param dek The key resolved for this call, if any. Implementations that
+  ///     already hold their key (e.g. AES, bound at construction) ignore it.
   virtual int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 };
 

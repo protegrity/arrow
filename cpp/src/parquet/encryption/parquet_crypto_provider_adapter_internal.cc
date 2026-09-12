@@ -38,7 +38,7 @@ bool ParquetCryptoProviderAdapter::UseCellPath() const {
 
 int32_t ParquetCryptoProviderAdapter::EncryptWithManagedBuffer(
     std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
-    std::span<const uint8_t> aad,
+    std::span<const uint8_t> aad, std::span<const uint8_t> dek,
     std::unique_ptr<encryption::EncodingProperties> encoding_properties) {
   std::vector<uint8_t> result_bytes;
 
@@ -49,13 +49,14 @@ int32_t ParquetCryptoProviderAdapter::EncryptWithManagedBuffer(
     }
     TypedColumnValues typed =
         ParquetPageDecoder::Decompress(plaintext, *encoding_properties);
-    PARQUET_THROW_NOT_OK(provider_->EncryptCells(typed.values(), ctx_));
+    PARQUET_THROW_NOT_OK(provider_->EncryptCells(typed.values(), ctx_, dek));
     result_bytes = ParquetPageDecoder::Recompress(typed, *encoding_properties);
   } else {
     // aad is the module AAD Encryptor::UpdateAad() already computed via
     // CreateModuleAad()/QuickUpdatePageAad() — the same per-page positional binding
-    // Internal PME uses for AES-GCM — forwarded straight through to the vendor.
-    PARQUET_ASSIGN_OR_THROW(result_bytes, provider_->EncryptBlock(plaintext, ctx_, aad));
+    // Internal PME uses for AES-GCM — forwarded straight through to the provider.
+    PARQUET_ASSIGN_OR_THROW(result_bytes,
+                            provider_->EncryptBlock(plaintext, ctx_, aad, dek));
   }
 
   PARQUET_THROW_NOT_OK(ciphertext->Resize(static_cast<int64_t>(result_bytes.size()),
@@ -69,8 +70,48 @@ int32_t ParquetCryptoProviderAdapter::SignedFooterEncrypt(
     std::span<const uint8_t> aad, std::span<const uint8_t> nonce,
     std::span<uint8_t> encrypted_footer) {
   throw ParquetException(
-      "ParquetCryptoProviderAdapter::SignedFooterEncrypt is not implemented: vendor "
+      "ParquetCryptoProviderAdapter::SignedFooterEncrypt is not implemented: provider "
       "footer signing is a future extension, not yet dispatched to this adapter");
+}
+
+ParquetCryptoProviderDecryptorAdapter::ParquetCryptoProviderDecryptorAdapter(
+    std::shared_ptr<ParquetCryptoProvider> provider, ParquetCryptoContext ctx)
+    : provider_(std::move(provider)), ctx_(std::move(ctx)) {}
+
+bool ParquetCryptoProviderDecryptorAdapter::UseCellPath() const {
+  return provider_->SupportsTypedValues() &&
+         (ctx_.module_type == ParquetModuleType::kDataPage ||
+          ctx_.module_type == ParquetModuleType::kDictionaryPage);
+}
+
+int32_t ParquetCryptoProviderDecryptorAdapter::DecryptWithManagedBuffer(
+    std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+    std::span<const uint8_t> aad, std::span<const uint8_t> dek,
+    std::unique_ptr<encryption::EncodingProperties> encoding_properties) {
+  std::vector<uint8_t> result_bytes;
+
+  if (UseCellPath()) {
+    if (encoding_properties == nullptr) {
+      throw ParquetException(
+          "ParquetCryptoProviderDecryptorAdapter: EncodingProperties required for "
+          "cell path");
+    }
+    TypedColumnValues typed =
+        ParquetPageDecoder::Decompress(ciphertext, *encoding_properties);
+    PARQUET_THROW_NOT_OK(provider_->DecryptCells(typed.values(), ctx_, dek));
+    result_bytes = ParquetPageDecoder::Recompress(typed, *encoding_properties);
+  } else {
+    // aad is the module AAD Decryptor::UpdateAad() already computed — the same
+    // per-page positional binding Internal PME uses for AES-GCM — forwarded
+    // straight through to the provider.
+    PARQUET_ASSIGN_OR_THROW(result_bytes,
+                            provider_->DecryptBlock(ciphertext, ctx_, aad, dek));
+  }
+
+  PARQUET_THROW_NOT_OK(plaintext->Resize(static_cast<int64_t>(result_bytes.size()),
+                                         /*shrink_to_fit=*/false));
+  std::memcpy(plaintext->mutable_data(), result_bytes.data(), result_bytes.size());
+  return static_cast<int32_t>(result_bytes.size());
 }
 
 }  // namespace parquet

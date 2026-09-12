@@ -53,9 +53,11 @@ class PARQUET_EXPORT EncryptorInterface {
   /// \param aad The positional binding for this call (e.g. Encryptor::UpdateAad()'s
   ///     CreateModuleAad() result, already updated per-page). Implementations
   ///     without AEAD-style binding may ignore it.
+  /// \param dek The key resolved for this call, if any. Implementations that
+  ///     already hold their key (e.g. AES, bound at construction) ignore it.
   virtual int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
-      std::span<const uint8_t> aad = {},
+      std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
 
   /// Return column-level metadata accumulated during encryption of a single page.

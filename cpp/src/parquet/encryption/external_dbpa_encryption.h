@@ -72,11 +72,11 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
 
   /// Encrypt the plaintext and leave the results in the ciphertext buffer.
   /// The buffer will be resized to the appropriate size by the agent during encryption.
-  /// `aad` is not used by this legacy DBPA adapter (the agent manages its own key
-  /// material and binding); accepted only for EncryptorInterface conformance.
+  /// `aad` and `dek` are not used by this legacy DBPA adapter (the agent manages its
+  /// own key material and binding); accepted only for EncryptorInterface conformance.
   int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
-      std::span<const uint8_t> aad = {},
+      std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
   /// Encrypts plaintext footer, in order to compute footer signature (tag).
@@ -212,6 +212,7 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   /// decryption.
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
  private:
