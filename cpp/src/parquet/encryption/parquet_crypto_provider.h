@@ -49,13 +49,13 @@ enum class PARQUET_EXPORT ParquetModuleType : int8_t {
 
 /// Describes the Parquet module a single ParquetCryptoProvider call applies to.
 ///
-/// Populated by Arrow from the file's crypto metadata. `key_metadata` is an opaque
-/// vendor-defined string read verbatim from the file (or application-supplied on
-/// write); Arrow never parses it or derives key material from it.
+/// Populated by Arrow from the file's crypto metadata. `key_metadata` is an opaque,
+/// implementation-defined string read verbatim from the file (or supplied by the
+/// application on write); Arrow never parses it or derives key material from it.
 struct PARQUET_EXPORT ParquetCryptoContext {
-  /// Opaque vendor key or policy identifier. Same value for every module
-  /// belonging to one column (or the footer); the vendor uses `module_type` to
-  /// distinguish between them if needed.
+  /// Opaque key or policy identifier, interpreted only by the ParquetCryptoProvider
+  /// implementation. Same value for every module belonging to one column (or the
+  /// footer); the implementation uses `module_type` to distinguish between them.
   std::string key_metadata;
   /// Dot-separated Parquet column path (e.g. "address.zip"); empty for the
   /// file-level footer modules.
@@ -93,14 +93,14 @@ using CryptoValueBuffer =
                  std::span<double>,          // DOUBLE
                  std::vector<std::string>>;  // BYTE_ARRAY
 
-/// Pure-virtual interface for an external (vendor) Parquet crypto provider.
+/// Pure-virtual interface for an external Parquet crypto provider.
 ///
 /// Implement this interface to protect Parquet file modules (footer, column
 /// metadata, data pages, dictionary pages, and related structures) with a
 /// third-party key-management, HSM, or tokenization backend instead of Arrow's
-/// built-in AES-GCM/CTR encryptor. Arrow never holds key material for modules
-/// routed through this interface — `ParquetCryptoContext::key_metadata` is an
-/// opaque string only the vendor interprets.
+/// built-in AES-GCM/CTR encryptor. `ParquetCryptoContext::key_metadata` is an
+/// opaque string only the implementation interprets; `dek` (below) carries the
+/// actual key bytes Arrow generated for the column or footer.
 ///
 /// Arrow calls exactly one of the two paths below for a given provider
 /// instance, decided once via SupportsTypedValues():
@@ -123,14 +123,17 @@ class PARQUET_EXPORT ParquetCryptoProvider {
   ///     type, row group, column, and page ordinals). AES-GCM implementations
   ///     should pass it as additional authenticated data; ciphers without an
   ///     AEAD tag may ignore it.
+  /// \param dek The column's or footer's data-encryption key, forwarded
+  ///     unconditionally by Arrow. A block cipher always requires it; empty
+  ///     only when Arrow could not resolve a key for this module.
   virtual ::arrow::Result<std::vector<uint8_t>> EncryptBlock(
       std::span<const uint8_t> plaintext, const ParquetCryptoContext& ctx,
-      std::span<const uint8_t> module_aad) = 0;
+      std::span<const uint8_t> module_aad, std::span<const uint8_t> dek = {}) = 0;
 
-  /// Decrypt a raw module block. See EncryptBlock() for `module_aad` semantics.
+  /// Decrypt a raw module block. See EncryptBlock() for `module_aad`/`dek` semantics.
   virtual ::arrow::Result<std::vector<uint8_t>> DecryptBlock(
       std::span<const uint8_t> ciphertext, const ParquetCryptoContext& ctx,
-      std::span<const uint8_t> module_aad) = 0;
+      std::span<const uint8_t> module_aad, std::span<const uint8_t> dek = {}) = 0;
 
   /// Selects the routing path Arrow uses for this provider.
   ///
@@ -141,13 +144,18 @@ class PARQUET_EXPORT ParquetCryptoProvider {
 
   /// Transform decoded column values in place (e.g. tokenize, FPE,
   /// pseudonymize). Called only when SupportsTypedValues() returns true.
+  ///
+  /// \param dek Same key as EncryptBlock()'s `dek`. The cell path may use it
+  ///     (e.g. keyed FPE) or ignore it (pure tokenization).
   virtual ::arrow::Status EncryptCells(CryptoValueBuffer& values,
-                                       const ParquetCryptoContext& ctx) = 0;
+                                       const ParquetCryptoContext& ctx,
+                                       std::span<const uint8_t> dek = {}) = 0;
 
   /// Reverse the transform applied by EncryptCells(). Called only when
   /// SupportsTypedValues() returns true.
   virtual ::arrow::Status DecryptCells(CryptoValueBuffer& values,
-                                       const ParquetCryptoContext& ctx) = 0;
+                                       const ParquetCryptoContext& ctx,
+                                       std::span<const uint8_t> dek = {}) = 0;
 };
 
 }  // namespace parquet
