@@ -57,8 +57,9 @@ int32_t Encryptor::Encrypt(std::span<const uint8_t> plaintext,
 int32_t Encryptor::EncryptWithManagedBuffer(
     std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
     std::unique_ptr<EncodingProperties> encoding_properties) {
-  return encryptor_instance_->EncryptWithManagedBuffer(
-      plaintext, ciphertext, str2span(aad_), std::move(encoding_properties));
+  return encryptor_instance_->EncryptWithManagedBuffer(plaintext, ciphertext,
+                                                       str2span(aad_), key_.as_span(),
+                                                       std::move(encoding_properties));
 }
 
 std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_type) {
@@ -87,7 +88,7 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterEncryptor() {
     ctx.module_type = ParquetModuleType::kFooterEncrypted;
     auto* encryptor_instance = GetParquetCryptoProviderEncryptor(std::move(ctx));
     footer_encryptor_ = std::make_shared<Encryptor>(
-        encryptor_instance, SecureString{}, properties_->file_aad(), footer_aad, pool_);
+        encryptor_instance, footer_key, properties_->file_aad(), footer_aad, pool_);
     return footer_encryptor_;
   }
 
@@ -111,8 +112,9 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterSigningEncryptor() {
     ctx.key_metadata = properties_->footer_key_metadata();
     ctx.module_type = ParquetModuleType::kFooterSigned;
     auto* encryptor_instance = GetParquetCryptoProviderEncryptor(std::move(ctx));
-    footer_signing_encryptor_ = std::make_shared<Encryptor>(
-        encryptor_instance, SecureString{}, properties_->file_aad(), footer_aad, pool_);
+    footer_signing_encryptor_ =
+        std::make_shared<Encryptor>(encryptor_instance, footer_signing_key,
+                                    properties_->file_aad(), footer_aad, pool_);
     return footer_signing_encryptor_;
   }
 
@@ -164,10 +166,10 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
     }
   }
 
-  // Route EXTERNAL_PROTECT_V1 to the vendor ParquetCryptoProvider. Applies to both
+  // Route EXTERNAL_PROTECT_V1 to the external ParquetCryptoProvider. Applies to both
   // data pages (metadata=false) and column metadata (metadata=true) — no !metadata
-  // guard here (§CW B-CT3): a Vendor Mode column's metadata must also go through the
-  // vendor, since Arrow holds no AES key for it.
+  // guard here: a column's metadata must also go through the provider, since Arrow
+  // holds no AES key for it.
   if (algorithm == ParquetCipher::EXTERNAL_PROTECT_V1) {
     if (column_prop->key_metadata().empty()) {
       throw ParquetException(
@@ -188,8 +190,8 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
     }
     auto* encryptor_instance = GetParquetCryptoProviderEncryptor(std::move(ctx));
     std::string file_aad = properties_->file_aad();
-    auto encryptor = std::make_shared<Encryptor>(encryptor_instance, SecureString{},
-                                                 file_aad, "", pool_);
+    auto encryptor =
+        std::make_shared<Encryptor>(encryptor_instance, key, file_aad, "", pool_);
     if (metadata) {
       column_metadata_map_[column_path] = encryptor;
     } else {
