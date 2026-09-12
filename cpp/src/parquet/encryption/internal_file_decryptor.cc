@@ -33,6 +33,16 @@ using arrow::util::SecureString;
 
 namespace parquet {
 
+namespace {
+// app_context lives only on ExternalFileDecryptionProperties, not the base class
+// InternalFileDecryptor holds; resolved lazily, only where EXTERNAL_PROTECT_V1
+// needs it, so plain AES properties never pay for the cast.
+std::string GetAppContext(FileDecryptionProperties* properties) {
+  auto* external_properties = dynamic_cast<ExternalFileDecryptionProperties*>(properties);
+  return external_properties != nullptr ? external_properties->app_context() : "";
+}
+}  // namespace
+
 // Decryptor
 Decryptor::Decryptor(std::unique_ptr<encryption::DecryptorInterface> decryptor_instance,
                      SecureString key, std::string file_aad, std::string aad,
@@ -141,6 +151,7 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetFooterDecryptor(
     ParquetCryptoContext ctx;
     ctx.key_metadata = footer_key_metadata_;
     ctx.module_type = ParquetModuleType::kFooterEncrypted;
+    ctx.app_context = GetAppContext(properties_.get());
     auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
         parquet_crypto_provider_, std::move(ctx));
     return std::make_unique<Decryptor>(std::move(decryptor_instance), GetFooterKey(),
@@ -196,6 +207,7 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetColumnMetaDecryptor(
     ctx.key_metadata = column_key_metadata;
     ctx.column_path = column_path;
     ctx.module_type = ParquetModuleType::kColumnMetaData;
+    ctx.app_context = GetAppContext(properties_.get());
     auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
         parquet_crypto_provider_, std::move(ctx));
     return std::make_unique<Decryptor>(std::move(decryptor_instance),
@@ -248,6 +260,7 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
     ctx.column_path = column_path;
     ctx.module_type =
         metadata ? ParquetModuleType::kColumnMetaData : ParquetModuleType::kDataPage;
+    ctx.app_context = GetAppContext(properties_.get());
     if (column_chunk_metadata != nullptr) {
       auto* descr = column_chunk_metadata->descr();
       ctx.data_type = descr->physical_type();

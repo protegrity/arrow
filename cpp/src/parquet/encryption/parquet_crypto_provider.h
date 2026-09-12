@@ -66,6 +66,10 @@ struct PARQUET_EXPORT ParquetCryptoContext {
   Type::type data_type = Type::BYTE_ARRAY;
   /// Byte width for FIXED_LEN_BYTE_ARRAY columns; nullopt for all other types.
   std::optional<int> datatype_length;
+  /// Application-supplied JSON context for access-control decisions, forwarded
+  /// verbatim from FileEncryptionProperties/FileDecryptionProperties. Same value
+  /// for every module in the file; empty if the application did not set one.
+  std::string app_context;
 };
 
 /// Type-erased, per-page buffer of decoded column values, used by the cell path.
