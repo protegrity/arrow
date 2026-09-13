@@ -162,6 +162,7 @@ std::shared_ptr<ExternalFileEncryptionProperties>
 CryptoFactory::GetExternalFileEncryptionProperties(
     const KmsConnectionConfig& kms_connection_config,
     const ExternalEncryptionConfiguration& external_encryption_config,
+    std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider,
     const std::string& file_path,
     const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
   // Validate the same rules as FileEncryptionProperties but considering
@@ -169,9 +170,21 @@ CryptoFactory::GetExternalFileEncryptionProperties(
   // column_keys or per_column_encryption must have values. If uniform_encryption
   // is set, then both column_keys and per_column_encryption must be empty.
   if (external_encryption_config.encryption_algorithm ==
-      ParquetCipher::EXTERNAL_PROTECT_V1) {
+          ParquetCipher::EXTERNAL_PROTECT_V1 &&
+      external_encryption_config.uniform_encryption) {
+    // EXTERNAL_PROTECT_V1 requires non-empty column key_metadata (see
+    // InternalFileEncryptor::GetColumnEncryptor), which uniform_encryption's
+    // encrypted-with-footer-key columns can never have.
     throw ParquetException(
-        "EXTERNAL_PROTECT_V1 algorithm is not supported for file level encryption");
+        "EXTERNAL_PROTECT_V1 columns cannot be encrypted with the footer key, so "
+        "uniform_encryption is not supported for this algorithm");
+  }
+  if (external_encryption_config.encryption_algorithm ==
+          ParquetCipher::EXTERNAL_PROTECT_V1 &&
+      parquet_crypto_provider == nullptr) {
+    throw ParquetException(
+        "parquet_crypto_provider must be set when using the EXTERNAL_PROTECT_V1 "
+        "algorithm");
   }
   bool no_columns_encrypted = external_encryption_config.column_keys.empty() &&
                               external_encryption_config.per_column_encryption.empty();
@@ -223,6 +236,11 @@ CryptoFactory::GetExternalFileEncryptionProperties(
         string_stream << "Keys found in column_keys and in per_column_encryption.";
         throw ParquetException(string_stream.str());
       }
+      if (attributes.parquet_cipher == ParquetCipher::EXTERNAL_PROTECT_V1 &&
+          parquet_crypto_provider == nullptr) {
+        throw ParquetException("parquet_crypto_provider must be set when column [" +
+                               column_name + "] uses the EXTERNAL_PROTECT_V1 algorithm");
+      }
 
       SecureString column_key(dek_length, '\0');
       RandBytes(reinterpret_cast<uint8_t*>(column_key.as_span().data()),
@@ -242,6 +260,11 @@ CryptoFactory::GetExternalFileEncryptionProperties(
   }
   if (!encrypted_columns.empty()) {
     external_properties_builder.encrypted_columns(encrypted_columns);
+  }
+
+  if (parquet_crypto_provider != nullptr) {
+    external_properties_builder.parquet_crypto_provider(
+        std::move(parquet_crypto_provider));
   }
 
   if (!external_encryption_config.app_context.empty()) {
@@ -347,6 +370,7 @@ std::shared_ptr<ExternalFileDecryptionProperties>
 CryptoFactory::GetExternalFileDecryptionProperties(
     const KmsConnectionConfig& kms_connection_config,
     const ExternalDecryptionConfiguration& external_decryption_config,
+    std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider,
     const std::string& file_path,
     const std::shared_ptr<::arrow::fs::FileSystem>& file_system) {
   // Use the same FileKeyUnwrapper as in the FileDecryptionProperties.
@@ -357,6 +381,10 @@ CryptoFactory::GetExternalFileDecryptionProperties(
   ExternalFileDecryptionProperties::Builder builder;
   builder.key_retriever(key_retriever);
   builder.plaintext_files_allowed();
+
+  if (parquet_crypto_provider != nullptr) {
+    builder.parquet_crypto_provider(std::move(parquet_crypto_provider));
+  }
 
   if (!external_decryption_config.app_context.empty()) {
     builder.app_context(external_decryption_config.app_context);

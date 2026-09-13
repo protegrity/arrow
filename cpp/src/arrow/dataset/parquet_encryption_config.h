@@ -19,14 +19,17 @@
 
 #include "arrow/dataset/type_fwd.h"
 
-namespace parquet::encryption {
+namespace parquet {
+class ParquetCryptoProvider;
+namespace encryption {
 class CryptoFactory;
 struct KmsConnectionConfig;
 struct EncryptionConfiguration;
 struct DecryptionConfiguration;
 struct ExternalEncryptionConfiguration;
 struct ExternalDecryptionConfiguration;
-}  // namespace parquet::encryption
+}  // namespace encryption
+}  // namespace parquet
 
 namespace arrow {
 namespace dataset {
@@ -57,6 +60,11 @@ struct ARROW_DS_EXPORT ParquetEncryptionConfig {
   ///  encryption algorithms. If this is set, the encryption_config cannot be set.
   std::shared_ptr<parquet::encryption::ExternalEncryptionConfiguration>
       external_encryption_config;
+
+  ///  Shared pointer to a ParquetCryptoProvider implementation. Required when
+  ///  external_encryption_config uses the EXTERNAL_PROTECT_V1 algorithm; ignored
+  ///  otherwise.
+  std::shared_ptr<parquet::ParquetCryptoProvider> parquet_crypto_provider;
 };
 
 /// \brief Core configuration class encapsulating parameters for high-level decryption
@@ -86,6 +94,10 @@ struct ARROW_DS_EXPORT ParquetDecryptionConfig {
   ///  If this is set, the decryption_config cannot be set.
   std::shared_ptr<parquet::encryption::ExternalDecryptionConfiguration>
       external_decryption_config;
+
+  ///  Shared pointer to a ParquetCryptoProvider implementation. Required to decrypt
+  ///  files containing EXTERNAL_PROTECT_V1 modules; ignored otherwise.
+  std::shared_ptr<parquet::ParquetCryptoProvider> parquet_crypto_provider;
 };
 
 }  // namespace dataset

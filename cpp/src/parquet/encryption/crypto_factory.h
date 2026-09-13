@@ -191,9 +191,16 @@ class PARQUET_EXPORT CryptoFactory {
 
   /// Get the external encryption properties for a Parquet file. Used when an external
   /// encryptor will be used to encrypt the file.
+  ///
+  /// parquet_crypto_provider is a live implementation object, not serializable
+  /// configuration, so it is injected here rather than stored on
+  /// ExternalEncryptionConfiguration. It must be set if
+  /// external_encryption_config.encryption_algorithm (or any per-column
+  /// ColumnEncryptionAttributes::parquet_cipher) is EXTERNAL_PROTECT_V1.
   std::shared_ptr<ExternalFileEncryptionProperties> GetExternalFileEncryptionProperties(
       const KmsConnectionConfig& kms_connection_config,
       const ExternalEncryptionConfiguration& external_encryption_config,
+      std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider,
       const std::string& file_path = "",
       const std::shared_ptr<::arrow::fs::FileSystem>& file_system = NULLPTR);
 
@@ -207,9 +214,15 @@ class PARQUET_EXPORT CryptoFactory {
 
   /// Get the external decryption properties for a Parquet file. Used when an
   /// external decryptor will be used to decrypt the file.
+  ///
+  /// parquet_crypto_provider is a live implementation object, not serializable
+  /// configuration, so it is injected here rather than stored on
+  /// ExternalDecryptionConfiguration. It is required to decrypt files containing
+  /// EXTERNAL_PROTECT_V1 modules; ignored for files that only use AES algorithms.
   std::shared_ptr<ExternalFileDecryptionProperties> GetExternalFileDecryptionProperties(
       const KmsConnectionConfig& kms_connection_config,
       const ExternalDecryptionConfiguration& external_decryption_config,
+      std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider,
       const std::string& file_path = "",
       const std::shared_ptr<::arrow::fs::FileSystem>& file_system = NULLPTR);
 

@@ -99,7 +99,8 @@ parquet::ReaderProperties MakeReaderProperties(
       file_decryption_prop =
           parquet_decrypt_config->crypto_factory->GetExternalFileDecryptionProperties(
               *parquet_decrypt_config->kms_connection_config,
-              *parquet_decrypt_config->external_decryption_config, path, filesystem);
+              *parquet_decrypt_config->external_decryption_config,
+              parquet_decrypt_config->parquet_crypto_provider, path, filesystem);
     } else {
       throw parquet::ParquetException("No file decryption config given");
     }
@@ -759,7 +760,8 @@ Result<std::shared_ptr<FileWriter>> ParquetFileFormat::MakeWriter(
           parquet_encrypt_config->crypto_factory->GetExternalFileEncryptionProperties(
               *parquet_encrypt_config->kms_connection_config,
               *parquet_encrypt_config->external_encryption_config,
-              destination_locator.path, destination_locator.filesystem);
+              parquet_encrypt_config->parquet_crypto_provider, destination_locator.path,
+              destination_locator.filesystem);
     }
 
     if (file_encryption_prop == nullptr) {

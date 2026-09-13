@@ -22,6 +22,8 @@
 
 #include "parquet/encryption/crypto_factory.h"
 #include "parquet/encryption/file_key_material_store.h"
+#include "parquet/encryption/key_metadata.h"
+#include "parquet/encryption/parquet_crypto_provider.h"
 #include "parquet/encryption/test_encryption_util.h"
 #include "parquet/encryption/test_in_memory_kms.h"
 
@@ -31,6 +33,37 @@ using ::testing::Return;
 using ::testing::StrEq;
 
 namespace parquet::encryption::test {
+
+namespace {
+// Minimal stand-in for a vendor ParquetCryptoProvider: only used here to verify
+// CryptoFactory wires it through, never actually invoked to encrypt/decrypt.
+class NoOpParquetCryptoProvider : public ParquetCryptoProvider {
+ public:
+  ::arrow::Result<std::vector<uint8_t>> EncryptBlock(
+      std::span<const uint8_t> plaintext, const ParquetCryptoContext& ctx,
+      std::span<const uint8_t> module_aad, std::span<const uint8_t> dek) override {
+    return std::vector<uint8_t>(plaintext.begin(), plaintext.end());
+  }
+
+  ::arrow::Result<std::vector<uint8_t>> DecryptBlock(
+      std::span<const uint8_t> ciphertext, const ParquetCryptoContext& ctx,
+      std::span<const uint8_t> module_aad, std::span<const uint8_t> dek) override {
+    return std::vector<uint8_t>(ciphertext.begin(), ciphertext.end());
+  }
+
+  [[nodiscard]] bool SupportsTypedValues() const override { return false; }
+
+  ::arrow::Status EncryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
+                               std::span<const uint8_t> dek) override {
+    return ::arrow::Status::OK();
+  }
+
+  ::arrow::Status DecryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
+                               std::span<const uint8_t> dek) override {
+    return ::arrow::Status::OK();
+  }
+};
+}  // namespace
 
 class CryptoFactoryTest : public ::testing::Test {
   void SetUp() {
@@ -53,7 +86,7 @@ TEST_F(CryptoFactoryTest, UniformEncryptionAndColumnKeysThrowsException) {
 
   try {
     auto properties =
-        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
+        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, nullptr);
     FAIL() << "ParquetException should have been raised";
   } catch (const ParquetException& xcp) {
     EXPECT_THAT(xcp.what(), HasSubstr("Cannot set both column encryption and uniform"));
@@ -75,7 +108,7 @@ TEST_F(CryptoFactoryTest, UniformEncryptionAndPerColumnEncryptionThrowsException
 
   try {
     auto properties =
-        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
+        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, nullptr);
     FAIL() << "ParquetException should have been raised";
   } catch (const ParquetException& xcp) {
     EXPECT_THAT(xcp.what(), HasSubstr("Cannot set both column encryption and uniform"));
@@ -89,7 +122,7 @@ TEST_F(CryptoFactoryTest, NoUniformEncryptionAndNoColumnsThrowsException) {
 
   try {
     auto properties =
-        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
+        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, nullptr);
     FAIL() << "ParquetException should have been raised";
   } catch (const ParquetException& xcp) {
     EXPECT_THAT(xcp.what(), HasSubstr("uniform_encryption must be set or column "
@@ -105,7 +138,7 @@ TEST_F(CryptoFactoryTest, BasicEncryptionConfig) {
   config.column_keys = "kc1:col1,col2;kc2:col3,col4";
 
   auto properties =
-      crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
+      crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, nullptr);
   EXPECT_EQ(16, properties->footer_key().size());
   EXPECT_GT(properties->footer_key_metadata().size(), 0);
   EXPECT_EQ(ParquetCipher::AES_GCM_V1, properties->algorithm().algorithm);
@@ -167,7 +200,7 @@ TEST_F(CryptoFactoryTest, ExternalEncryptionConfig) {
       {ParquetCipher::EXTERNAL_PROTECT_V1, {{"file_path", "path/to/file"}}}};
 
   auto properties =
-      crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
+      crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, nullptr);
   EXPECT_EQ(16, properties->footer_key().size());
   EXPECT_GT(properties->footer_key_metadata().size(), 0);
   EXPECT_EQ(ParquetCipher::AES_GCM_V1, properties->algorithm().algorithm);
@@ -217,8 +250,7 @@ TEST_F(CryptoFactoryTest, ExternalEncryptionConfig) {
             "path/to/file");
 }
 
-TEST_F(CryptoFactoryTest,
-       ExternalEncryptionConfigWithExternalDbpaAlgorithmThrowsException) {
+TEST_F(CryptoFactoryTest, ExternalEncryptionConfigWithExternalProtectRequiresProvider) {
   ExternalEncryptionConfiguration config("kf");
   config.plaintext_footer = true;
   config.column_keys = "kc3:col3,col4";
@@ -226,16 +258,62 @@ TEST_F(CryptoFactoryTest,
 
   try {
     auto properties =
-        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
+        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, nullptr);
     FAIL() << "ParquetException should have been raised";
   } catch (const ParquetException& xcp) {
-    EXPECT_THAT(
-        xcp.what(),
-        HasSubstr(
-            "EXTERNAL_PROTECT_V1 algorithm is not supported for file level encryption"));
+    EXPECT_THAT(xcp.what(),
+                HasSubstr("parquet_crypto_provider must be set when using the "
+                          "EXTERNAL_PROTECT_V1 algorithm"));
   } catch (...) {
     FAIL() << "Caught unexpected exception type";
   }
+}
+
+TEST_F(CryptoFactoryTest,
+       ExternalEncryptionConfigWithExternalProtectAndUniformEncryptionThrowsException) {
+  ExternalEncryptionConfiguration config("kf");
+  config.uniform_encryption = true;
+  config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+  auto parquet_crypto_provider = std::make_shared<NoOpParquetCryptoProvider>();
+
+  try {
+    auto properties = crypto_factory_.GetExternalFileEncryptionProperties(
+        kms_config_, config, parquet_crypto_provider);
+    FAIL() << "ParquetException should have been raised";
+  } catch (const ParquetException& xcp) {
+    EXPECT_THAT(xcp.what(),
+                HasSubstr("EXTERNAL_PROTECT_V1 columns cannot be encrypted with the "
+                          "footer key"));
+  } catch (...) {
+    FAIL() << "Caught unexpected exception type";
+  }
+}
+
+TEST_F(CryptoFactoryTest, ExternalEncryptionConfigWithExternalProtectV1) {
+  ExternalEncryptionConfiguration config("kf");
+  config.column_keys = "kc3:col3,col4";
+  config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+  auto parquet_crypto_provider = std::make_shared<NoOpParquetCryptoProvider>();
+
+  auto properties = crypto_factory_.GetExternalFileEncryptionProperties(
+      kms_config_, config, parquet_crypto_provider);
+
+  EXPECT_EQ(properties->parquet_crypto_provider(), parquet_crypto_provider);
+  EXPECT_EQ(ParquetCipher::EXTERNAL_PROTECT_V1, properties->algorithm().algorithm);
+
+  // Footer DEK was really generated (RandBytes) and wrapped by the KMS mock into a
+  // valid PKMT1 key_metadata blob, exactly like the AES path.
+  EXPECT_EQ(16, properties->footer_key().size());
+  KeyMetadata footer_key_metadata = KeyMetadata::Parse(properties->footer_key_metadata());
+  EXPECT_TRUE(footer_key_metadata.key_material_stored_internally());
+  EXPECT_EQ(footer_key_metadata.key_material().master_key_id(), "kf");
+
+  auto column_properties = properties->column_encryption_properties("col3");
+  EXPECT_TRUE(column_properties->is_encrypted());
+  EXPECT_FALSE(column_properties->is_encrypted_with_footer_key());
+  EXPECT_EQ(16, column_properties->key().size());
+  KeyMetadata column_key_metadata = KeyMetadata::Parse(column_properties->key_metadata());
+  EXPECT_EQ(column_key_metadata.key_material().master_key_id(), "kc3");
 }
 
 TEST_F(CryptoFactoryTest, ColumnRepeatedInMapsThrowsException) {
@@ -258,7 +336,7 @@ TEST_F(CryptoFactoryTest, ColumnRepeatedInMapsThrowsException) {
 
   try {
     auto properties =
-        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config);
+        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, nullptr);
     FAIL() << "ParquetException should have been raised";
   } catch (const ParquetException& xcp) {
     EXPECT_THAT(xcp.what(), HasSubstr("Multiple keys defined for column [col2]"));
@@ -272,7 +350,7 @@ TEST_F(CryptoFactoryTest, BasicDecryptionConfig) {
   config.cache_lifetime_seconds = 600;
 
   auto properties =
-      crypto_factory_.GetExternalFileDecryptionProperties(kms_config_, config);
+      crypto_factory_.GetExternalFileDecryptionProperties(kms_config_, config, nullptr);
   EXPECT_TRUE(properties->check_plaintext_footer_integrity());
   EXPECT_TRUE(properties->plaintext_files_allowed());
   EXPECT_THAT(properties->key_retriever(), testing::NotNull());
@@ -289,7 +367,7 @@ TEST_F(CryptoFactoryTest, ExternalDecryptionConfig) {
       {ParquetCipher::EXTERNAL_PROTECT_V1, {{"file_path", "path/to/file"}}}};
 
   auto properties =
-      crypto_factory_.GetExternalFileDecryptionProperties(kms_config_, config);
+      crypto_factory_.GetExternalFileDecryptionProperties(kms_config_, config, nullptr);
   EXPECT_TRUE(properties->check_plaintext_footer_integrity());
   EXPECT_TRUE(properties->plaintext_files_allowed());
   EXPECT_THAT(properties->key_retriever(), testing::NotNull());
@@ -313,6 +391,16 @@ TEST_F(CryptoFactoryTest, ExternalDecryptionConfig) {
             "path/to/file");
 }
 
+TEST_F(CryptoFactoryTest, ExternalDecryptionConfigWithParquetCryptoProvider) {
+  ExternalDecryptionConfiguration config;
+  config.cache_lifetime_seconds = 600;
+  auto parquet_crypto_provider = std::make_shared<NoOpParquetCryptoProvider>();
+
+  auto properties = crypto_factory_.GetExternalFileDecryptionProperties(
+      kms_config_, config, parquet_crypto_provider);
+  EXPECT_EQ(properties->parquet_crypto_provider(), parquet_crypto_provider);
+}
+
 TEST_F(CryptoFactoryTest, ExternalDecryptionConfigWithInvalidAppContextThrowsException) {
   ExternalDecryptionConfiguration config;
   config.cache_lifetime_seconds = 600;
@@ -320,7 +408,7 @@ TEST_F(CryptoFactoryTest, ExternalDecryptionConfigWithInvalidAppContextThrowsExc
 
   try {
     auto properties =
-        crypto_factory_.GetExternalFileDecryptionProperties(kms_config_, config);
+        crypto_factory_.GetExternalFileDecryptionProperties(kms_config_, config, nullptr);
     FAIL() << "ParquetException should have been raised";
   } catch (const ParquetException& xcp) {
     EXPECT_THAT(xcp.what(), HasSubstr("App context is not a valid JSON string"));

@@ -180,7 +180,7 @@ ExternalFileDecryptionProperties::Builder::build_external() {
       new ExternalFileDecryptionProperties(
           footer_key_, key_retriever_, check_plaintext_footer_integrity_, aad_prefix_,
           aad_prefix_verifier_, column_decryption_properties_, plaintext_files_allowed_,
-          app_context_, configuration_properties_));
+          app_context_, configuration_properties_, parquet_crypto_provider_));
 }
 
 ExternalFileDecryptionProperties::ExternalFileDecryptionProperties(
@@ -191,12 +191,14 @@ ExternalFileDecryptionProperties::ExternalFileDecryptionProperties(
     ColumnPathToDecryptionPropertiesMap column_decryption_properties,
     bool plaintext_files_allowed, std::string app_context,
     std::map<ParquetCipher::type, std::map<std::string, std::string>>
-        configuration_properties)
+        configuration_properties,
+    std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider)
     : FileDecryptionProperties(
           footer_key, key_retriever, check_plaintext_footer_integrity, aad_prefix,
           aad_prefix_verifier, column_decryption_properties, plaintext_files_allowed),
-      app_context_(app_context),
-      configuration_properties_(configuration_properties) {}
+      app_context_(std::move(app_context)),
+      configuration_properties_(std::move(configuration_properties)),
+      parquet_crypto_provider_(std::move(parquet_crypto_provider)) {}
 
 ColumnDecryptionProperties::Builder* ColumnDecryptionProperties::Builder::key(
     SecureString key) {
@@ -322,16 +324,14 @@ FileDecryptionProperties::FileDecryptionProperties(
     bool check_plaintext_footer_integrity, std::string aad_prefix,
     std::shared_ptr<AADPrefixVerifier> aad_prefix_verifier,
     ColumnPathToDecryptionPropertiesMap column_decryption_properties,
-    bool plaintext_files_allowed,
-    std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider)
+    bool plaintext_files_allowed)
     : footer_key_(std::move(footer_key)),
       aad_prefix_(std::move(aad_prefix)),
       aad_prefix_verifier_(std::move(aad_prefix_verifier)),
       column_decryption_properties_(std::move(column_decryption_properties)),
       key_retriever_(std::move(key_retriever)),
       check_plaintext_footer_integrity_(check_plaintext_footer_integrity),
-      plaintext_files_allowed_(plaintext_files_allowed),
-      parquet_crypto_provider_(std::move(parquet_crypto_provider)) {
+      plaintext_files_allowed_(plaintext_files_allowed) {
   DCHECK(!footer_key_.empty() || nullptr != key_retriever_ ||
          0 != column_decryption_properties_.size());
   if (!footer_key_.empty()) {
@@ -386,15 +386,13 @@ FileEncryptionProperties::column_encryption_properties(const std::string& column
 FileEncryptionProperties::FileEncryptionProperties(
     ParquetCipher::type cipher, SecureString footer_key, std::string footer_key_metadata,
     bool encrypted_footer, std::string aad_prefix, bool store_aad_prefix_in_file,
-    ColumnPathToEncryptionPropertiesMap encrypted_columns,
-    std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider)
+    ColumnPathToEncryptionPropertiesMap encrypted_columns)
     : footer_key_(std::move(footer_key)),
       footer_key_metadata_(std::move(footer_key_metadata)),
       encrypted_footer_(encrypted_footer),
       aad_prefix_(std::move(aad_prefix)),
       store_aad_prefix_in_file_(store_aad_prefix_in_file),
-      encrypted_columns_(std::move(encrypted_columns)),
-      parquet_crypto_provider_(std::move(parquet_crypto_provider)) {
+      encrypted_columns_(std::move(encrypted_columns)) {
   DCHECK(!footer_key_.empty());
   // footer_key must be either 16, 24 or 32 bytes.
   DCHECK(footer_key_.length() == 16 || footer_key_.length() == 24 ||
@@ -459,7 +457,7 @@ ExternalFileEncryptionProperties::Builder::build_external() {
       new ExternalFileEncryptionProperties(
           parquet_cipher_, footer_key_, footer_key_metadata_, encrypted_footer_,
           aad_prefix_, store_aad_prefix_in_file_, encrypted_columns_, app_context_,
-          configuration_properties_));
+          configuration_properties_, parquet_crypto_provider_));
 }
 
 ExternalFileEncryptionProperties::ExternalFileEncryptionProperties(
@@ -468,10 +466,12 @@ ExternalFileEncryptionProperties::ExternalFileEncryptionProperties(
     bool store_aad_prefix_in_file, ColumnPathToEncryptionPropertiesMap encrypted_columns,
     std::string app_context,
     std::map<ParquetCipher::type, std::map<std::string, std::string>>
-        configuration_properties)
+        configuration_properties,
+    std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider)
     : FileEncryptionProperties(cipher, footer_key, footer_key_metadata, encrypted_footer,
                                aad_prefix, store_aad_prefix_in_file, encrypted_columns),
-      app_context_(app_context),
-      configuration_properties_(configuration_properties) {}
+      app_context_(std::move(app_context)),
+      configuration_properties_(std::move(configuration_properties)),
+      parquet_crypto_provider_(std::move(parquet_crypto_provider)) {}
 
 }  // namespace parquet
