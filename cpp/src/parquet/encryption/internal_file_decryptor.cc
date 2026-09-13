@@ -161,7 +161,7 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetFooterDecryptor(
     ctx.module_type = ParquetModuleType::kFooterEncrypted;
     ctx.app_context = std::move(external_info.app_context);
     auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
-        external_info.parquet_crypto_provider, std::move(ctx));
+        std::move(external_info.parquet_crypto_provider), std::move(ctx));
     return std::make_unique<Decryptor>(std::move(decryptor_instance), GetFooterKey(),
                                        file_aad_, aad, pool_);
   }
@@ -218,7 +218,7 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetColumnMetaDecryptor(
     ctx.module_type = ParquetModuleType::kColumnMetaData;
     ctx.app_context = std::move(external_info.app_context);
     auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
-        external_info.parquet_crypto_provider, std::move(ctx));
+        std::move(external_info.parquet_crypto_provider), std::move(ctx));
     return std::make_unique<Decryptor>(std::move(decryptor_instance),
                                        GetColumnKey(column_path, column_key_metadata),
                                        file_aad_, aad, pool_);
@@ -280,8 +280,9 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
     }
     // Captured by value: the provider is resolved once here rather than re-cast on
     // every invocation of the returned factory (once per page).
-    return [this, aad, ctx, column_path, column_key_metadata,
-            parquet_crypto_provider = external_info.parquet_crypto_provider]() {
+    return [this, aad, ctx = std::move(ctx), column_path, column_key_metadata,
+            parquet_crypto_provider =
+                std::move(external_info.parquet_crypto_provider)]() {
       auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
           parquet_crypto_provider, ctx);
       return std::make_unique<Decryptor>(std::move(decryptor_instance),

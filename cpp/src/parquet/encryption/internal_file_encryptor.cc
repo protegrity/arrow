@@ -188,10 +188,13 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
     }
   }
 
-  // Route EXTERNAL_PROTECT_V1 to the external ParquetCryptoProvider. Applies to both
-  // data pages (metadata=false) and column metadata (metadata=true) — no !metadata
-  // guard here: a column's metadata must also go through the provider, since Arrow
-  // holds no AES key for it.
+  // Route EXTERNAL_PROTECT_V1 to the external ParquetCryptoProvider. No !metadata
+  // guard here: once `algorithm` resolves to EXTERNAL_PROTECT_V1, both data pages
+  // (metadata=false) and column metadata (metadata=true) must go through the
+  // provider, since Arrow holds no AES key for either. Note this only applies when
+  // the file-level algorithm itself is EXTERNAL_PROTECT_V1 — a per-column cipher
+  // override (set above, only under `!metadata`) affects data pages only; that
+  // column's own metadata still follows the file-level algorithm.
   if (algorithm == ParquetCipher::EXTERNAL_PROTECT_V1) {
     if (column_prop->key_metadata().empty()) {
       throw ParquetException(
