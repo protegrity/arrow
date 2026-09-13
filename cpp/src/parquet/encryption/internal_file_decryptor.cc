@@ -34,12 +34,20 @@ using arrow::util::SecureString;
 namespace parquet {
 
 namespace {
-// app_context lives only on ExternalFileDecryptionProperties, not the base class
-// InternalFileDecryptor holds; resolved lazily, only where EXTERNAL_PROTECT_V1
-// needs it, so plain AES properties never pay for the cast.
-std::string GetAppContext(FileDecryptionProperties* properties) {
+// app_context and parquet_crypto_provider both live only on
+// ExternalFileDecryptionProperties, not the base class InternalFileDecryptor holds;
+// resolved together via a single dynamic_cast, only where EXTERNAL_PROTECT_V1 needs
+// them, so plain AES properties never pay for the cast.
+struct ExternalDispatchInfo {
+  std::string app_context;
+  std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider;
+};
+
+ExternalDispatchInfo GetExternalDispatchInfo(FileDecryptionProperties* properties) {
   auto* external_properties = dynamic_cast<ExternalFileDecryptionProperties*>(properties);
-  return external_properties != nullptr ? external_properties->app_context() : "";
+  if (external_properties == nullptr) return {};
+  return {external_properties->app_context(),
+          external_properties->parquet_crypto_provider()};
 }
 }  // namespace
 
@@ -91,8 +99,7 @@ InternalFileDecryptor::InternalFileDecryptor(
       file_aad_(file_aad),
       algorithm_(algorithm),
       footer_key_metadata_(footer_key_metadata),
-      pool_(pool),
-      parquet_crypto_provider_(properties_->parquet_crypto_provider()) {}
+      pool_(pool) {}
 
 const SecureString& InternalFileDecryptor::GetFooterKey() {
   std::unique_lock lock(mutex_);
@@ -143,17 +150,18 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetFooterDecryptor(
       throw ParquetException(
           "EXTERNAL_PROTECT_V1 columns cannot be encrypted with the footer key");
     }
-    if (!parquet_crypto_provider_) {
+    auto external_info = GetExternalDispatchInfo(properties_.get());
+    if (!external_info.parquet_crypto_provider) {
       throw ParquetException(
-          "FileDecryptionProperties::parquet_crypto_provider must be set when using "
-          "EXTERNAL_PROTECT_V1 algorithm");
+          "ExternalFileDecryptionProperties::parquet_crypto_provider must be set when "
+          "using EXTERNAL_PROTECT_V1 algorithm");
     }
     ParquetCryptoContext ctx;
     ctx.key_metadata = footer_key_metadata_;
     ctx.module_type = ParquetModuleType::kFooterEncrypted;
-    ctx.app_context = GetAppContext(properties_.get());
+    ctx.app_context = std::move(external_info.app_context);
     auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
-        parquet_crypto_provider_, std::move(ctx));
+        external_info.parquet_crypto_provider, std::move(ctx));
     return std::make_unique<Decryptor>(std::move(decryptor_instance), GetFooterKey(),
                                        file_aad_, aad, pool_);
   }
@@ -193,10 +201,11 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetColumnMetaDecryptor(
     const std::string& aad) {
   // Route column metadata through the external ParquetCryptoProvider.
   if (algorithm_ == ParquetCipher::EXTERNAL_PROTECT_V1) {
-    if (!parquet_crypto_provider_) {
+    auto external_info = GetExternalDispatchInfo(properties_.get());
+    if (!external_info.parquet_crypto_provider) {
       throw ParquetException(
-          "FileDecryptionProperties::parquet_crypto_provider must be set when using "
-          "EXTERNAL_PROTECT_V1 algorithm");
+          "ExternalFileDecryptionProperties::parquet_crypto_provider must be set when "
+          "using EXTERNAL_PROTECT_V1 algorithm");
     }
     if (column_key_metadata.empty()) {
       throw ParquetException(
@@ -207,9 +216,9 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetColumnMetaDecryptor(
     ctx.key_metadata = column_key_metadata;
     ctx.column_path = column_path;
     ctx.module_type = ParquetModuleType::kColumnMetaData;
-    ctx.app_context = GetAppContext(properties_.get());
+    ctx.app_context = std::move(external_info.app_context);
     auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
-        parquet_crypto_provider_, std::move(ctx));
+        external_info.parquet_crypto_provider, std::move(ctx));
     return std::make_unique<Decryptor>(std::move(decryptor_instance),
                                        GetColumnKey(column_path, column_key_metadata),
                                        file_aad_, aad, pool_);
@@ -245,10 +254,11 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
   // column metadata (metadata=true) and data pages (metadata=false) — no !metadata
   // guard.
   if (algorithm == ParquetCipher::EXTERNAL_PROTECT_V1) {
-    if (!parquet_crypto_provider_) {
+    auto external_info = GetExternalDispatchInfo(properties_.get());
+    if (!external_info.parquet_crypto_provider) {
       throw ParquetException(
-          "FileDecryptionProperties::parquet_crypto_provider must be set when using "
-          "EXTERNAL_PROTECT_V1 algorithm");
+          "ExternalFileDecryptionProperties::parquet_crypto_provider must be set when "
+          "using EXTERNAL_PROTECT_V1 algorithm");
     }
     if (column_key_metadata.empty()) {
       throw ParquetException(
@@ -260,7 +270,7 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
     ctx.column_path = column_path;
     ctx.module_type =
         metadata ? ParquetModuleType::kColumnMetaData : ParquetModuleType::kDataPage;
-    ctx.app_context = GetAppContext(properties_.get());
+    ctx.app_context = std::move(external_info.app_context);
     if (column_chunk_metadata != nullptr) {
       auto* descr = column_chunk_metadata->descr();
       ctx.data_type = descr->physical_type();
@@ -268,9 +278,12 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
         ctx.datatype_length = descr->type_length();
       }
     }
-    return [this, aad, ctx, column_path, column_key_metadata]() {
+    // Captured by value: the provider is resolved once here rather than re-cast on
+    // every invocation of the returned factory (once per page).
+    return [this, aad, ctx, column_path, column_key_metadata,
+            parquet_crypto_provider = external_info.parquet_crypto_provider]() {
       auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
-          parquet_crypto_provider_, ctx);
+          parquet_crypto_provider, ctx);
       return std::make_unique<Decryptor>(std::move(decryptor_instance),
                                          GetColumnKey(column_path, column_key_metadata),
                                          file_aad_, aad, pool_);

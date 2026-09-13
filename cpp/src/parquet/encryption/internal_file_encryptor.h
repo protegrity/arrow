@@ -106,7 +106,6 @@ class InternalFileEncryptor {
 
   ::arrow::MemoryPool* pool_;
   encryption::AesEncryptorFactory aes_encryptor_factory_;
-  std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider_;
   // Owns ParquetCryptoProviderAdapter instances; raw ptrs are held by Encryptor
   // objects and must not outlive this cache.
   std::vector<std::unique_ptr<encryption::EncryptorInterface>> encryptor_cache_;
@@ -126,8 +125,10 @@ class InternalFileEncryptor {
   // returns the raw pointer — the EXTERNAL_PROTECT_V1 counterpart to GetMetaEncryptor/
   // GetDataEncryptor. Unlike those, each call always creates a new adapter: ctx is
   // per-column/footer, so instances cannot be shared by (algorithm, key_size) the way
-  // AesEncryptor is.
+  // AesEncryptor is. Callers already resolved parquet_crypto_provider via
+  // GetExternalDispatchInfo, so it isn't re-derived here.
   encryption::EncryptorInterface* GetParquetCryptoProviderEncryptor(
+      const std::shared_ptr<ParquetCryptoProvider>& parquet_crypto_provider,
       ParquetCryptoContext ctx);
 };
 

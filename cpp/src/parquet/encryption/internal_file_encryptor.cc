@@ -31,12 +31,20 @@ using arrow::util::SecureString;
 namespace parquet {
 
 namespace {
-// app_context lives only on ExternalFileEncryptionProperties, not the base class
-// InternalFileEncryptor holds; resolved lazily, only where EXTERNAL_PROTECT_V1
-// needs it, so plain AES properties never pay for the cast.
-std::string GetAppContext(FileEncryptionProperties* properties) {
+// app_context and parquet_crypto_provider both live only on
+// ExternalFileEncryptionProperties, not the base class InternalFileEncryptor holds;
+// resolved together via a single dynamic_cast, only where EXTERNAL_PROTECT_V1 needs
+// them, so plain AES properties never pay for the cast.
+struct ExternalDispatchInfo {
+  std::string app_context;
+  std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider;
+};
+
+ExternalDispatchInfo GetExternalDispatchInfo(FileEncryptionProperties* properties) {
   auto* external_properties = dynamic_cast<ExternalFileEncryptionProperties*>(properties);
-  return external_properties != nullptr ? external_properties->app_context() : "";
+  if (external_properties == nullptr) return {};
+  return {external_properties->app_context(),
+          external_properties->parquet_crypto_provider()};
 }
 }  // namespace
 
@@ -79,9 +87,7 @@ std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_t
 // InternalFileEncryptor
 InternalFileEncryptor::InternalFileEncryptor(FileEncryptionProperties* properties,
                                              ::arrow::MemoryPool* pool)
-    : properties_(properties),
-      pool_(pool),
-      parquet_crypto_provider_(properties->parquet_crypto_provider()) {}
+    : properties_(properties), pool_(pool) {}
 
 std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterEncryptor() {
   if (footer_encryptor_ != nullptr) {
@@ -93,11 +99,13 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterEncryptor() {
   const SecureString& footer_key = properties_->footer_key();
 
   if (algorithm == ParquetCipher::EXTERNAL_PROTECT_V1) {
+    auto external_info = GetExternalDispatchInfo(properties_);
     ParquetCryptoContext ctx;
     ctx.key_metadata = properties_->footer_key_metadata();
     ctx.module_type = ParquetModuleType::kFooterEncrypted;
-    ctx.app_context = GetAppContext(properties_);
-    auto* encryptor_instance = GetParquetCryptoProviderEncryptor(std::move(ctx));
+    ctx.app_context = std::move(external_info.app_context);
+    auto* encryptor_instance = GetParquetCryptoProviderEncryptor(
+        external_info.parquet_crypto_provider, std::move(ctx));
     footer_encryptor_ = std::make_shared<Encryptor>(
         encryptor_instance, footer_key, properties_->file_aad(), footer_aad, pool_);
     return footer_encryptor_;
@@ -119,11 +127,13 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterSigningEncryptor() {
   const SecureString& footer_signing_key = properties_->footer_key();
 
   if (algorithm == ParquetCipher::EXTERNAL_PROTECT_V1) {
+    auto external_info = GetExternalDispatchInfo(properties_);
     ParquetCryptoContext ctx;
     ctx.key_metadata = properties_->footer_key_metadata();
     ctx.module_type = ParquetModuleType::kFooterSigned;
-    ctx.app_context = GetAppContext(properties_);
-    auto* encryptor_instance = GetParquetCryptoProviderEncryptor(std::move(ctx));
+    ctx.app_context = std::move(external_info.app_context);
+    auto* encryptor_instance = GetParquetCryptoProviderEncryptor(
+        external_info.parquet_crypto_provider, std::move(ctx));
     footer_signing_encryptor_ =
         std::make_shared<Encryptor>(encryptor_instance, footer_signing_key,
                                     properties_->file_aad(), footer_aad, pool_);
@@ -193,7 +203,8 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
     ctx.column_path = column_path;
     ctx.module_type =
         metadata ? ParquetModuleType::kColumnMetaData : ParquetModuleType::kDataPage;
-    ctx.app_context = GetAppContext(properties_);
+    auto external_info = GetExternalDispatchInfo(properties_);
+    ctx.app_context = std::move(external_info.app_context);
     if (column_chunk_metadata != nullptr) {
       auto* descr = column_chunk_metadata->descr();
       ctx.data_type = descr->physical_type();
@@ -201,7 +212,8 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
         ctx.datatype_length = descr->type_length();
       }
     }
-    auto* encryptor_instance = GetParquetCryptoProviderEncryptor(std::move(ctx));
+    auto* encryptor_instance = GetParquetCryptoProviderEncryptor(
+        external_info.parquet_crypto_provider, std::move(ctx));
     std::string file_aad = properties_->file_aad();
     auto encryptor =
         std::make_shared<Encryptor>(encryptor_instance, key, file_aad, "", pool_);
@@ -241,13 +253,14 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
 }
 
 encryption::EncryptorInterface* InternalFileEncryptor::GetParquetCryptoProviderEncryptor(
+    const std::shared_ptr<ParquetCryptoProvider>& parquet_crypto_provider,
     ParquetCryptoContext ctx) {
-  if (!parquet_crypto_provider_) {
+  if (!parquet_crypto_provider) {
     throw ParquetException(
-        "FileEncryptionProperties::parquet_crypto_provider must be set when using "
-        "EXTERNAL_PROTECT_V1 algorithm");
+        "ExternalFileEncryptionProperties::parquet_crypto_provider must be set when "
+        "using EXTERNAL_PROTECT_V1 algorithm");
   }
-  auto adapter = std::make_unique<ParquetCryptoProviderAdapter>(parquet_crypto_provider_,
+  auto adapter = std::make_unique<ParquetCryptoProviderAdapter>(parquet_crypto_provider,
                                                                 std::move(ctx));
   auto* raw = adapter.get();
   encryptor_cache_.push_back(std::move(adapter));

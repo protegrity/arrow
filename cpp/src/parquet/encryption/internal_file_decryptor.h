@@ -123,7 +123,6 @@ class InternalFileDecryptor {
   ParquetCipher::type algorithm_;
   std::string footer_key_metadata_;
   ::arrow::MemoryPool* pool_;
-  std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider_;
 
   // Protects footer_key_ updates
   std::mutex mutex_;
