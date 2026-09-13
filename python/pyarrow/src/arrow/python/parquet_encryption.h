@@ -28,6 +28,7 @@
 #include "parquet/encryption/key_material.h"
 #include "parquet/encryption/kms_client.h"
 #include "parquet/encryption/kms_client_factory.h"
+#include "parquet/encryption/parquet_crypto_provider.h"
 
 #if defined(_WIN32) || defined(__CYGWIN__)  // Windows
 #  if defined(_MSC_VER)
@@ -111,6 +112,57 @@ class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyKmsClientFactory
   PyKmsClientFactoryVtable vtable_;
 };
 
+/// \brief A table of function pointers for calling from C++ into Python for a
+/// block-path ParquetCryptoProvider. Typed-value (cell path) callbacks are not
+/// yet bound to Python, so only encrypt_block/decrypt_block are declared here.
+class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyParquetCryptoProviderVtable {
+ public:
+  std::function<void(PyObject*, const std::string& plaintext,
+                     const std::string& key_metadata, const std::string& column_path,
+                     const std::string& module_type, const std::string& app_context,
+                     const std::string& module_aad, const std::string& dek,
+                     std::string* out)>
+      encrypt_block;
+  std::function<void(PyObject*, const std::string& ciphertext,
+                     const std::string& key_metadata, const std::string& column_path,
+                     const std::string& module_type, const std::string& app_context,
+                     const std::string& module_aad, const std::string& dek,
+                     std::string* out)>
+      decrypt_block;
+};
+
+/// \brief A helper for ParquetCryptoProvider implementation in Python. Only the
+/// block path (EncryptBlock/DecryptBlock) is exposed; SupportsTypedValues() always
+/// returns false, so Arrow never calls EncryptCells()/DecryptCells() on this class.
+class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyParquetCryptoProvider
+    : public ::parquet::ParquetCryptoProvider {
+ public:
+  PyParquetCryptoProvider(PyObject* handler, PyParquetCryptoProviderVtable vtable);
+  ~PyParquetCryptoProvider() override;
+
+  arrow::Result<std::vector<uint8_t>> EncryptBlock(
+      std::span<const uint8_t> plaintext, const ::parquet::ParquetCryptoContext& ctx,
+      std::span<const uint8_t> module_aad, std::span<const uint8_t> dek = {}) override;
+
+  arrow::Result<std::vector<uint8_t>> DecryptBlock(
+      std::span<const uint8_t> ciphertext, const ::parquet::ParquetCryptoContext& ctx,
+      std::span<const uint8_t> module_aad, std::span<const uint8_t> dek = {}) override;
+
+  [[nodiscard]] bool SupportsTypedValues() const override { return false; }
+
+  arrow::Status EncryptCells(::parquet::CryptoValueBuffer& values,
+                             const ::parquet::ParquetCryptoContext& ctx,
+                             std::span<const uint8_t> dek = {}) override;
+
+  arrow::Status DecryptCells(::parquet::CryptoValueBuffer& values,
+                             const ::parquet::ParquetCryptoContext& ctx,
+                             std::span<const uint8_t> dek = {}) override;
+
+ private:
+  OwnedRefNoGIL handler_;
+  PyParquetCryptoProviderVtable vtable_;
+};
+
 /// \brief A CryptoFactory that returns Results instead of throwing exceptions.
 class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyCryptoFactory
     : public ::parquet::encryption::CryptoFactory {
@@ -126,7 +178,10 @@ class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyCryptoFactory
   SafeGetExternalFileEncryptionProperties(
       const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,
       const ::parquet::encryption::ExternalEncryptionConfiguration&
-          external_encryption_config);
+          external_encryption_config,
+      const std::shared_ptr<::parquet::ParquetCryptoProvider>& parquet_crypto_provider,
+      const std::string& parquet_file_path,
+      const std::shared_ptr<::arrow::fs::FileSystem>& filesystem);
 
   /// The returned FileDecryptionProperties object will use the cache inside this
   /// CryptoFactory object, so please keep this
@@ -152,7 +207,10 @@ class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyCryptoFactory
   SafeGetExternalFileDecryptionProperties(
       const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,
       const ::parquet::encryption::ExternalDecryptionConfiguration&
-          external_decryption_config);
+          external_decryption_config,
+      const std::shared_ptr<::parquet::ParquetCryptoProvider>& parquet_crypto_provider,
+      const std::string& parquet_file_path,
+      const std::shared_ptr<::arrow::fs::FileSystem>& filesystem);
 };
 
 }  // namespace encryption

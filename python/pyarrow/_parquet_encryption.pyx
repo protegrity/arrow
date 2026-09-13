@@ -663,6 +663,77 @@ cdef class KmsClient(_Weakrefable):
         return self.client
 
 
+cdef class ParquetCryptoProvider(_Weakrefable):
+    """The abstract base class for external ParquetCryptoProvider implementations.
+
+    Only the block path (encrypt_block/decrypt_block) is currently exposed;
+    typed-value (cell) callbacks are not yet bound to Python.
+    """
+    cdef:
+        shared_ptr[CParquetCryptoProvider] provider
+
+    def __init__(self):
+        self.init()
+
+    cdef init(self):
+        cdef:
+            CPyParquetCryptoProviderVtable vtable = CPyParquetCryptoProviderVtable()
+
+        vtable.encrypt_block = _cb_encrypt_block
+        vtable.decrypt_block = _cb_decrypt_block
+
+        self.provider.reset(new CPyParquetCryptoProvider(self, vtable))
+
+    def encrypt_block(self, plaintext, key_metadata, column_path, module_type,
+                      app_context, module_aad, dek):
+        """Encrypt a raw module block (compressed page, footer, or serialized
+        column metadata). Must return bytes."""
+        raise NotImplementedError()
+
+    def decrypt_block(self, ciphertext, key_metadata, column_path, module_type,
+                      app_context, module_aad, dek):
+        """Decrypt a raw module block. Must return bytes."""
+        raise NotImplementedError()
+
+    cdef inline shared_ptr[CParquetCryptoProvider] unwrap(self) nogil:
+        return self.provider
+
+
+# Callback definitions for CPyParquetCryptoProviderVtable
+cdef void _cb_encrypt_block(
+        handler, const c_string& plaintext, const c_string& key_metadata,
+        const c_string& column_path, const c_string& module_type,
+        const c_string& app_context, const c_string& module_aad,
+        const c_string& dek, c_string* out) except *:
+    cdef bytes plaintext_bytes = plaintext
+    cdef bytes module_aad_bytes = module_aad
+    cdef bytes dek_bytes = dek
+    result = handler.encrypt_block(
+        plaintext_bytes, frombytes(key_metadata), frombytes(column_path),
+        frombytes(module_type), frombytes(app_context), module_aad_bytes,
+        dek_bytes)
+    if not isinstance(result, bytes):
+        raise TypeError("encrypt_block must return bytes")
+    out[0] = <c_string>result
+
+
+cdef void _cb_decrypt_block(
+        handler, const c_string& ciphertext, const c_string& key_metadata,
+        const c_string& column_path, const c_string& module_type,
+        const c_string& app_context, const c_string& module_aad,
+        const c_string& dek, c_string* out) except *:
+    cdef bytes ciphertext_bytes = ciphertext
+    cdef bytes module_aad_bytes = module_aad
+    cdef bytes dek_bytes = dek
+    result = handler.decrypt_block(
+        ciphertext_bytes, frombytes(key_metadata), frombytes(column_path),
+        frombytes(module_type), frombytes(app_context), module_aad_bytes,
+        dek_bytes)
+    if not isinstance(result, bytes):
+        raise TypeError("decrypt_block must return bytes")
+    out[0] = <c_string>result
+
+
 # Callback definition for CPyKmsClientFactoryVtable
 cdef void _cb_create_kms_client(
         handler,
@@ -778,15 +849,66 @@ cdef class CryptoFactory(_Weakrefable):
 
     def external_file_encryption_properties(self,
                                             KmsConnectionConfig kms_connection_config,
-                                            ExternalEncryptionConfiguration external_encryption_config):
+                                            ExternalEncryptionConfiguration external_encryption_config,
+                                            ParquetCryptoProvider parquet_crypto_provider=None,
+                                            parquet_file_path=None,
+                                            FileSystem filesystem=None):
+        """Create external file encryption properties.
+
+        Parameters
+        ----------
+        kms_connection_config : KmsConnectionConfig
+            Configuration of connection to KMS
+
+        external_encryption_config : ExternalEncryptionConfiguration
+            Configuration of the external encryption, such as which columns
+            to encrypt and the external crypto provider to use.
+
+        parquet_crypto_provider : ParquetCryptoProvider or None, default None
+            Required when external_encryption_config.encryption_algorithm (or
+            any per-column encryption_algorithm) is "EXTERNAL_PROTECT_V1";
+            ignored otherwise.
+
+        parquet_file_path : str, pathlib.Path, or None, default None
+            Path to the parquet file to be encrypted. Only required when the
+            internal_key_material attribute of ExternalEncryptionConfiguration
+            is set to False. Used to derive the path for storing key material
+            specific to this parquet file.
+
+        filesystem : FileSystem or None, default None
+            Used only when internal_key_material is set to False on
+            ExternalEncryptionConfiguration. If None, the file system will be
+            inferred based on parquet_file_path.
+
+        Returns
+        -------
+        external_file_encryption_properties : ExternalFileEncryptionProperties
+            External file encryption properties.
+        """
         cdef:
             CResult[shared_ptr[CExternalFileEncryptionProperties]] \
                 external_file_encryption_properties_result
+            c_string c_parquet_file_path
+            shared_ptr[CFileSystem] c_filesystem
+            shared_ptr[CParquetCryptoProvider] c_parquet_crypto_provider
+
+        filesystem, parquet_file_path = _resolve_filesystem_and_path(
+            parquet_file_path, filesystem)
+        if parquet_file_path is not None:
+            c_parquet_file_path = tobytes(parquet_file_path)
+        else:
+            c_parquet_file_path = tobytes("")
+        c_filesystem = _unwrap_fs(filesystem)
+        if parquet_crypto_provider is not None:
+            c_parquet_crypto_provider = parquet_crypto_provider.unwrap()
+
         with nogil:
             external_file_encryption_properties_result = \
                 self.factory.get().SafeGetExternalFileEncryptionProperties(
                     deref(kms_connection_config.unwrap().get()),
-                    deref(external_encryption_config.unwrap_external().get()))
+                    deref(external_encryption_config.unwrap_external().get()),
+                    c_parquet_crypto_provider,
+                    c_parquet_file_path, c_filesystem)
         external_file_encryption_properties = GetResultValue(
             external_file_encryption_properties_result)
         return ExternalFileEncryptionProperties.wrap_external(external_file_encryption_properties)
@@ -853,7 +975,10 @@ cdef class CryptoFactory(_Weakrefable):
     def external_file_decryption_properties(
             self,
             KmsConnectionConfig kms_connection_config,
-            ExternalDecryptionConfiguration decryption_config):
+            ExternalDecryptionConfiguration decryption_config,
+            ParquetCryptoProvider parquet_crypto_provider=None,
+            parquet_file_path=None,
+            FileSystem filesystem=None):
         """Create file decryption properties.
         Parameters
         ----------
@@ -862,6 +987,16 @@ cdef class CryptoFactory(_Weakrefable):
         decryption_config : ExternalDecryptionConfiguration
             Configuration of the decryption, such as cache timeout and the information on how to
             connect the external decryption service.
+        parquet_crypto_provider : ParquetCryptoProvider or None, default None
+            Required to decrypt files containing EXTERNAL_PROTECT_V1 modules;
+            ignored otherwise.
+        parquet_file_path : str, pathlib.Path, or None, default None
+            Path to the parquet file to be decrypted. Only required when
+            the parquet file uses external key material. Used to derive
+            the path to the external key material file.
+        filesystem : FileSystem or None, default None
+            Used only when the parquet file uses external key material. If
+            None, the file system will be inferred based on parquet_file_path.
         Returns
         -------
         file_decryption_properties : ExternalFileDecryptionProperties
@@ -871,6 +1006,20 @@ cdef class CryptoFactory(_Weakrefable):
             CExternalDecryptionConfiguration c_decryption_config
             CResult[shared_ptr[CExternalFileDecryptionProperties]] \
                 c_file_decryption_properties
+            c_string c_parquet_file_path
+            shared_ptr[CFileSystem] c_filesystem
+            shared_ptr[CParquetCryptoProvider] c_parquet_crypto_provider
+
+        filesystem, parquet_file_path = _resolve_filesystem_and_path(
+            parquet_file_path, filesystem)
+        if parquet_file_path is not None:
+            c_parquet_file_path = tobytes(parquet_file_path)
+        else:
+            c_parquet_file_path = tobytes("")
+        c_filesystem = _unwrap_fs(filesystem)
+        if parquet_crypto_provider is not None:
+            c_parquet_crypto_provider = parquet_crypto_provider.unwrap()
+
         if decryption_config is None:
             c_decryption_config = CExternalDecryptionConfiguration()
         else:
@@ -879,7 +1028,8 @@ cdef class CryptoFactory(_Weakrefable):
             c_file_decryption_properties = \
                 self.factory.get().SafeGetExternalFileDecryptionProperties(
                     deref(kms_connection_config.unwrap().get()),
-                    c_decryption_config)
+                    c_decryption_config, c_parquet_crypto_provider,
+                    c_parquet_file_path, c_filesystem)
         file_decryption_properties = GetResultValue(
             c_file_decryption_properties)
         return ExternalFileDecryptionProperties.wrap_external(file_decryption_properties)

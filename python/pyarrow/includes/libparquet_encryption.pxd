@@ -70,6 +70,20 @@ ctypedef void CallbackCreateKmsClient(
     object,
     const CKmsConnectionConfig&, shared_ptr[CKmsClient]*)
 
+cdef extern from "parquet/encryption/parquet_crypto_provider.h" \
+        namespace "parquet" nogil:
+    cdef cppclass CParquetCryptoProvider" parquet::ParquetCryptoProvider":
+        pass
+
+# Callbacks for implementing Python parquet crypto providers (block path only)
+# Use typedef to emulate syntax for std::function<void(..)>
+ctypedef void CallbackEncryptBlock(
+    object, const c_string&, const c_string&, const c_string&, const c_string&,
+    const c_string&, const c_string&, const c_string&, c_string*)
+ctypedef void CallbackDecryptBlock(
+    object, const c_string&, const c_string&, const c_string&, const c_string&,
+    const c_string&, const c_string&, const c_string&, c_string*)
+
 cdef extern from "parquet/encryption/crypto_factory.h" \
         namespace "parquet::encryption" nogil:
     cdef cppclass CEncryptionConfiguration\
@@ -128,7 +142,10 @@ cdef extern from "parquet/encryption/crypto_factory.h" \
             const shared_ptr[CFileSystem] file_system) except +*
         shared_ptr[CExternalFileEncryptionProperties] GetExternalFileEncryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
-            const CExternalEncryptionConfiguration& external_encryption_config) except +*
+            const CExternalEncryptionConfiguration& external_encryption_config,
+            shared_ptr[CParquetCryptoProvider] parquet_crypto_provider,
+            const c_string parquet_file_path,
+            const shared_ptr[CFileSystem] file_system) except +*
         shared_ptr[CFileDecryptionProperties] GetFileDecryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
             const CDecryptionConfiguration& decryption_config,
@@ -136,7 +153,10 @@ cdef extern from "parquet/encryption/crypto_factory.h" \
             const shared_ptr[CFileSystem] file_system) except +*
         shared_ptr[CExternalFileDecryptionProperties] GetExternalFileDecryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
-            const CExternalDecryptionConfiguration& decryption_config) except +*
+            const CExternalDecryptionConfiguration& decryption_config,
+            shared_ptr[CParquetCryptoProvider] parquet_crypto_provider,
+            const c_string parquet_file_path,
+            const shared_ptr[CFileSystem] file_system) except +*
         void RemoveCacheEntriesForToken(const c_string& access_token) except +
         void RemoveCacheEntriesForAllTokens() except +
         void RotateMasterKeys(const CKmsConnectionConfig& kms_connection_config,
@@ -203,6 +223,17 @@ cdef extern from "arrow/python/parquet_encryption.h" \
                 CKmsClientFactory):
         CPyKmsClientFactory(object handler, CPyKmsClientFactoryVtable vtable)
 
+    cdef cppclass CPyParquetCryptoProviderVtable\
+            " arrow::py::parquet::encryption::PyParquetCryptoProviderVtable":
+        CPyParquetCryptoProviderVtable()
+        function[CallbackEncryptBlock] encrypt_block
+        function[CallbackDecryptBlock] decrypt_block
+
+    cdef cppclass CPyParquetCryptoProvider\
+            " arrow::py::parquet::encryption::PyParquetCryptoProvider"(
+                CParquetCryptoProvider):
+        CPyParquetCryptoProvider(object handler, CPyParquetCryptoProviderVtable vtable)
+
     cdef cppclass CPyCryptoFactory\
             " arrow::py::parquet::encryption::PyCryptoFactory"(CCryptoFactory):
         CResult[shared_ptr[CFileEncryptionProperties]] \
@@ -214,7 +245,10 @@ cdef extern from "arrow/python/parquet_encryption.h" \
         CResult[shared_ptr[CExternalFileEncryptionProperties]] \
             SafeGetExternalFileEncryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
-            const CExternalEncryptionConfiguration& external_encryption_config)
+            const CExternalEncryptionConfiguration& external_encryption_config,
+            const shared_ptr[CParquetCryptoProvider] parquet_crypto_provider,
+            const c_string parquet_file_path,
+            const shared_ptr[CFileSystem] filesystem)
         CResult[shared_ptr[CFileDecryptionProperties]] \
             SafeGetFileDecryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
@@ -229,4 +263,7 @@ cdef extern from "arrow/python/parquet_encryption.h" \
         CResult[shared_ptr[CExternalFileDecryptionProperties]] \
             SafeGetExternalFileDecryptionProperties(
             const CKmsConnectionConfig& kms_connection_config,
-            const CExternalDecryptionConfiguration& decryption_config)
+            const CExternalDecryptionConfiguration& decryption_config,
+            const shared_ptr[CParquetCryptoProvider] parquet_crypto_provider,
+            const c_string parquet_file_path,
+            const shared_ptr[CFileSystem] filesystem)

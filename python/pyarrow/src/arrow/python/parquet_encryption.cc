@@ -23,6 +23,38 @@ namespace py {
 namespace parquet {
 namespace encryption {
 
+namespace {
+// Textual module_type name, since Python callbacks have no binding for the
+// ParquetModuleType enum.
+std::string ModuleTypeToName(::parquet::ParquetModuleType module_type) {
+  switch (module_type) {
+    case ::parquet::ParquetModuleType::kFooterEncrypted:
+      return "FOOTER_ENCRYPTED";
+    case ::parquet::ParquetModuleType::kColumnMetaData:
+      return "COLUMN_META_DATA";
+    case ::parquet::ParquetModuleType::kDataPage:
+      return "DATA_PAGE";
+    case ::parquet::ParquetModuleType::kDictionaryPage:
+      return "DICTIONARY_PAGE";
+    case ::parquet::ParquetModuleType::kDataPageHeader:
+      return "DATA_PAGE_HEADER";
+    case ::parquet::ParquetModuleType::kDictionaryPageHeader:
+      return "DICTIONARY_PAGE_HEADER";
+    case ::parquet::ParquetModuleType::kColumnIndex:
+      return "COLUMN_INDEX";
+    case ::parquet::ParquetModuleType::kOffsetIndex:
+      return "OFFSET_INDEX";
+    case ::parquet::ParquetModuleType::kBloomFilterHeader:
+      return "BLOOM_FILTER_HEADER";
+    case ::parquet::ParquetModuleType::kBloomFilterBitset:
+      return "BLOOM_FILTER_BITSET";
+    case ::parquet::ParquetModuleType::kFooterSigned:
+      return "FOOTER_SIGNED";
+  }
+  return "UNKNOWN";
+}
+}  // namespace
+
 PyKmsClient::PyKmsClient(PyObject* handler, PyKmsClientVtable vtable)
     : handler_(handler), vtable_(std::move(vtable)) {
   Py_INCREF(handler);
@@ -76,6 +108,62 @@ std::shared_ptr<::parquet::encryption::KmsClient> PyKmsClientFactory::CreateKmsC
   return kms_client;
 }
 
+PyParquetCryptoProvider::PyParquetCryptoProvider(PyObject* handler,
+                                                 PyParquetCryptoProviderVtable vtable)
+    : handler_(handler), vtable_(std::move(vtable)) {
+  Py_INCREF(handler);
+}
+
+PyParquetCryptoProvider::~PyParquetCryptoProvider() {}
+
+arrow::Result<std::vector<uint8_t>> PyParquetCryptoProvider::EncryptBlock(
+    std::span<const uint8_t> plaintext, const ::parquet::ParquetCryptoContext& ctx,
+    std::span<const uint8_t> module_aad, std::span<const uint8_t> dek) {
+  std::string out;
+  RETURN_NOT_OK(SafeCallIntoPython([&]() -> Status {
+    vtable_.encrypt_block(handler_.obj(), std::string(plaintext.begin(), plaintext.end()),
+                          ctx.key_metadata, ctx.column_path,
+                          ModuleTypeToName(ctx.module_type), ctx.app_context,
+                          std::string(module_aad.begin(), module_aad.end()),
+                          std::string(dek.begin(), dek.end()), &out);
+    return CheckPyError();
+  }));
+  return std::vector<uint8_t>(out.begin(), out.end());
+}
+
+arrow::Result<std::vector<uint8_t>> PyParquetCryptoProvider::DecryptBlock(
+    std::span<const uint8_t> ciphertext, const ::parquet::ParquetCryptoContext& ctx,
+    std::span<const uint8_t> module_aad, std::span<const uint8_t> dek) {
+  std::string out;
+  RETURN_NOT_OK(SafeCallIntoPython([&]() -> Status {
+    vtable_.decrypt_block(
+        handler_.obj(), std::string(ciphertext.begin(), ciphertext.end()),
+        ctx.key_metadata, ctx.column_path, ModuleTypeToName(ctx.module_type),
+        ctx.app_context, std::string(module_aad.begin(), module_aad.end()),
+        std::string(dek.begin(), dek.end()), &out);
+    return CheckPyError();
+  }));
+  return std::vector<uint8_t>(out.begin(), out.end());
+}
+
+// Dead code: SupportsTypedValues() always returns false, so Arrow never calls this.
+arrow::Status PyParquetCryptoProvider::EncryptCells(
+    ::parquet::CryptoValueBuffer& values, const ::parquet::ParquetCryptoContext& ctx,
+    std::span<const uint8_t> dek) {
+  return arrow::Status::NotImplemented(
+      "PyParquetCryptoProvider only supports the block path (SupportsTypedValues() "
+      "returns false); EncryptCells is unreachable.");
+}
+
+// Dead code for the same reason as EncryptCells().
+arrow::Status PyParquetCryptoProvider::DecryptCells(
+    ::parquet::CryptoValueBuffer& values, const ::parquet::ParquetCryptoContext& ctx,
+    std::span<const uint8_t> dek) {
+  return arrow::Status::NotImplemented(
+      "PyParquetCryptoProvider only supports the block path (SupportsTypedValues() "
+      "returns false); DecryptCells is unreachable.");
+}
+
 arrow::Result<std::shared_ptr<::parquet::FileEncryptionProperties>>
 PyCryptoFactory::SafeGetFileEncryptionProperties(
     const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,
@@ -90,9 +178,13 @@ arrow::Result<std::shared_ptr<::parquet::ExternalFileEncryptionProperties>>
 PyCryptoFactory::SafeGetExternalFileEncryptionProperties(
     const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,
     const ::parquet::encryption::ExternalEncryptionConfiguration&
-        external_encryption_config) {
+        external_encryption_config,
+    const std::shared_ptr<::parquet::ParquetCryptoProvider>& parquet_crypto_provider,
+    const std::string& parquet_file_path,
+    const std::shared_ptr<::arrow::fs::FileSystem>& filesystem) {
   PARQUET_CATCH_AND_RETURN(this->GetExternalFileEncryptionProperties(
-      kms_connection_config, external_encryption_config));
+      kms_connection_config, external_encryption_config, parquet_crypto_provider,
+      parquet_file_path, filesystem));
 }
 
 arrow::Result<std::shared_ptr<::parquet::FileDecryptionProperties>>
@@ -120,9 +212,13 @@ arrow::Result<std::shared_ptr<::parquet::ExternalFileDecryptionProperties>>
 PyCryptoFactory::SafeGetExternalFileDecryptionProperties(
     const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,
     const ::parquet::encryption::ExternalDecryptionConfiguration&
-        external_decryption_config) {
+        external_decryption_config,
+    const std::shared_ptr<::parquet::ParquetCryptoProvider>& parquet_crypto_provider,
+    const std::string& parquet_file_path,
+    const std::shared_ptr<::arrow::fs::FileSystem>& filesystem) {
   PARQUET_CATCH_AND_RETURN(this->GetExternalFileDecryptionProperties(
-      kms_connection_config, external_decryption_config));
+      kms_connection_config, external_decryption_config, parquet_crypto_provider,
+      parquet_file_path, filesystem));
 }
 
 }  // namespace encryption
