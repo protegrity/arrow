@@ -562,8 +562,8 @@ static inline format::ExternalProtectV1 ToExternalProtectV1Thrift(
     const AadMetadata& aad) {
   format::ExternalProtectV1 externalProtectV1;
   // aad_file_unique/supply_aad_prefix are always set, mirroring
-  // AesGcmV1/AesGcmCtrV1, so vendor ciphers with positional binding can
-  // reconstruct file_aad on read.
+  // AesGcmV1/AesGcmCtrV1, so external-provider ciphers with positional binding
+  // can reconstruct file_aad on read.
   externalProtectV1.__set_aad_file_unique(aad.aad_file_unique);
   externalProtectV1.__set_supply_aad_prefix(aad.supply_aad_prefix);
   if (!aad.aad_prefix.empty()) {
@@ -620,23 +620,35 @@ class ThriftDeserializer {
     if (decryptor == NULLPTR) {
       // thrift message is not encrypted
       return DeserializeUnencryptedMessage(buf, len, deserialized_msg);
+    } else if (len > std::numeric_limits<int32_t>::max()) {
+      std::stringstream ss;
+      ss << "Cannot decrypt buffer with length " << len << ", which overflows int32\n";
+      throw ParquetException(ss.str());
+    } else if (!decryptor->CanCalculateLengths()) {
+      // The decryptor can't pre-calculate plaintext/ciphertext lengths (e.g. an
+      // external ParquetCryptoProvider, whose ciphertext size is opaque to Arrow).
+      // The passed-in buffer may be exactly the encrypted Thrift blob (its length
+      // came from elsewhere: a Thrift `binary` field's own length, a
+      // footer/crypto-metadata length split, or a length prefix already read from
+      // the stream) or a peeked, over-allocated stream cursor (e.g. a page-header
+      // reader growing its peek window until parsing succeeds) whose real extent
+      // isn't yet known. GetCiphertextLength() resolves which — self-delimited
+      // buffers get their own size back; buffers with a self-describing length
+      // prefix (this adapter's on-disk format) get just the real payload's extent.
+      std::span<const uint8_t> cipher_buf(buf, len);
+      int64_t read_bytes = decryptor->GetCiphertextLength(cipher_buf);
+      auto decrypted_buffer = AllocateBuffer(decryptor->pool());
+      int32_t decrypted_buffer_len = decryptor->DecryptWithManagedBuffer(
+          cipher_buf.subspan(0, read_bytes), decrypted_buffer.get());
+      if (decrypted_buffer_len <= 0) {
+        throw ParquetException("Couldn't decrypt buffer\n");
+      }
+      DeserializeUnencryptedMessage(decrypted_buffer->data(), decrypted_buffer_len,
+                                    deserialized_msg);
+      return read_bytes;
     } else {
-      // This method is only used to deserialize metadata or footer data, so it
-      // is not expected to be called with a decryptor that can't calculate lengths.
-      if (!decryptor->CanCalculateLengths()) {
-        std::stringstream ss;
-        ss << "Decryptor can't calculate plaintext or ciphertext lengths ";
-        ss << "when deserializing metadata or footer data";
-        throw ParquetException(ss.str());
-      }
-
-      // thrift message is encrypted
-      if (len > std::numeric_limits<int32_t>::max()) {
-        std::stringstream ss;
-        ss << "Cannot decrypt buffer with length " << len << ", which overflows int32\n";
-        throw ParquetException(ss.str());
-      }
-      // decrypt
+      // thrift message is encrypted, and the decryptor can pre-calculate lengths
+      // (the AES path)
       auto decrypted_buffer = AllocateBuffer(
           decryptor->pool(), decryptor->PlaintextLength(static_cast<int32_t>(len)));
       std::span<const uint8_t> cipher_buf(buf, len);

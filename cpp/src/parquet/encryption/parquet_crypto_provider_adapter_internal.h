@@ -33,31 +33,32 @@ namespace parquet {
 // provider implementations; created inline by
 // InternalFileEncryptor::GetColumnEncryptor() — one instance per column per file
 // write, reused across all row groups (see column_data_map_ cache).
-class ParquetCryptoProviderAdapter : public encryption::EncryptorInterface {
+class ParquetCryptoProviderEncryptorAdapter : public encryption::EncryptorInterface {
  public:
-  ParquetCryptoProviderAdapter(std::shared_ptr<ParquetCryptoProvider> provider,
-                               ParquetCryptoContext ctx);
+  ParquetCryptoProviderEncryptorAdapter(std::shared_ptr<ParquetCryptoProvider> provider,
+                                        ParquetCryptoContext ctx);
 
   // Always false: every call is routed through EncryptWithManagedBuffer(), which
   // lets the provider return an arbitrarily-sized owned buffer (block path) or the
   // recompressed page (cell path) without Arrow pre-sizing anything.
   [[nodiscard]] bool CanCalculateCiphertextLength() const override { return false; }
 
-  // Dead code: Arrow only calls this pre-allocated-buffer path when
+  // Unreachable: Arrow only calls this pre-allocated-buffer path when
   // CanCalculateCiphertextLength()==true, which this adapter never returns.
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override {
     throw ParquetException(
-        "ParquetCryptoProviderAdapter::CiphertextLength is unreachable: "
+        "ParquetCryptoProviderEncryptorAdapter::CiphertextLength is unreachable: "
         "CanCalculateCiphertextLength() always returns false");
   }
 
-  // Dead code for the same reason as CiphertextLength().
+  // Unreachable for the same reason as CiphertextLength().
   int32_t Encrypt(std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
                   std::span<const uint8_t> aad, std::span<uint8_t> ciphertext,
                   std::unique_ptr<encryption::EncodingProperties> encoding_properties =
                       nullptr) override {
     throw ParquetException(
-        "ParquetCryptoProviderAdapter::Encrypt is unreachable: Arrow only calls the "
+        "ParquetCryptoProviderEncryptorAdapter::Encrypt is unreachable: Arrow only calls "
+        "the "
         "pre-allocated-buffer path when CanCalculateCiphertextLength() is true");
   }
 
@@ -106,7 +107,7 @@ class ParquetCryptoProviderDecryptorAdapter : public encryption::DecryptorInterf
   // recompressed page (cell path) without Arrow pre-sizing anything.
   [[nodiscard]] bool CanCalculateLengths() const override { return false; }
 
-  // Dead code: Arrow only calls this pre-allocated-buffer path when
+  // Unreachable: Arrow only calls this pre-allocated-buffer path when
   // CanCalculateLengths()==true, which this adapter never returns.
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override {
     throw ParquetException(
@@ -114,14 +115,14 @@ class ParquetCryptoProviderDecryptorAdapter : public encryption::DecryptorInterf
         "CanCalculateLengths() always returns false");
   }
 
-  // Dead code for the same reason as PlaintextLength().
+  // Unreachable for the same reason as PlaintextLength().
   [[nodiscard]] int32_t CiphertextLength(int32_t plaintext_len) const override {
     throw ParquetException(
         "ParquetCryptoProviderDecryptorAdapter::CiphertextLength is unreachable: "
         "CanCalculateLengths() always returns false");
   }
 
-  // Dead code for the same reason as PlaintextLength().
+  // Unreachable for the same reason as PlaintextLength().
   int32_t Decrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
                   std::span<const uint8_t> aad, std::span<uint8_t> plaintext,
                   std::unique_ptr<encryption::EncodingProperties> encoding_properties =
@@ -133,10 +134,10 @@ class ParquetCryptoProviderDecryptorAdapter : public encryption::DecryptorInterf
 
   // The real entry point. Routes to the block or cell path based on ctx_.module_type
   // and provider_->SupportsTypedValues() (mirrors
-  // ParquetCryptoProviderAdapter::EncryptWithManagedBuffer()'s gating rule). `aad` is
-  // the module AAD Decryptor::UpdateAad() already computed; `dek` is the column's or
-  // footer's resolved key. Both are forwarded straight through to the block path;
-  // the cell path forwards only `dek`.
+  // ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer()'s gating rule).
+  // `aad` is the module AAD Decryptor::UpdateAad() already computed; `dek` is the
+  // column's or footer's resolved key. Both are forwarded straight through to the block
+  // path; the cell path forwards only `dek`.
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
@@ -144,6 +145,18 @@ class ParquetCryptoProviderDecryptorAdapter : public encryption::DecryptorInterf
           nullptr) override;
 
  private:
+  // Reads the 4-byte little-endian length prefix EncryptWithManagedBuffer() wrote
+  // (mirrors AesDecryptor::GetCiphertextLength()'s existing convention and access
+  // level) so a caller peeking an over-sized, not-yet-delimited buffer (e.g.
+  // SerializedPageReader::NextPage()'s growing page-header peek) can learn
+  // exactly how many bytes are the real payload before advancing its stream
+  // cursor. Callers that already pass an exactly-sized buffer (column metadata,
+  // footer, column/offset index, bloom filter header) get back `ciphertext.size()`.
+  // Private like AesDecryptor's own override: every real caller reaches this only
+  // through the base DecryptorInterface*/Decryptor wrapper, never this concrete type.
+  [[nodiscard]] int32_t GetCiphertextLength(
+      std::span<const uint8_t> ciphertext) const override;
+
   // True only for data/dictionary pages of a cell-path provider. Every other module
   // type always uses the block path, regardless of SupportsTypedValues().
   [[nodiscard]] bool UseCellPath() const;

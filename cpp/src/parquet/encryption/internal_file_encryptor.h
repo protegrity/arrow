@@ -106,7 +106,7 @@ class InternalFileEncryptor {
 
   ::arrow::MemoryPool* pool_;
   encryption::AesEncryptorFactory aes_encryptor_factory_;
-  // Owns ParquetCryptoProviderAdapter instances; raw ptrs are held by Encryptor
+  // Owns ParquetCryptoProviderEncryptorAdapter instances; raw ptrs are held by Encryptor
   // objects and must not outlive this cache.
   std::vector<std::unique_ptr<encryption::EncryptorInterface>> encryptor_cache_;
 
@@ -121,7 +121,7 @@ class InternalFileEncryptor {
       ParquetCipher::type algorithm, size_t key_len,
       const ColumnChunkMetaDataBuilder* column_chunk_metadata = nullptr);
 
-  // Builds a ParquetCryptoProviderAdapter for ctx, owns it in encryptor_cache_, and
+  // Builds a ParquetCryptoProviderEncryptorAdapter for ctx, owns it in encryptor_cache_, and
   // returns the raw pointer — the EXTERNAL_PROTECT_V1 counterpart to GetMetaEncryptor/
   // GetDataEncryptor. Unlike those, each call always creates a new adapter: ctx is
   // per-column/footer, so instances cannot be shared by (algorithm, key_size) the way

@@ -40,6 +40,19 @@ class PARQUET_EXPORT DecryptorInterface {
   /// Calculate the size of the ciphertext for a given plaintext length.
   [[nodiscard]] virtual int32_t CiphertextLength(int32_t plaintext_len) const = 0;
 
+  /// Determine how many bytes of `ciphertext` are the real encrypted payload.
+  /// Most callers already pass an exactly-sized buffer, for which the entire
+  /// buffer is the payload (the default below). Some callers (e.g. a page-header
+  /// reader peeking a progressively larger, over-sized buffer before it knows the
+  /// header's real extent) need to know the true boundary before treating the
+  /// rest of the buffer as unrelated trailing data; implementations that write a
+  /// self-describing length prefix (like ParquetCryptoProviderDecryptorAdapter)
+  /// override this to read it back.
+  [[nodiscard]] virtual int32_t GetCiphertextLength(
+      std::span<const uint8_t> ciphertext) const {
+    return static_cast<int32_t>(ciphertext.size());
+  }
+
   /// Decrypt the ciphertext and leave the results in the plaintext buffer.
   /// Most implementations will require the key and aad to be provided, but it is up to
   /// each decryptor whether to use them or not.

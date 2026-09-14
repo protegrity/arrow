@@ -24,7 +24,7 @@ namespace parquet {
 
 // Decompress()/Recompress() implement the cell path (decode to typed values via
 // Decoder<DType>/Encoder<DType>, recompress via arrow::Compression::MakeCodec()).
-// Stubbed for now so ParquetCryptoProviderAdapter's cell path links, matching
+// Stubbed for now so ParquetCryptoProviderEncryptorAdapter's cell path links, matching
 // SignedFooterEncrypt(); the cell path is a future extension, not yet dispatched.
 TypedColumnValues ParquetPageDecoder::Decompress(
     std::span<const uint8_t> compressed_page,

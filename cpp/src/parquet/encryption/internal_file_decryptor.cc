@@ -75,6 +75,10 @@ int32_t Decryptor::CiphertextLength(int32_t plaintext_len) const {
   return decryptor_instance_->CiphertextLength(plaintext_len);
 }
 
+int32_t Decryptor::GetCiphertextLength(std::span<const uint8_t> ciphertext) const {
+  return decryptor_instance_->GetCiphertextLength(ciphertext);
+}
+
 int32_t Decryptor::Decrypt(std::span<const uint8_t> ciphertext,
                            std::span<uint8_t> plaintext,
                            std::unique_ptr<EncodingProperties> encoding_properties) {

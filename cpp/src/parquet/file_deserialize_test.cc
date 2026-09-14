@@ -1053,6 +1053,7 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
 
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::span<const uint8_t> /*aad*/, std::span<const uint8_t> /*dek*/,
       std::unique_ptr<parquet::encryption::EncodingProperties> encoding_properties)
       override {
     PARQUET_THROW_NOT_OK(plaintext->Resize(ciphertext.size()));

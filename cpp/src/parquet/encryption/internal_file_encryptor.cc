@@ -263,7 +263,7 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetParquetCryptoProviderE
         "ExternalFileEncryptionProperties::parquet_crypto_provider must be set when "
         "using EXTERNAL_PROTECT_V1 algorithm");
   }
-  auto adapter = std::make_unique<ParquetCryptoProviderAdapter>(parquet_crypto_provider,
+  auto adapter = std::make_unique<ParquetCryptoProviderEncryptorAdapter>(parquet_crypto_provider,
                                                                 std::move(ctx));
   auto* raw = adapter.get();
   encryptor_cache_.push_back(std::move(adapter));
