@@ -35,12 +35,17 @@ namespace {
 // ExternalFileEncryptionProperties, not the base class InternalFileEncryptor holds;
 // resolved together via a single dynamic_cast, only where EXTERNAL_PROTECT_V1 needs
 // them, so plain AES properties never pay for the cast.
-struct ExternalDispatchInfo {
+//
+// Named distinctly from internal_file_decryptor.cc's equivalent struct: under a
+// unity build, both files' anonymous namespaces merge into one translation unit,
+// so identical struct names here would be an ODR redefinition.
+struct EncryptorExternalDispatchInfo {
   std::string app_context;
   std::shared_ptr<ParquetCryptoProvider> parquet_crypto_provider;
 };
 
-ExternalDispatchInfo GetExternalDispatchInfo(FileEncryptionProperties* properties) {
+EncryptorExternalDispatchInfo GetExternalDispatchInfo(
+    FileEncryptionProperties* properties) {
   auto* external_properties = dynamic_cast<ExternalFileEncryptionProperties*>(properties);
   if (external_properties == nullptr) return {};
   return {external_properties->app_context(),
@@ -75,9 +80,9 @@ int32_t Encryptor::Encrypt(std::span<const uint8_t> plaintext,
 int32_t Encryptor::EncryptWithManagedBuffer(
     std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
     std::unique_ptr<EncodingProperties> encoding_properties) {
-  return encryptor_instance_->EncryptWithManagedBuffer(
-      plaintext, ciphertext, str2span(aad_), key_.as_span(),
-      std::move(encoding_properties));
+  return encryptor_instance_->EncryptWithManagedBuffer(plaintext, ciphertext,
+                                                       str2span(aad_), key_.as_span(),
+                                                       std::move(encoding_properties));
 }
 
 std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_type) {

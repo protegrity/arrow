@@ -33,7 +33,8 @@ namespace parquet {
 // provider implementations; created inline by
 // InternalFileEncryptor::GetColumnEncryptor() — one instance per column per file
 // write, reused across all row groups (see column_data_map_ cache).
-class ParquetCryptoProviderEncryptorAdapter : public encryption::EncryptorInterface {
+class PARQUET_EXPORT ParquetCryptoProviderEncryptorAdapter
+    : public encryption::EncryptorInterface {
  public:
   // dispatch_module_type is one of parquet::encryption's module-type constants
   // (encryption_utils.h) — the same values CreateModuleAad()/GetKeyValueMetadata()
@@ -77,8 +78,8 @@ class ParquetCryptoProviderEncryptorAdapter : public encryption::EncryptorInterf
   int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
-      std::unique_ptr<encryption::EncodingProperties> encoding_properties = nullptr)
-      override;
+      std::unique_ptr<encryption::EncodingProperties> encoding_properties =
+          nullptr) override;
 
   // Footer signing is not yet routed to the provider (future extension); unreachable
   // until that lands.
@@ -104,7 +105,8 @@ class ParquetCryptoProviderEncryptorAdapter : public encryption::EncryptorInterf
 // footer/column-metadata/data-page dispatch — one instance per call (no shared
 // cache, unlike the AES path's key-size-keyed cache, since ParquetCryptoContext is
 // per-column/footer and not content-addressable).
-class ParquetCryptoProviderDecryptorAdapter : public encryption::DecryptorInterface {
+class PARQUET_EXPORT ParquetCryptoProviderDecryptorAdapter
+    : public encryption::DecryptorInterface {
  public:
   // See ParquetCryptoProviderEncryptorAdapter's constructor comment for what
   // dispatch_module_type is used for.
@@ -151,8 +153,8 @@ class ParquetCryptoProviderDecryptorAdapter : public encryption::DecryptorInterf
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
-      std::unique_ptr<encryption::EncodingProperties> encoding_properties = nullptr)
-      override;
+      std::unique_ptr<encryption::EncodingProperties> encoding_properties =
+          nullptr) override;
 
  private:
   // Reads the 4-byte little-endian length prefix EncryptWithManagedBuffer() wrote

@@ -77,8 +77,7 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
   int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
-      std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
-      int8_t module_type = -1) override;
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
   /// Encrypts plaintext footer, in order to compute footer signature (tag).
   int32_t SignedFooterEncrypt(std::span<const uint8_t> footer,
@@ -214,8 +213,7 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
-      std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
-      int8_t module_type = -1) override;
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
 
  private:
   // agent_instance is assumed to be initialized at the time of construction.
