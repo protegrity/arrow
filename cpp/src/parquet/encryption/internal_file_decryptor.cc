@@ -89,9 +89,9 @@ int32_t Decryptor::Decrypt(std::span<const uint8_t> ciphertext,
 int32_t Decryptor::DecryptWithManagedBuffer(
     std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
     std::unique_ptr<EncodingProperties> encoding_properties) {
-  return decryptor_instance_->DecryptWithManagedBuffer(ciphertext, plaintext,
-                                                       str2span(aad_), key_.as_span(),
-                                                       std::move(encoding_properties));
+  return decryptor_instance_->DecryptWithManagedBuffer(
+      ciphertext, plaintext, str2span(aad_), key_.as_span(),
+      std::move(encoding_properties));
 }
 
 // InternalFileDecryptor
@@ -162,10 +162,10 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetFooterDecryptor(
     }
     ParquetCryptoContext ctx;
     ctx.key_metadata = footer_key_metadata_;
-    ctx.module_type = ParquetModuleType::kFooterEncrypted;
     ctx.app_context = std::move(external_info.app_context);
     auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
-        std::move(external_info.parquet_crypto_provider), std::move(ctx));
+        std::move(external_info.parquet_crypto_provider), std::move(ctx),
+        encryption::kFooter);
     return std::make_unique<Decryptor>(std::move(decryptor_instance), GetFooterKey(),
                                        file_aad_, aad, pool_);
   }
@@ -219,10 +219,10 @@ std::unique_ptr<Decryptor> InternalFileDecryptor::GetColumnMetaDecryptor(
     ParquetCryptoContext ctx;
     ctx.key_metadata = column_key_metadata;
     ctx.column_path = column_path;
-    ctx.module_type = ParquetModuleType::kColumnMetaData;
     ctx.app_context = std::move(external_info.app_context);
     auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
-        std::move(external_info.parquet_crypto_provider), std::move(ctx));
+        std::move(external_info.parquet_crypto_provider), std::move(ctx),
+        encryption::kColumnMetaData);
     return std::make_unique<Decryptor>(std::move(decryptor_instance),
                                        GetColumnKey(column_path, column_key_metadata),
                                        file_aad_, aad, pool_);
@@ -272,8 +272,6 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
     ParquetCryptoContext ctx;
     ctx.key_metadata = column_key_metadata;
     ctx.column_path = column_path;
-    ctx.module_type =
-        metadata ? ParquetModuleType::kColumnMetaData : ParquetModuleType::kDataPage;
     ctx.app_context = std::move(external_info.app_context);
     if (column_chunk_metadata != nullptr) {
       auto* descr = column_chunk_metadata->descr();
@@ -282,13 +280,16 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
         ctx.datatype_length = descr->type_length();
       }
     }
+    int8_t dispatch_module_type =
+        metadata ? encryption::kColumnMetaData : encryption::kDataPage;
     // Captured by value: the provider is resolved once here rather than re-cast on
     // every invocation of the returned factory (once per page).
-    return [this, aad, ctx = std::move(ctx), column_path, column_key_metadata,
+    return [this, aad, ctx = std::move(ctx), dispatch_module_type, column_path,
+            column_key_metadata,
             parquet_crypto_provider =
                 std::move(external_info.parquet_crypto_provider)]() {
       auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
-          parquet_crypto_provider, ctx);
+          parquet_crypto_provider, ctx, dispatch_module_type);
       return std::make_unique<Decryptor>(std::move(decryptor_instance),
                                          GetColumnKey(column_path, column_key_metadata),
                                          file_aad_, aad, pool_);

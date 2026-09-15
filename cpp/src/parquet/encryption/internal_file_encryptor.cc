@@ -75,9 +75,9 @@ int32_t Encryptor::Encrypt(std::span<const uint8_t> plaintext,
 int32_t Encryptor::EncryptWithManagedBuffer(
     std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
     std::unique_ptr<EncodingProperties> encoding_properties) {
-  return encryptor_instance_->EncryptWithManagedBuffer(plaintext, ciphertext,
-                                                       str2span(aad_), key_.as_span(),
-                                                       std::move(encoding_properties));
+  return encryptor_instance_->EncryptWithManagedBuffer(
+      plaintext, ciphertext, str2span(aad_), key_.as_span(),
+      std::move(encoding_properties));
 }
 
 std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_type) {
@@ -102,10 +102,9 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterEncryptor() {
     auto external_info = GetExternalDispatchInfo(properties_);
     ParquetCryptoContext ctx;
     ctx.key_metadata = properties_->footer_key_metadata();
-    ctx.module_type = ParquetModuleType::kFooterEncrypted;
     ctx.app_context = std::move(external_info.app_context);
     auto* encryptor_instance = GetParquetCryptoProviderEncryptor(
-        external_info.parquet_crypto_provider, std::move(ctx));
+        external_info.parquet_crypto_provider, std::move(ctx), encryption::kFooter);
     footer_encryptor_ = std::make_shared<Encryptor>(
         encryptor_instance, footer_key, properties_->file_aad(), footer_aad, pool_);
     return footer_encryptor_;
@@ -130,10 +129,9 @@ std::shared_ptr<Encryptor> InternalFileEncryptor::GetFooterSigningEncryptor() {
     auto external_info = GetExternalDispatchInfo(properties_);
     ParquetCryptoContext ctx;
     ctx.key_metadata = properties_->footer_key_metadata();
-    ctx.module_type = ParquetModuleType::kFooterSigned;
     ctx.app_context = std::move(external_info.app_context);
     auto* encryptor_instance = GetParquetCryptoProviderEncryptor(
-        external_info.parquet_crypto_provider, std::move(ctx));
+        external_info.parquet_crypto_provider, std::move(ctx), encryption::kFooter);
     footer_signing_encryptor_ =
         std::make_shared<Encryptor>(encryptor_instance, footer_signing_key,
                                     properties_->file_aad(), footer_aad, pool_);
@@ -204,8 +202,6 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
     ParquetCryptoContext ctx;
     ctx.key_metadata = column_prop->key_metadata();
     ctx.column_path = column_path;
-    ctx.module_type =
-        metadata ? ParquetModuleType::kColumnMetaData : ParquetModuleType::kDataPage;
     auto external_info = GetExternalDispatchInfo(properties_);
     ctx.app_context = std::move(external_info.app_context);
     if (column_chunk_metadata != nullptr) {
@@ -215,8 +211,10 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
         ctx.datatype_length = descr->type_length();
       }
     }
+    int8_t dispatch_module_type =
+        metadata ? encryption::kColumnMetaData : encryption::kDataPage;
     auto* encryptor_instance = GetParquetCryptoProviderEncryptor(
-        external_info.parquet_crypto_provider, std::move(ctx));
+        external_info.parquet_crypto_provider, std::move(ctx), dispatch_module_type);
     std::string file_aad = properties_->file_aad();
     auto encryptor =
         std::make_shared<Encryptor>(encryptor_instance, key, file_aad, "", pool_);
@@ -257,14 +255,14 @@ encryption::EncryptorInterface* InternalFileEncryptor::GetDataEncryptor(
 
 encryption::EncryptorInterface* InternalFileEncryptor::GetParquetCryptoProviderEncryptor(
     const std::shared_ptr<ParquetCryptoProvider>& parquet_crypto_provider,
-    ParquetCryptoContext ctx) {
+    ParquetCryptoContext ctx, int8_t dispatch_module_type) {
   if (!parquet_crypto_provider) {
     throw ParquetException(
         "ExternalFileEncryptionProperties::parquet_crypto_provider must be set when "
         "using EXTERNAL_PROTECT_V1 algorithm");
   }
-  auto adapter = std::make_unique<ParquetCryptoProviderEncryptorAdapter>(parquet_crypto_provider,
-                                                                std::move(ctx));
+  auto adapter = std::make_unique<ParquetCryptoProviderEncryptorAdapter>(
+      parquet_crypto_provider, std::move(ctx), dispatch_module_type);
   auto* raw = adapter.get();
   encryptor_cache_.push_back(std::move(adapter));
   return raw;

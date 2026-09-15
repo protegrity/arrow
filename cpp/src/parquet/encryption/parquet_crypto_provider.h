@@ -31,22 +31,6 @@
 
 namespace parquet {
 
-/// Identifies which Parquet file module is being encrypted or decrypted.
-/// Values match the module-type constants in parquet/encryption/encryption_utils.h.
-enum class PARQUET_EXPORT ParquetModuleType : int8_t {
-  kFooterEncrypted = 0,
-  kColumnMetaData = 1,
-  kDataPage = 2,
-  kDictionaryPage = 3,
-  kDataPageHeader = 4,
-  kDictionaryPageHeader = 5,
-  kColumnIndex = 6,
-  kOffsetIndex = 7,
-  kBloomFilterHeader = 8,
-  kBloomFilterBitset = 9,
-  kFooterSigned = 10,
-};
-
 /// Describes the Parquet module a single ParquetCryptoProvider call applies to.
 ///
 /// Populated by Arrow from the file's crypto metadata. `key_metadata` is an opaque,
@@ -55,13 +39,11 @@ enum class PARQUET_EXPORT ParquetModuleType : int8_t {
 struct PARQUET_EXPORT ParquetCryptoContext {
   /// Opaque key or policy identifier, interpreted only by the ParquetCryptoProvider
   /// implementation. Same value for every module belonging to one column (or the
-  /// footer); the implementation uses `module_type` to distinguish between them.
+  /// footer).
   std::string key_metadata;
   /// Dot-separated Parquet column path (e.g. "address.zip"); empty for the
   /// file-level footer modules.
   std::string column_path;
-  /// Which Parquet module this call is encrypting or decrypting.
-  ParquetModuleType module_type;
   /// Physical type of the column; meaningless for footer modules.
   Type::type data_type = Type::BYTE_ARRAY;
   /// Byte width for FIXED_LEN_BYTE_ARRAY columns; nullopt for all other types.

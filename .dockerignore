@@ -27,6 +27,13 @@
 # include explicitly
 !ci/**
 !c_glib/Gemfile
+# Required by the development Dockerfile (COPY-based build)
+!.env
+!LICENSE.txt
+!NOTICE.txt
+!cpp/**
+!python/**
+!testing/**
 !dev/release/setup-*.sh
 !docs/requirements*.txt
 !go/go.mod

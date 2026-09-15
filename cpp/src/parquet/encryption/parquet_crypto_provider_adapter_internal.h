@@ -35,8 +35,13 @@ namespace parquet {
 // write, reused across all row groups (see column_data_map_ cache).
 class ParquetCryptoProviderEncryptorAdapter : public encryption::EncryptorInterface {
  public:
+  // dispatch_module_type is one of parquet::encryption's module-type constants
+  // (encryption_utils.h) — the same values CreateModuleAad()/GetKeyValueMetadata()
+  // already use. Fixed once for this adapter's lifetime (one instance per column or
+  // footer); used only to gate UseCellPath().
   ParquetCryptoProviderEncryptorAdapter(std::shared_ptr<ParquetCryptoProvider> provider,
-                                        ParquetCryptoContext ctx);
+                                        ParquetCryptoContext ctx,
+                                        int8_t dispatch_module_type);
 
   // Always false: every call is routed through EncryptWithManagedBuffer(), which
   // lets the provider return an arbitrarily-sized owned buffer (block path) or the
@@ -62,18 +67,18 @@ class ParquetCryptoProviderEncryptorAdapter : public encryption::EncryptorInterf
         "pre-allocated-buffer path when CanCalculateCiphertextLength() is true");
   }
 
-  // The real entry point. Routes to the block or cell path based on ctx_.module_type
-  // and provider_->SupportsTypedValues() — never on SupportsTypedValues() alone,
-  // since footer/column-metadata/index/bloom-filter modules must always go through
-  // the block path regardless of that flag. `aad` is the module AAD
-  // Encryptor::UpdateAad() already computed via CreateModuleAad(); `dek` is the
-  // column's or footer's resolved key. Both are forwarded straight through to the
-  // block path; the cell path forwards only `dek`.
+  // The real entry point. Routes to the block or cell path based on
+  // dispatch_module_type_ and provider_->SupportsTypedValues() — never on
+  // SupportsTypedValues() alone, since footer/column-metadata/index/bloom-filter
+  // modules must always go through the block path regardless of that flag. `aad` is
+  // the module AAD Encryptor::UpdateAad() already computed via CreateModuleAad();
+  // `dek` is the column's or footer's resolved key. Both are forwarded straight
+  // through to the block path; the cell path forwards only `dek`.
   int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
-      std::unique_ptr<encryption::EncodingProperties> encoding_properties =
-          nullptr) override;
+      std::unique_ptr<encryption::EncodingProperties> encoding_properties = nullptr)
+      override;
 
   // Footer signing is not yet routed to the provider (future extension); unreachable
   // until that lands.
@@ -83,12 +88,14 @@ class ParquetCryptoProviderEncryptorAdapter : public encryption::EncryptorInterf
                               std::span<uint8_t> encrypted_footer) override;
 
  private:
-  // True only for data/dictionary pages of a cell-path provider. Every other module
-  // type always uses the block path, regardless of SupportsTypedValues().
+  // True only when dispatch_module_type_ is kDataPage/kDictionaryPage and the
+  // provider supports typed values. Footer/column-metadata adapters always use the
+  // block path, regardless of SupportsTypedValues().
   [[nodiscard]] bool UseCellPath() const;
 
   std::shared_ptr<ParquetCryptoProvider> provider_;
   ParquetCryptoContext ctx_;
+  int8_t dispatch_module_type_;
 };
 
 // Arrow-internal bridge from the external-provider-facing ParquetCryptoProvider
@@ -99,8 +106,11 @@ class ParquetCryptoProviderEncryptorAdapter : public encryption::EncryptorInterf
 // per-column/footer and not content-addressable).
 class ParquetCryptoProviderDecryptorAdapter : public encryption::DecryptorInterface {
  public:
+  // See ParquetCryptoProviderEncryptorAdapter's constructor comment for what
+  // dispatch_module_type is used for.
   ParquetCryptoProviderDecryptorAdapter(std::shared_ptr<ParquetCryptoProvider> provider,
-                                        ParquetCryptoContext ctx);
+                                        ParquetCryptoContext ctx,
+                                        int8_t dispatch_module_type);
 
   // Always false: every call is routed through DecryptWithManagedBuffer(), which
   // lets the provider return an arbitrarily-sized owned buffer (block path) or the
@@ -132,8 +142,8 @@ class ParquetCryptoProviderDecryptorAdapter : public encryption::DecryptorInterf
         "calls the pre-allocated-buffer path when CanCalculateLengths() is true");
   }
 
-  // The real entry point. Routes to the block or cell path based on ctx_.module_type
-  // and provider_->SupportsTypedValues() (mirrors
+  // The real entry point. Routes to the block or cell path based on
+  // dispatch_module_type_ and provider_->SupportsTypedValues() (mirrors
   // ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer()'s gating rule).
   // `aad` is the module AAD Decryptor::UpdateAad() already computed; `dek` is the
   // column's or footer's resolved key. Both are forwarded straight through to the block
@@ -141,8 +151,8 @@ class ParquetCryptoProviderDecryptorAdapter : public encryption::DecryptorInterf
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
-      std::unique_ptr<encryption::EncodingProperties> encoding_properties =
-          nullptr) override;
+      std::unique_ptr<encryption::EncodingProperties> encoding_properties = nullptr)
+      override;
 
  private:
   // Reads the 4-byte little-endian length prefix EncryptWithManagedBuffer() wrote
@@ -157,12 +167,14 @@ class ParquetCryptoProviderDecryptorAdapter : public encryption::DecryptorInterf
   [[nodiscard]] int32_t GetCiphertextLength(
       std::span<const uint8_t> ciphertext) const override;
 
-  // True only for data/dictionary pages of a cell-path provider. Every other module
-  // type always uses the block path, regardless of SupportsTypedValues().
+  // True only when dispatch_module_type_ is kDataPage/kDictionaryPage and the
+  // provider supports typed values. Footer/column-metadata adapters always use the
+  // block path, regardless of SupportsTypedValues().
   [[nodiscard]] bool UseCellPath() const;
-
   std::shared_ptr<ParquetCryptoProvider> provider_;
+
   ParquetCryptoContext ctx_;
+  int8_t dispatch_module_type_;
 };
 
 }  // namespace parquet

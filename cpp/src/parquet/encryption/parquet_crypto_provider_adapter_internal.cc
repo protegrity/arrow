@@ -22,6 +22,7 @@
 #include <utility>
 
 #include "arrow/buffer.h"
+#include "parquet/encryption/encryption_utils.h"
 #include "parquet/encryption/parquet_page_decoder_internal.h"
 #include "parquet/exception.h"
 
@@ -88,13 +89,16 @@ uint32_t ReadLengthPrefix(std::span<const uint8_t> buf) {
 }  // namespace
 
 ParquetCryptoProviderEncryptorAdapter::ParquetCryptoProviderEncryptorAdapter(
-    std::shared_ptr<ParquetCryptoProvider> provider, ParquetCryptoContext ctx)
-    : provider_(std::move(provider)), ctx_(std::move(ctx)) {}
+    std::shared_ptr<ParquetCryptoProvider> provider, ParquetCryptoContext ctx,
+    int8_t dispatch_module_type)
+    : provider_(std::move(provider)),
+      ctx_(std::move(ctx)),
+      dispatch_module_type_(dispatch_module_type) {}
 
 bool ParquetCryptoProviderEncryptorAdapter::UseCellPath() const {
   return provider_->SupportsTypedValues() &&
-         (ctx_.module_type == ParquetModuleType::kDataPage ||
-          ctx_.module_type == ParquetModuleType::kDictionaryPage);
+         (dispatch_module_type_ == encryption::kDataPage ||
+          dispatch_module_type_ == encryption::kDictionaryPage);
 }
 
 int32_t ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer(
@@ -106,7 +110,8 @@ int32_t ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer(
   if (UseCellPath()) {
     if (encoding_properties == nullptr) {
       throw ParquetException(
-          "ParquetCryptoProviderEncryptorAdapter: EncodingProperties required for cell path");
+          "ParquetCryptoProviderEncryptorAdapter: EncodingProperties required for cell "
+          "path");
     }
     TypedColumnValues typed =
         ParquetPageDecoder::Decompress(plaintext, *encoding_properties);
@@ -133,18 +138,22 @@ int32_t ParquetCryptoProviderEncryptorAdapter::SignedFooterEncrypt(
     std::span<const uint8_t> aad, std::span<const uint8_t> nonce,
     std::span<uint8_t> encrypted_footer) {
   throw ParquetException(
-      "ParquetCryptoProviderEncryptorAdapter::SignedFooterEncrypt is not implemented: provider "
+      "ParquetCryptoProviderEncryptorAdapter::SignedFooterEncrypt is not implemented: "
+      "provider "
       "footer signing is a future extension, not yet dispatched to this adapter");
 }
 
 ParquetCryptoProviderDecryptorAdapter::ParquetCryptoProviderDecryptorAdapter(
-    std::shared_ptr<ParquetCryptoProvider> provider, ParquetCryptoContext ctx)
-    : provider_(std::move(provider)), ctx_(std::move(ctx)) {}
+    std::shared_ptr<ParquetCryptoProvider> provider, ParquetCryptoContext ctx,
+    int8_t dispatch_module_type)
+    : provider_(std::move(provider)),
+      ctx_(std::move(ctx)),
+      dispatch_module_type_(dispatch_module_type) {}
 
 bool ParquetCryptoProviderDecryptorAdapter::UseCellPath() const {
   return provider_->SupportsTypedValues() &&
-         (ctx_.module_type == ParquetModuleType::kDataPage ||
-          ctx_.module_type == ParquetModuleType::kDictionaryPage);
+         (dispatch_module_type_ == encryption::kDataPage ||
+          dispatch_module_type_ == encryption::kDictionaryPage);
 }
 
 int32_t ParquetCryptoProviderDecryptorAdapter::GetCiphertextLength(

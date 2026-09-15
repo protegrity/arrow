@@ -121,15 +121,17 @@ class InternalFileEncryptor {
       ParquetCipher::type algorithm, size_t key_len,
       const ColumnChunkMetaDataBuilder* column_chunk_metadata = nullptr);
 
-  // Builds a ParquetCryptoProviderEncryptorAdapter for ctx, owns it in encryptor_cache_, and
-  // returns the raw pointer — the EXTERNAL_PROTECT_V1 counterpart to GetMetaEncryptor/
-  // GetDataEncryptor. Unlike those, each call always creates a new adapter: ctx is
-  // per-column/footer, so instances cannot be shared by (algorithm, key_size) the way
-  // AesEncryptor is. Callers already resolved parquet_crypto_provider via
-  // GetExternalDispatchInfo, so it isn't re-derived here.
+  // Builds a ParquetCryptoProviderEncryptorAdapter for ctx, owns it in encryptor_cache_,
+  // and returns the raw pointer — the EXTERNAL_PROTECT_V1 counterpart to
+  // GetMetaEncryptor/ GetDataEncryptor. Unlike those, each call always creates a new
+  // adapter: ctx is per-column/footer, so instances cannot be shared by (algorithm,
+  // key_size) the way AesEncryptor is. Callers already resolved parquet_crypto_provider
+  // via GetExternalDispatchInfo, so it isn't re-derived here. dispatch_module_type is one
+  // of parquet::encryption's module-type constants (encryption_utils.h), used only to
+  // gate the adapter's cell-path routing.
   encryption::EncryptorInterface* GetParquetCryptoProviderEncryptor(
       const std::shared_ptr<ParquetCryptoProvider>& parquet_crypto_provider,
-      ParquetCryptoContext ctx);
+      ParquetCryptoContext ctx, int8_t dispatch_module_type);
 };
 
 }  // namespace parquet

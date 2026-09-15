@@ -467,6 +467,12 @@ if(PARQUET_REQUIRE_ENCRYPTION)
                    encryption/test_encryption_util.cc
                    encryption/test_in_memory_kms.cc
                    encryption/two_level_cache_with_expiration_test.cc)
+  add_parquet_test(column-crypto-provider-test
+                   SOURCES
+                   encryption/test_mock_crypto_providers.cc
+                   encryption/parquet_column_crypto_provider_test.cc
+                   encryption/test_encryption_util.cc
+                   encryption/test_in_memory_kms.cc)
 endif()
 
 # Those tests need to use static linking as they access thrift-generated
