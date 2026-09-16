@@ -99,6 +99,11 @@ int32_t AesDecryptor::PlaintextLength(int32_t ciphertext_len) const {
   return -1;
 }
 
+int32_t AesDecryptor::GetCiphertextLength(std::span<const uint8_t> ciphertext) const {
+  ThrowOpenSSLRequiredException();
+  return -1;
+}
+
 int32_t AesDecryptor::CiphertextLength(int32_t plaintext_len) const {
   ThrowOpenSSLRequiredException();
   return -1;
