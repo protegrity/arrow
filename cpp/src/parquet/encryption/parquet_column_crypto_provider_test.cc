@@ -798,7 +798,7 @@ TEST(ParquetCryptoProviderAdapterLengthPrefixTest, BufferShorterThanPrefixThrows
   auto* base_decryptor = static_cast<encryption::DecryptorInterface*>(&decryptor);
 
   const std::vector<uint8_t> too_short = {1, 2, 3};
-  EXPECT_THROW(base_decryptor->GetCiphertextLength(too_short), ParquetException);
+  EXPECT_THROW((void)base_decryptor->GetCiphertextLength(too_short), ParquetException);
 
   ASSERT_OK_AND_ASSIGN(auto plaintext_buf, ::arrow::AllocateResizableBuffer(0));
   EXPECT_THROW(decryptor.DecryptWithManagedBuffer(too_short, plaintext_buf.get()),
@@ -816,7 +816,7 @@ TEST(ParquetCryptoProviderAdapterLengthPrefixTest, PrefixExceedingBufferThrows) 
 
   // Little-endian 1000-byte claim, but only 2 bytes actually follow the prefix.
   const std::vector<uint8_t> corrupted = {0xE8, 0x03, 0x00, 0x00, 0xAA, 0xBB};
-  EXPECT_THROW(base_decryptor->GetCiphertextLength(corrupted), ParquetException);
+  EXPECT_THROW((void)base_decryptor->GetCiphertextLength(corrupted), ParquetException);
 
   ASSERT_OK_AND_ASSIGN(auto plaintext_buf, ::arrow::AllocateResizableBuffer(0));
   EXPECT_THROW(decryptor.DecryptWithManagedBuffer(corrupted, plaintext_buf.get()),

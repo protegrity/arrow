@@ -684,13 +684,13 @@ cdef class ParquetCryptoProvider(_Weakrefable):
 
         self.provider.reset(new CPyParquetCryptoProvider(self, vtable))
 
-    def encrypt_block(self, plaintext, key_metadata, column_path, module_type,
+    def encrypt_block(self, plaintext, key_metadata, column_path,
                       app_context, module_aad, dek):
         """Encrypt a raw module block (compressed page, footer, or serialized
         column metadata). Must return bytes."""
         raise NotImplementedError()
 
-    def decrypt_block(self, ciphertext, key_metadata, column_path, module_type,
+    def decrypt_block(self, ciphertext, key_metadata, column_path,
                       app_context, module_aad, dek):
         """Decrypt a raw module block. Must return bytes."""
         raise NotImplementedError()
@@ -702,7 +702,7 @@ cdef class ParquetCryptoProvider(_Weakrefable):
 # Callback definitions for CPyParquetCryptoProviderVtable
 cdef void _cb_encrypt_block(
         handler, const c_string& plaintext, const c_string& key_metadata,
-        const c_string& column_path, const c_string& module_type,
+        const c_string& column_path,
         const c_string& app_context, const c_string& module_aad,
         const c_string& dek, c_string* out) except *:
     cdef bytes plaintext_bytes = plaintext
@@ -710,7 +710,7 @@ cdef void _cb_encrypt_block(
     cdef bytes dek_bytes = dek
     result = handler.encrypt_block(
         plaintext_bytes, frombytes(key_metadata), frombytes(column_path),
-        frombytes(module_type), frombytes(app_context), module_aad_bytes,
+        frombytes(app_context), module_aad_bytes,
         dek_bytes)
     if not isinstance(result, bytes):
         raise TypeError("encrypt_block must return bytes")
@@ -719,7 +719,7 @@ cdef void _cb_encrypt_block(
 
 cdef void _cb_decrypt_block(
         handler, const c_string& ciphertext, const c_string& key_metadata,
-        const c_string& column_path, const c_string& module_type,
+        const c_string& column_path,
         const c_string& app_context, const c_string& module_aad,
         const c_string& dek, c_string* out) except *:
     cdef bytes ciphertext_bytes = ciphertext
@@ -727,7 +727,7 @@ cdef void _cb_decrypt_block(
     cdef bytes dek_bytes = dek
     result = handler.decrypt_block(
         ciphertext_bytes, frombytes(key_metadata), frombytes(column_path),
-        frombytes(module_type), frombytes(app_context), module_aad_bytes,
+        frombytes(app_context), module_aad_bytes,
         dek_bytes)
     if not isinstance(result, bytes):
         raise TypeError("decrypt_block must return bytes")

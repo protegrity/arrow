@@ -173,7 +173,8 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
  private:
   /// Get the actual ciphertext length, inclusive of the length buffer length,
   /// and validate that the provided buffer size is large enough.
-  [[nodiscard]] int32_t GetCiphertextLength(std::span<const uint8_t> ciphertext) const;
+  [[nodiscard]] int32_t GetCiphertextLength(
+      std::span<const uint8_t> ciphertext) const override;
 
   int32_t GcmDecrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
                      std::span<const uint8_t> aad, std::span<uint8_t> plaintext);

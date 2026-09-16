@@ -119,15 +119,13 @@ class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyParquetCryptoProviderVtable {
  public:
   std::function<void(PyObject*, const std::string& plaintext,
                      const std::string& key_metadata, const std::string& column_path,
-                     const std::string& module_type, const std::string& app_context,
-                     const std::string& module_aad, const std::string& dek,
-                     std::string* out)>
+                     const std::string& app_context, const std::string& module_aad,
+                     const std::string& dek, std::string* out)>
       encrypt_block;
   std::function<void(PyObject*, const std::string& ciphertext,
                      const std::string& key_metadata, const std::string& column_path,
-                     const std::string& module_type, const std::string& app_context,
-                     const std::string& module_aad, const std::string& dek,
-                     std::string* out)>
+                     const std::string& app_context, const std::string& module_aad,
+                     const std::string& dek, std::string* out)>
       decrypt_block;
 };
 

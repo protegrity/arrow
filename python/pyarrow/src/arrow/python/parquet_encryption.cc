@@ -23,38 +23,6 @@ namespace py {
 namespace parquet {
 namespace encryption {
 
-namespace {
-// Textual module_type name, since Python callbacks have no binding for the
-// ParquetModuleType enum.
-std::string ModuleTypeToName(::parquet::ParquetModuleType module_type) {
-  switch (module_type) {
-    case ::parquet::ParquetModuleType::kFooterEncrypted:
-      return "FOOTER_ENCRYPTED";
-    case ::parquet::ParquetModuleType::kColumnMetaData:
-      return "COLUMN_META_DATA";
-    case ::parquet::ParquetModuleType::kDataPage:
-      return "DATA_PAGE";
-    case ::parquet::ParquetModuleType::kDictionaryPage:
-      return "DICTIONARY_PAGE";
-    case ::parquet::ParquetModuleType::kDataPageHeader:
-      return "DATA_PAGE_HEADER";
-    case ::parquet::ParquetModuleType::kDictionaryPageHeader:
-      return "DICTIONARY_PAGE_HEADER";
-    case ::parquet::ParquetModuleType::kColumnIndex:
-      return "COLUMN_INDEX";
-    case ::parquet::ParquetModuleType::kOffsetIndex:
-      return "OFFSET_INDEX";
-    case ::parquet::ParquetModuleType::kBloomFilterHeader:
-      return "BLOOM_FILTER_HEADER";
-    case ::parquet::ParquetModuleType::kBloomFilterBitset:
-      return "BLOOM_FILTER_BITSET";
-    case ::parquet::ParquetModuleType::kFooterSigned:
-      return "FOOTER_SIGNED";
-  }
-  return "UNKNOWN";
-}
-}  // namespace
-
 PyKmsClient::PyKmsClient(PyObject* handler, PyKmsClientVtable vtable)
     : handler_(handler), vtable_(std::move(vtable)) {
   Py_INCREF(handler);
@@ -122,8 +90,7 @@ arrow::Result<std::vector<uint8_t>> PyParquetCryptoProvider::EncryptBlock(
   std::string out;
   RETURN_NOT_OK(SafeCallIntoPython([&]() -> Status {
     vtable_.encrypt_block(handler_.obj(), std::string(plaintext.begin(), plaintext.end()),
-                          ctx.key_metadata, ctx.column_path,
-                          ModuleTypeToName(ctx.module_type), ctx.app_context,
+                          ctx.key_metadata, ctx.column_path, ctx.app_context,
                           std::string(module_aad.begin(), module_aad.end()),
                           std::string(dek.begin(), dek.end()), &out);
     return CheckPyError();
@@ -136,11 +103,11 @@ arrow::Result<std::vector<uint8_t>> PyParquetCryptoProvider::DecryptBlock(
     std::span<const uint8_t> module_aad, std::span<const uint8_t> dek) {
   std::string out;
   RETURN_NOT_OK(SafeCallIntoPython([&]() -> Status {
-    vtable_.decrypt_block(
-        handler_.obj(), std::string(ciphertext.begin(), ciphertext.end()),
-        ctx.key_metadata, ctx.column_path, ModuleTypeToName(ctx.module_type),
-        ctx.app_context, std::string(module_aad.begin(), module_aad.end()),
-        std::string(dek.begin(), dek.end()), &out);
+    vtable_.decrypt_block(handler_.obj(),
+                          std::string(ciphertext.begin(), ciphertext.end()),
+                          ctx.key_metadata, ctx.column_path, ctx.app_context,
+                          std::string(module_aad.begin(), module_aad.end()),
+                          std::string(dek.begin(), dek.end()), &out);
     return CheckPyError();
   }));
   return std::vector<uint8_t>(out.begin(), out.end());

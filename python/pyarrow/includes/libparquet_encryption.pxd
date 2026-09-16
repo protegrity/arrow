@@ -78,10 +78,10 @@ cdef extern from "parquet/encryption/parquet_crypto_provider.h" \
 # Callbacks for implementing Python parquet crypto providers (block path only)
 # Use typedef to emulate syntax for std::function<void(..)>
 ctypedef void CallbackEncryptBlock(
-    object, const c_string&, const c_string&, const c_string&, const c_string&,
+    object, const c_string&, const c_string&, const c_string&,
     const c_string&, const c_string&, const c_string&, c_string*)
 ctypedef void CallbackDecryptBlock(
-    object, const c_string&, const c_string&, const c_string&, const c_string&,
+    object, const c_string&, const c_string&, const c_string&,
     const c_string&, const c_string&, const c_string&, c_string*)
 
 cdef extern from "parquet/encryption/crypto_factory.h" \
