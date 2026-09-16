@@ -50,11 +50,16 @@ class PARQUET_EXPORT EncryptorInterface {
   /// encryption. This method is used when the encryptor cannot calculate the
   /// ciphertext length before encryption.
   ///
+  /// \param plaintext The bytes to encrypt.
+  /// \param ciphertext Resized to the actual ciphertext length and filled by
+  ///     the encryptor.
   /// \param aad The positional binding for this call (e.g. Encryptor::UpdateAad()'s
   ///     CreateModuleAad() result, already updated per-page). Implementations
   ///     without AEAD-style binding may ignore it.
   /// \param dek The key resolved for this call, if any. Implementations that
   ///     already hold their key (e.g. AES, bound at construction) ignore it.
+  /// \param encoding_properties Page value/level encoding context, forwarded to
+  ///     implementations that need it to encode a self-describing buffer.
   virtual int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},

@@ -38,6 +38,11 @@ namespace parquet {
 /// and are unchanged by the vendor.
 class PARQUET_EXPORT TypedColumnValues {
  public:
+  /// \param physical_type Type shared by every element of values().
+  /// \param max_definition_level Schema-declared maximum definition level for
+  ///     this column; independent of the levels actually present in a page.
+  /// \param max_repetition_level Schema-declared maximum repetition level for
+  ///     this column; independent of the levels actually present in a page.
   TypedColumnValues(Type::type physical_type, int16_t max_definition_level,
                     int16_t max_repetition_level)
       : physical_type_(physical_type),

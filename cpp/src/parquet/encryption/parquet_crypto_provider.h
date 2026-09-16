@@ -56,8 +56,8 @@ struct PARQUET_EXPORT ParquetCryptoContext {
 
 /// Type-erased, per-page buffer of decoded column values, used by the cell path.
 ///
-/// One discriminant covers the whole page (resolved once via std::get/std::visit),
-/// not one per value — a Parquet page is single-typed by construction, so boxing
+/// One discriminant covers the whole page (resolved once via `std::get`), not one
+/// per value — a Parquet page is single-typed by construction, so boxing
 /// each value in its own tagged union wastes memory and forces a redundant type
 /// check on every element. Fixed-width physical types are non-owning, mutable spans
 /// into caller-owned storage (zero-copy). Only BYTE_ARRAY uses an owning
@@ -105,6 +105,8 @@ class PARQUET_EXPORT ParquetCryptoProvider {
   /// Encrypt a raw module block (compressed page, footer, or serialized
   /// column metadata).
   ///
+  /// \param plaintext The raw bytes to encrypt.
+  /// \param ctx Identifies the column (or footer) and module this call applies to.
   /// \param module_aad Arrow-computed positional binding (file AAD, module
   ///     type, row group, column, and page ordinals). AES-GCM implementations
   ///     should pass it as additional authenticated data; ciphers without an
@@ -117,6 +119,11 @@ class PARQUET_EXPORT ParquetCryptoProvider {
       std::span<const uint8_t> module_aad, std::span<const uint8_t> dek = {}) = 0;
 
   /// Decrypt a raw module block. See EncryptBlock() for `module_aad`/`dek` semantics.
+  ///
+  /// \param ciphertext The raw bytes to decrypt.
+  /// \param ctx Identifies the column (or footer) and module this call applies to.
+  /// \param module_aad Same value EncryptBlock() received for this module.
+  /// \param dek Same value EncryptBlock() received for this module.
   virtual ::arrow::Result<std::vector<uint8_t>> DecryptBlock(
       std::span<const uint8_t> ciphertext, const ParquetCryptoContext& ctx,
       std::span<const uint8_t> module_aad, std::span<const uint8_t> dek = {}) = 0;
@@ -131,6 +138,8 @@ class PARQUET_EXPORT ParquetCryptoProvider {
   /// Transform decoded column values in place (e.g. tokenize, FPE,
   /// pseudonymize). Called only when SupportsTypedValues() returns true.
   ///
+  /// \param values The page's decoded values, transformed in place.
+  /// \param ctx Identifies the column this call applies to.
   /// \param dek Same key as EncryptBlock()'s `dek`. The cell path may use it
   ///     (e.g. keyed FPE) or ignore it (pure tokenization).
   virtual ::arrow::Status EncryptCells(CryptoValueBuffer& values,
@@ -139,6 +148,10 @@ class PARQUET_EXPORT ParquetCryptoProvider {
 
   /// Reverse the transform applied by EncryptCells(). Called only when
   /// SupportsTypedValues() returns true.
+  ///
+  /// \param values The page's decoded values, transformed in place.
+  /// \param ctx Identifies the column this call applies to.
+  /// \param dek Same value EncryptCells() received for this column.
   virtual ::arrow::Status DecryptCells(CryptoValueBuffer& values,
                                        const ParquetCryptoContext& ctx,
                                        std::span<const uint8_t> dek = {}) = 0;
