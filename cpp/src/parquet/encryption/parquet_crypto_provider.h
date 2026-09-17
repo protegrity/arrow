@@ -61,8 +61,8 @@ struct PARQUET_EXPORT ParquetCryptoContext {
 /// each value in its own tagged union wastes memory and forces a redundant type
 /// check on every element. Fixed-width physical types are non-owning, mutable spans
 /// into caller-owned storage (zero-copy). Only BYTE_ARRAY uses an owning
-/// `vector<string>`, since its per-value length is not schema-fixed and
-/// tokenization/FPE may change it.
+/// `vector<string>`, since its per-value length is not schema-fixed and an
+/// implementation's transform may change it.
 ///
 /// BOOLEAN and FIXED_LEN_BYTE_ARRAY share the `span<uint8_t>` alternative: both are
 /// packed, fixed-stride byte data (stride 1 for BOOLEAN, `ctx.datatype_length` for
@@ -83,7 +83,7 @@ using CryptoValueBuffer =
 ///
 /// Implement this interface to protect Parquet file modules (footer, column
 /// metadata, data pages, dictionary pages, and related structures) with a
-/// third-party key-management, HSM, or tokenization backend instead of Arrow's
+/// third-party key-management, HSM, or data-protection backend instead of Arrow's
 /// built-in AES-GCM/CTR encryptor. `ParquetCryptoContext::key_metadata` is an
 /// opaque string only the implementation interprets; `dek` (below) carries the
 /// actual key bytes Arrow generated for the column or footer.
@@ -135,13 +135,13 @@ class PARQUET_EXPORT ParquetCryptoProvider {
   /// EncryptCells()/DecryptCells() instead.
   [[nodiscard]] virtual bool SupportsTypedValues() const = 0;
 
-  /// Transform decoded column values in place (e.g. tokenize, FPE,
-  /// pseudonymize). Called only when SupportsTypedValues() returns true.
+  /// Transform decoded column values in place using an implementation-defined
+  /// protection scheme. Called only when SupportsTypedValues() returns true.
   ///
   /// \param values The page's decoded values, transformed in place.
   /// \param ctx Identifies the column this call applies to.
   /// \param dek Same key as EncryptBlock()'s `dek`. The cell path may use it
-  ///     (e.g. keyed FPE) or ignore it (pure tokenization).
+  ///     (e.g. a keyed transform) or ignore it (e.g. a static lookup).
   virtual ::arrow::Status EncryptCells(CryptoValueBuffer& values,
                                        const ParquetCryptoContext& ctx,
                                        std::span<const uint8_t> dek = {}) = 0;
