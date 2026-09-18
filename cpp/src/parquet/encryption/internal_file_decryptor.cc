@@ -99,6 +99,12 @@ int32_t Decryptor::DecryptWithManagedBuffer(
                                                        std::move(encoding_properties));
 }
 
+bool Decryptor::VerifyFooterSignature(std::span<const uint8_t> footer,
+                                      std::span<const uint8_t> stored_signature) {
+  return decryptor_instance_->VerifyFooterSignature(footer, stored_signature,
+                                                    str2span(aad_), key_.as_span());
+}
+
 // InternalFileDecryptor
 InternalFileDecryptor::InternalFileDecryptor(
     std::shared_ptr<FileDecryptionProperties> properties, const std::string& file_aad,

@@ -18,8 +18,10 @@
 #pragma once
 
 #include <span>
+#include <vector>
 
 #include "parquet/encryption/encoding_properties.h"
+#include "parquet/exception.h"
 #include "parquet/platform.h"
 
 namespace parquet::encryption {
@@ -79,6 +81,15 @@ class PARQUET_EXPORT EncryptorInterface {
                                       std::span<const uint8_t> aad,
                                       std::span<const uint8_t> nonce,
                                       std::span<uint8_t> encrypted_footer) = 0;
+
+  /// Compute a standalone, opaque footer-signature blob (as opposed to
+  /// SignedFooterEncrypt()'s AES-GCM tag-via-encryption mechanism). Default throws;
+  /// only implementations that don't use SignedFooterEncrypt() override this.
+  virtual std::vector<uint8_t> ComputeFooterSignature(std::span<const uint8_t> footer,
+                                                      std::span<const uint8_t> footer_aad,
+                                                      std::span<const uint8_t> dek = {}) {
+    throw ParquetException("ComputeFooterSignature is not supported by this encryptor");
+  }
 };
 
 }  // namespace parquet::encryption

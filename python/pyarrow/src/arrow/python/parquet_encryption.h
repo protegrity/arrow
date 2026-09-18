@@ -114,7 +114,8 @@ class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyKmsClientFactory
 
 /// \brief A table of function pointers for calling from C++ into Python for a
 /// block-path ParquetCryptoProvider. Typed-value (cell path) callbacks are not
-/// yet bound to Python, so only encrypt_block/decrypt_block are declared here.
+/// yet bound to Python, so only the block and footer-signing paths are declared
+/// here.
 class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyParquetCryptoProviderVtable {
  public:
   std::function<void(PyObject*, const std::string& plaintext,
@@ -127,10 +128,21 @@ class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyParquetCryptoProviderVtable {
                      const std::string& app_context, const std::string& module_aad,
                      const std::string& dek, std::string* out)>
       decrypt_block;
+  std::function<void(PyObject*, const std::string& footer_bytes,
+                     const std::string& key_metadata, const std::string& column_path,
+                     const std::string& app_context, const std::string& footer_aad,
+                     const std::string& dek, std::string* out)>
+      sign_footer;
+  std::function<void(PyObject*, const std::string& footer_bytes,
+                     const std::string& stored_signature, const std::string& key_metadata,
+                     const std::string& column_path, const std::string& app_context,
+                     const std::string& footer_aad, const std::string& dek, bool* out)>
+      verify_footer_signature;
 };
 
 /// \brief A helper for ParquetCryptoProvider implementation in Python. Only the
-/// block path (EncryptBlock/DecryptBlock) is exposed; SupportsTypedValues() always
+/// block path (EncryptBlock/DecryptBlock) and footer signing
+/// (SignFooter/VerifyFooterSignature) are exposed; SupportsTypedValues() always
 /// returns false, so Arrow never calls EncryptCells()/DecryptCells() on this class.
 class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyParquetCryptoProvider
     : public ::parquet::ParquetCryptoProvider {
@@ -155,6 +167,16 @@ class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyParquetCryptoProvider
   arrow::Status DecryptCells(::parquet::CryptoValueBuffer& values,
                              const ::parquet::ParquetCryptoContext& ctx,
                              std::span<const uint8_t> dek = {}) override;
+
+  arrow::Result<std::vector<uint8_t>> SignFooter(
+      std::span<const uint8_t> footer_bytes, const ::parquet::ParquetCryptoContext& ctx,
+      std::span<const uint8_t> footer_aad, std::span<const uint8_t> dek = {}) override;
+
+  arrow::Result<bool> VerifyFooterSignature(std::span<const uint8_t> footer_bytes,
+                                            std::span<const uint8_t> stored_signature,
+                                            const ::parquet::ParquetCryptoContext& ctx,
+                                            std::span<const uint8_t> footer_aad,
+                                            std::span<const uint8_t> dek = {}) override;
 
  private:
   OwnedRefNoGIL handler_;

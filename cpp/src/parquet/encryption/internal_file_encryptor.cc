@@ -24,6 +24,7 @@
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/encryption_utils.h"
+#include "parquet/encryption/parquet_crypto_provider_adapter_internal.h"
 #include "parquet/exception.h"
 
 using arrow::util::SecureString;
@@ -83,6 +84,11 @@ int32_t Encryptor::EncryptWithManagedBuffer(
   return encryptor_instance_->EncryptWithManagedBuffer(plaintext, ciphertext,
                                                        str2span(aad_), key_.as_span(),
                                                        std::move(encoding_properties));
+}
+
+std::vector<uint8_t> Encryptor::ComputeFooterSignature(std::span<const uint8_t> footer) {
+  return encryptor_instance_->ComputeFooterSignature(footer, str2span(aad_),
+                                                     key_.as_span());
 }
 
 std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_type) {

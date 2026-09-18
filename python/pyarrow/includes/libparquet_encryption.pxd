@@ -83,6 +83,12 @@ ctypedef void CallbackEncryptBlock(
 ctypedef void CallbackDecryptBlock(
     object, const c_string&, const c_string&, const c_string&,
     const c_string&, const c_string&, const c_string&, c_string*)
+ctypedef void CallbackSignFooter(
+    object, const c_string&, const c_string&, const c_string&,
+    const c_string&, const c_string&, const c_string&, c_string*)
+ctypedef void CallbackVerifyFooterSignature(
+    object, const c_string&, const c_string&, const c_string&, const c_string&,
+    const c_string&, const c_string&, const c_string&, c_bool*)
 
 cdef extern from "parquet/encryption/crypto_factory.h" \
         namespace "parquet::encryption" nogil:
@@ -228,6 +234,8 @@ cdef extern from "arrow/python/parquet_encryption.h" \
         CPyParquetCryptoProviderVtable()
         function[CallbackEncryptBlock] encrypt_block
         function[CallbackDecryptBlock] decrypt_block
+        function[CallbackSignFooter] sign_footer
+        function[CallbackVerifyFooterSignature] verify_footer_signature
 
     cdef cppclass CPyParquetCryptoProvider\
             " arrow::py::parquet::encryption::PyParquetCryptoProvider"(

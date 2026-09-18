@@ -20,6 +20,7 @@
 #include <span>
 
 #include "parquet/encryption/encoding_properties.h"
+#include "parquet/exception.h"
 #include "parquet/platform.h"
 
 namespace parquet::encryption {
@@ -79,6 +80,17 @@ class PARQUET_EXPORT DecryptorInterface {
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
+
+  /// Verify a standalone, opaque footer-signature blob produced by
+  /// EncryptorInterface::ComputeFooterSignature() (as opposed to recomputing and
+  /// comparing SignedFooterEncrypt()'s AES-GCM tag). Default throws; only
+  /// implementations that don't use SignedFooterEncrypt() override this.
+  virtual bool VerifyFooterSignature(std::span<const uint8_t> footer,
+                                     std::span<const uint8_t> stored_signature,
+                                     std::span<const uint8_t> footer_aad,
+                                     std::span<const uint8_t> dek = {}) {
+    throw ParquetException("VerifyFooterSignature is not supported by this decryptor");
+  }
 };
 
 }  // namespace parquet::encryption

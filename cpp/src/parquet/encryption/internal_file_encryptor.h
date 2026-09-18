@@ -21,6 +21,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <vector>
 
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/encryption/encryption.h"
@@ -55,6 +56,13 @@ class PARQUET_EXPORT Encryptor {
   int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
+
+  // Signs a plaintext (PAR1-mode) footer, returning an opaque signature blob to
+  // write alongside the plaintext footer bytes. `footer_aad` (CreateFooterAad()'s
+  // result) is already stored as aad_ from construction. Only encryptors that
+  // override EncryptorInterface::ComputeFooterSignature() support this (currently
+  // just the vendor adapter); others throw.
+  std::vector<uint8_t> ComputeFooterSignature(std::span<const uint8_t> footer);
 
   /// After the column_writer writes a dictionary or a data page, this method will
   /// be called so that each encryptor can provide any encryptor-specific column

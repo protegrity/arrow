@@ -155,6 +155,34 @@ class PARQUET_EXPORT ParquetCryptoProvider {
   virtual ::arrow::Status DecryptCells(CryptoValueBuffer& values,
                                        const ParquetCryptoContext& ctx,
                                        std::span<const uint8_t> dek = {}) = 0;
+
+  /// Sign a plaintext (PAR1-mode) footer, or recompute the same signature to verify it.
+  /// Not related to EncryptorInterface::SignedFooterEncrypt() (the AES-GCM path's
+  /// tag-via-encryption mechanism) -- this is a real, standalone signature primitive.
+  ///
+  /// \param footer_bytes The serialized Thrift footer bytes (plaintext).
+  /// \param ctx Identifies this as a footer-signing call (column_path empty).
+  /// \param footer_aad Arrow-computed positional binding (file AAD), analogous to
+  ///     EncryptBlock's module_aad. Implementations MUST bind this into the
+  ///     signature to prevent a signature computed for one file being replayed
+  ///     onto another file sharing the same key.
+  /// \param dek The footer-signing key, forwarded unconditionally by Arrow.
+  virtual ::arrow::Result<std::vector<uint8_t>> SignFooter(
+      std::span<const uint8_t> footer_bytes, const ParquetCryptoContext& ctx,
+      std::span<const uint8_t> footer_aad, std::span<const uint8_t> dek = {}) = 0;
+
+  /// Verify a stored footer signature. Implementations MUST use a constant-time
+  /// comparison -- a data-dependent-time comparison is a timing side-channel.
+  ///
+  /// \param footer_bytes The serialized Thrift footer bytes read from disk.
+  /// \param stored_signature Exactly the blob SignFooter() returned at write time.
+  /// \param ctx Same value SignFooter() received for this file.
+  /// \param footer_aad Same value SignFooter() received for this file.
+  /// \param dek Same value SignFooter() received for this file.
+  virtual ::arrow::Result<bool> VerifyFooterSignature(
+      std::span<const uint8_t> footer_bytes, std::span<const uint8_t> stored_signature,
+      const ParquetCryptoContext& ctx, std::span<const uint8_t> footer_aad,
+      std::span<const uint8_t> dek = {}) = 0;
 };
 
 }  // namespace parquet

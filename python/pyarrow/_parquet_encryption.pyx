@@ -666,8 +666,9 @@ cdef class KmsClient(_Weakrefable):
 cdef class ParquetCryptoProvider(_Weakrefable):
     """The abstract base class for external ParquetCryptoProvider implementations.
 
-    Only the block path (encrypt_block/decrypt_block) is currently exposed;
-    typed-value (cell) callbacks are not yet bound to Python.
+    Only the block path (encrypt_block/decrypt_block) and footer signing
+    (sign_footer/verify_footer_signature) are currently exposed; typed-value
+    (cell) callbacks are not yet bound to Python.
     """
     cdef:
         shared_ptr[CParquetCryptoProvider] provider
@@ -681,6 +682,8 @@ cdef class ParquetCryptoProvider(_Weakrefable):
 
         vtable.encrypt_block = _cb_encrypt_block
         vtable.decrypt_block = _cb_decrypt_block
+        vtable.sign_footer = _cb_sign_footer
+        vtable.verify_footer_signature = _cb_verify_footer_signature
 
         self.provider.reset(new CPyParquetCryptoProvider(self, vtable))
 
@@ -693,6 +696,17 @@ cdef class ParquetCryptoProvider(_Weakrefable):
     def decrypt_block(self, ciphertext, key_metadata, column_path,
                       app_context, module_aad, dek):
         """Decrypt a raw module block. Must return bytes."""
+        raise NotImplementedError()
+
+    def sign_footer(self, footer_bytes, key_metadata, column_path,
+                   app_context, footer_aad, dek):
+        """Sign a plaintext (plaintext_footer=True) footer. Must return bytes --
+        an opaque signature blob verified later via verify_footer_signature."""
+        raise NotImplementedError()
+
+    def verify_footer_signature(self, footer_bytes, stored_signature, key_metadata,
+                                column_path, app_context, footer_aad, dek):
+        """Verify a stored plaintext-footer signature. Must return bool."""
         raise NotImplementedError()
 
     cdef inline shared_ptr[CParquetCryptoProvider] unwrap(self) nogil:
@@ -732,6 +746,41 @@ cdef void _cb_decrypt_block(
     if not isinstance(result, bytes):
         raise TypeError("decrypt_block must return bytes")
     out[0] = <c_string>result
+
+
+cdef void _cb_sign_footer(
+        handler, const c_string& footer_bytes, const c_string& key_metadata,
+        const c_string& column_path,
+        const c_string& app_context, const c_string& footer_aad,
+        const c_string& dek, c_string* out) except *:
+    cdef bytes footer_bytes_bytes = footer_bytes
+    cdef bytes footer_aad_bytes = footer_aad
+    cdef bytes dek_bytes = dek
+    result = handler.sign_footer(
+        footer_bytes_bytes, frombytes(key_metadata), frombytes(column_path),
+        frombytes(app_context), footer_aad_bytes,
+        dek_bytes)
+    if not isinstance(result, bytes):
+        raise TypeError("sign_footer must return bytes")
+    out[0] = <c_string>result
+
+
+cdef void _cb_verify_footer_signature(
+        handler, const c_string& footer_bytes, const c_string& stored_signature,
+        const c_string& key_metadata, const c_string& column_path,
+        const c_string& app_context, const c_string& footer_aad,
+        const c_string& dek, c_bool* out) except *:
+    cdef bytes footer_bytes_bytes = footer_bytes
+    cdef bytes stored_signature_bytes = stored_signature
+    cdef bytes footer_aad_bytes = footer_aad
+    cdef bytes dek_bytes = dek
+    result = handler.verify_footer_signature(
+        footer_bytes_bytes, stored_signature_bytes, frombytes(key_metadata),
+        frombytes(column_path), frombytes(app_context), footer_aad_bytes,
+        dek_bytes)
+    if not isinstance(result, bool):
+        raise TypeError("verify_footer_signature must return bool")
+    out[0] = <c_bool>result
 
 
 # Callback definition for CPyKmsClientFactoryVtable

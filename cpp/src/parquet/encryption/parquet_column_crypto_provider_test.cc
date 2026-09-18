@@ -25,6 +25,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <set>
@@ -455,17 +456,11 @@ TEST_F(ParquetColumnCryptoProviderTest, PerColumnEncryptionAddsExternalColumn) {
   EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
 }
 
-// Known gap: plaintext-footer signing does not yet call the provider's real
-// signing path (see the comment below).
-
-// plaintext_footer=true with a ParquetCryptoProvider. Encrypt writes the
-// footer via the normal EncryptWithManagedBuffer() block path and slices its output
-// as if it were AES-GCM's [4B length | 12B nonce | ciphertext | 16B tag] framing --
-// see FileMetaDataImpl::WriteTo() -- so the "signature" bytes it stores are whatever
-// the provider's ciphertext happens to contain at those offsets, not a real
-// signature. This test observes what actually happens today; update it once
-// plaintext-footer signing is taught to call the provider's real signing path.
-TEST_F(ParquetColumnCryptoProviderTest, PlaintextFooterWithProviderNotYetSupported) {
+// plaintext_footer=true with a ParquetCryptoProvider: the footer is signed via
+// ParquetCryptoProvider::SignFooter() (an opaque blob, XOR'd with
+// footer_aad||footer for this mock provider) and verified via
+// VerifyFooterSignature() -- no AES-GCM byte-offset assumptions in metadata.cc.
+TEST_F(ParquetColumnCryptoProviderTest, PlaintextFooterSigningRoundTrip) {
   auto provider = std::make_shared<XorBlockCryptoProvider>();
 
   ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
@@ -485,11 +480,48 @@ TEST_F(ParquetColumnCryptoProviderTest, PlaintextFooterWithProviderNotYetSupport
       kms_config_, dec_config, provider);
   ASSERT_NE(decryption_props, nullptr);
 
-  // The footer signature was never computed by a real signing operation, so
-  // verification is expected to fail -- pinning this as a known gap rather than
-  // silently accepting unverified footer integrity.
+  // A real signature computed by the provider verifies successfully.
   FileDecryptor decryptor;
-  EXPECT_ANY_THROW(decryptor.DecryptFile(file_path, decryption_props));
+  EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
+}
+
+// A corrupted footer signature is rejected rather than silently accepted --
+// proves VerifyFooterSignature() (not just its absence) is actually enforced.
+TEST_F(ParquetColumnCryptoProviderTest, PlaintextFooterTamperedSignatureThrows) {
+  auto provider = std::make_shared<XorBlockCryptoProvider>();
+
+  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
+  enc_config.column_keys = BuildColumnKeyMapping();
+  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+  enc_config.plaintext_footer = true;
+  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
+      kms_config_, enc_config, provider);
+  ASSERT_NE(encryption_props, nullptr);
+
+  const std::string file_path = TempFilePath("plaintext_footer_tampered.parquet");
+  FileEncryptor encryptor;
+  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
+
+  // Flip the last byte of the file (part of the signature blob, which sits after
+  // the plaintext footer and before the trailing 8-byte length+magic trailer).
+  {
+    std::fstream f(file_path, std::ios::in | std::ios::out | std::ios::binary);
+    ASSERT_TRUE(f.is_open());
+    f.seekg(-9, std::ios::end);
+    char byte;
+    f.read(&byte, 1);
+    byte = static_cast<char>(static_cast<uint8_t>(byte) ^ 0xFF);
+    f.seekp(-9, std::ios::end);
+    f.write(&byte, 1);
+  }
+
+  ExternalDecryptionConfiguration dec_config;
+  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
+      kms_config_, dec_config, provider);
+  ASSERT_NE(decryption_props, nullptr);
+
+  FileDecryptor decryptor;
+  EXPECT_THROW(decryptor.DecryptFile(file_path, decryption_props), ParquetException);
 }
 
 // Validation and error handling: invalid configurations and provider errors
@@ -606,6 +638,19 @@ class FailingBlockCryptoProvider : public ParquetCryptoProvider {
   ::arrow::Status DecryptCells(CryptoValueBuffer&, const ParquetCryptoContext&,
                                std::span<const uint8_t>) override {
     return ::arrow::Status::NotImplemented("block-path-only provider");
+  }
+  ::arrow::Result<std::vector<uint8_t>> SignFooter(std::span<const uint8_t>,
+                                                   const ParquetCryptoContext&,
+                                                   std::span<const uint8_t>,
+                                                   std::span<const uint8_t>) override {
+    return ::arrow::Status::IOError("injected SignFooter failure");
+  }
+  ::arrow::Result<bool> VerifyFooterSignature(std::span<const uint8_t>,
+                                              std::span<const uint8_t>,
+                                              const ParquetCryptoContext&,
+                                              std::span<const uint8_t>,
+                                              std::span<const uint8_t>) override {
+    return ::arrow::Status::IOError("injected VerifyFooterSignature failure");
   }
 };
 }  // namespace

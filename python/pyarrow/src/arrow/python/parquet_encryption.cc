@@ -131,6 +131,41 @@ arrow::Status PyParquetCryptoProvider::DecryptCells(
       "returns false); DecryptCells is unreachable.");
 }
 
+// Unlike EncryptCells/DecryptCells, this is reachable whenever plaintext_footer=true
+// is used with this provider -- there is no SupportsTypedValues()-style gate.
+arrow::Result<std::vector<uint8_t>> PyParquetCryptoProvider::SignFooter(
+    std::span<const uint8_t> footer_bytes, const ::parquet::ParquetCryptoContext& ctx,
+    std::span<const uint8_t> footer_aad, std::span<const uint8_t> dek) {
+  std::string out;
+  RETURN_NOT_OK(SafeCallIntoPython([&]() -> Status {
+    vtable_.sign_footer(handler_.obj(),
+                        std::string(footer_bytes.begin(), footer_bytes.end()),
+                        ctx.key_metadata, ctx.column_path, ctx.app_context,
+                        std::string(footer_aad.begin(), footer_aad.end()),
+                        std::string(dek.begin(), dek.end()), &out);
+    return CheckPyError();
+  }));
+  return std::vector<uint8_t>(out.begin(), out.end());
+}
+
+// Unreachable for the same reason SignFooter() can't be dismissed as dead code.
+arrow::Result<bool> PyParquetCryptoProvider::VerifyFooterSignature(
+    std::span<const uint8_t> footer_bytes, std::span<const uint8_t> stored_signature,
+    const ::parquet::ParquetCryptoContext& ctx, std::span<const uint8_t> footer_aad,
+    std::span<const uint8_t> dek) {
+  bool out = false;
+  RETURN_NOT_OK(SafeCallIntoPython([&]() -> Status {
+    vtable_.verify_footer_signature(
+        handler_.obj(), std::string(footer_bytes.begin(), footer_bytes.end()),
+        std::string(stored_signature.begin(), stored_signature.end()), ctx.key_metadata,
+        ctx.column_path, ctx.app_context,
+        std::string(footer_aad.begin(), footer_aad.end()),
+        std::string(dek.begin(), dek.end()), &out);
+    return CheckPyError();
+  }));
+  return out;
+}
+
 arrow::Result<std::shared_ptr<::parquet::FileEncryptionProperties>>
 PyCryptoFactory::SafeGetFileEncryptionProperties(
     const ::parquet::encryption::KmsConnectionConfig& kms_connection_config,

@@ -138,9 +138,17 @@ int32_t ParquetCryptoProviderEncryptorAdapter::SignedFooterEncrypt(
     std::span<const uint8_t> aad, std::span<const uint8_t> nonce,
     std::span<uint8_t> encrypted_footer) {
   throw ParquetException(
-      "ParquetCryptoProviderEncryptorAdapter::SignedFooterEncrypt is not implemented: "
-      "provider "
-      "footer signing is a future extension, not yet dispatched to this adapter");
+      "ParquetCryptoProviderEncryptorAdapter::SignedFooterEncrypt is unreachable: "
+      "footer signing is routed to the provider via ComputeFooterSignature() instead");
+}
+
+std::vector<uint8_t> ParquetCryptoProviderEncryptorAdapter::ComputeFooterSignature(
+    std::span<const uint8_t> footer, std::span<const uint8_t> footer_aad,
+    std::span<const uint8_t> dek) {
+  std::vector<uint8_t> signature;
+  PARQUET_ASSIGN_OR_THROW(signature,
+                          provider_->SignFooter(footer, ctx_, footer_aad, dek));
+  return signature;
 }
 
 ParquetCryptoProviderDecryptorAdapter::ParquetCryptoProviderDecryptorAdapter(
@@ -200,6 +208,15 @@ int32_t ParquetCryptoProviderDecryptorAdapter::DecryptWithManagedBuffer(
                                          /*shrink_to_fit=*/false));
   std::memcpy(plaintext->mutable_data(), result_bytes.data(), result_bytes.size());
   return static_cast<int32_t>(result_bytes.size());
+}
+
+bool ParquetCryptoProviderDecryptorAdapter::VerifyFooterSignature(
+    std::span<const uint8_t> footer, std::span<const uint8_t> stored_signature,
+    std::span<const uint8_t> footer_aad, std::span<const uint8_t> dek) {
+  bool ok;
+  PARQUET_ASSIGN_OR_THROW(ok, provider_->VerifyFooterSignature(footer, stored_signature,
+                                                               ctx_, footer_aad, dek));
+  return ok;
 }
 
 }  // namespace parquet

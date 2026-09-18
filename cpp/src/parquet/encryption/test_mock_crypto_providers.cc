@@ -17,6 +17,8 @@
 
 #include "parquet/encryption/test_mock_crypto_providers.h"
 
+#include <algorithm>
+
 #include "parquet/exception.h"
 
 namespace parquet::encryption::test {
@@ -68,6 +70,26 @@ constexpr uint8_t kXorKey = 0xAB;
   return ::arrow::Status::NotImplemented(
       "XorBlockCryptoProvider::DecryptCells is unreachable: SupportsTypedValues() "
       "always returns false");
+}
+
+::arrow::Result<std::vector<uint8_t>> XorBlockCryptoProvider::SignFooter(
+    std::span<const uint8_t> footer_bytes, const ParquetCryptoContext& ctx,
+    std::span<const uint8_t> footer_aad, std::span<const uint8_t> dek) {
+  std::vector<uint8_t> signature;
+  signature.reserve(footer_aad.size() + footer_bytes.size());
+  for (uint8_t b : footer_aad) signature.push_back(b ^ kXorKey);
+  for (uint8_t b : footer_bytes) signature.push_back(b ^ kXorKey);
+  return signature;
+}
+
+::arrow::Result<bool> XorBlockCryptoProvider::VerifyFooterSignature(
+    std::span<const uint8_t> footer_bytes, std::span<const uint8_t> stored_signature,
+    const ParquetCryptoContext& ctx, std::span<const uint8_t> footer_aad,
+    std::span<const uint8_t> dek) {
+  ARROW_ASSIGN_OR_RAISE(std::vector<uint8_t> recomputed,
+                        SignFooter(footer_bytes, ctx, footer_aad, dek));
+  return recomputed.size() == stored_signature.size() &&
+         std::equal(recomputed.begin(), recomputed.end(), stored_signature.begin());
 }
 
 std::vector<ParquetCryptoContext> XorBlockCryptoProvider::seen_contexts() const {
@@ -136,6 +158,26 @@ void XorBlockCryptoProvider::RecordCall(const ParquetCryptoContext& ctx,
     }
   }
   return ::arrow::Status::OK();
+}
+
+::arrow::Result<std::vector<uint8_t>> XorCellCryptoProvider::SignFooter(
+    std::span<const uint8_t> footer_bytes, const ParquetCryptoContext& ctx,
+    std::span<const uint8_t> footer_aad, std::span<const uint8_t> dek) {
+  std::vector<uint8_t> signature;
+  signature.reserve(footer_aad.size() + footer_bytes.size());
+  for (uint8_t b : footer_aad) signature.push_back(b ^ kXorKey);
+  for (uint8_t b : footer_bytes) signature.push_back(b ^ kXorKey);
+  return signature;
+}
+
+::arrow::Result<bool> XorCellCryptoProvider::VerifyFooterSignature(
+    std::span<const uint8_t> footer_bytes, std::span<const uint8_t> stored_signature,
+    const ParquetCryptoContext& ctx, std::span<const uint8_t> footer_aad,
+    std::span<const uint8_t> dek) {
+  ARROW_ASSIGN_OR_RAISE(std::vector<uint8_t> recomputed,
+                        SignFooter(footer_bytes, ctx, footer_aad, dek));
+  return recomputed.size() == stored_signature.size() &&
+         std::equal(recomputed.begin(), recomputed.end(), stored_signature.begin());
 }
 
 }  // namespace parquet::encryption::test

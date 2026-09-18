@@ -831,6 +831,15 @@ class FileMetaData::FileMetaDataImpl {
     if (file_decryptor_ == nullptr) {
       throw ParquetException("Decryption not set properly. cannot verify signature");
     }
+    if (is_encryption_algorithm_set() &&
+        encryption_algorithm().algorithm == ParquetCipher::EXTERNAL_PROTECT_V1) {
+      throw ParquetException(
+          "FileMetaData::VerifySignature(const void*) cannot verify an "
+          "EXTERNAL_PROTECT_V1 footer signature: its length is vendor-defined and "
+          "not known to this deprecated, length-less API. Read the file through "
+          "ParquetFileReader/parquet::arrow::FileReader instead, which verifies the "
+          "signature internally.");
+    }
     // serialize the footer
     ThriftSerializer serializer;
     auto serialized_data_span = serializer.SerializeToBuffer(metadata_.get());
@@ -889,6 +898,22 @@ class FileMetaData::FileMetaDataImpl {
     // encryption_algorithm is set in footer
     if (is_encryption_algorithm_set()) {
       const auto serialized_data_span = serializer.SerializeToBuffer(metadata_.get());
+
+      if (FromThrift(metadata_->encryption_algorithm).algorithm ==
+          ParquetCipher::EXTERNAL_PROTECT_V1) {
+        // Vendor-defined opaque signature blob -- no assumed byte layout here,
+        // unlike the AES-GCM-specific nonce/tag slicing below. (encryption_algorithm()
+        // isn't usable here: it's non-const, and WriteTo() is a const method.)
+        std::vector<uint8_t> signature =
+            encryptor->ComputeFooterSignature(serialized_data_span);
+        PARQUET_THROW_NOT_OK(
+            dst->Write(serialized_data_span.data(),
+                       static_cast<int64_t>(serialized_data_span.size())));
+        PARQUET_THROW_NOT_OK(
+            dst->Write(signature.data(), static_cast<int64_t>(signature.size())));
+        return;
+      }
+
       const auto serialized_data_len = static_cast<int64_t>(serialized_data_span.size());
 
       // encrypt the footer key
@@ -1213,6 +1238,14 @@ bool FileMetaData::VerifySignature(std::span<const uint8_t> serialized_metadata,
                                    std::span<const uint8_t> signature,
                                    InternalFileDecryptor* file_decryptor) {
   DCHECK_NE(file_decryptor, nullptr);
+
+  if (file_decryptor->algorithm() == ParquetCipher::EXTERNAL_PROTECT_V1) {
+    // Vendor-defined opaque signature blob -- delegates to the vendor provider via
+    // Decryptor::VerifyFooterSignature() rather than assuming an AES-GCM nonce+tag
+    // layout, unlike the fixed-size-signature path below.
+    auto decryptor = file_decryptor->GetFooterDecryptor();
+    return decryptor->VerifyFooterSignature(serialized_metadata, signature);
+  }
 
   // In plaintext footer, the "signature" is the concatenation of the nonce used
   // for GCM encryption, and the authentication tag obtained after GCM encryption.

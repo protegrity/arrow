@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <span>
+#include <vector>
 
 #include "parquet/encryption/decryptor_interface.h"
 #include "parquet/encryption/encryptor_interface.h"
@@ -81,12 +82,20 @@ class PARQUET_EXPORT ParquetCryptoProviderEncryptorAdapter
       std::unique_ptr<encryption::EncodingProperties> encoding_properties =
           nullptr) override;
 
-  // Footer signing is not yet routed to the provider (future extension); unreachable
-  // until that lands.
+  // AES-GCM-shaped (explicit nonce, fixed output); footer signing is routed to the
+  // provider via ComputeFooterSignature() below instead, so this is unreachable.
   int32_t SignedFooterEncrypt(std::span<const uint8_t> footer,
                               std::span<const uint8_t> key, std::span<const uint8_t> aad,
                               std::span<const uint8_t> nonce,
                               std::span<uint8_t> encrypted_footer) override;
+
+  // Delegates to provider_->SignFooter(), converting its Result<> into the
+  // throw-based EncryptorInterface convention via PARQUET_ASSIGN_OR_THROW. Named
+  // ComputeFooterSignature() (not SignFooter()) at this interface layer to stay
+  // visually distinct from AesEncryptor's SignedFooterEncrypt() in the same header.
+  std::vector<uint8_t> ComputeFooterSignature(std::span<const uint8_t> footer,
+                                              std::span<const uint8_t> footer_aad,
+                                              std::span<const uint8_t> dek = {}) override;
 
  private:
   // True only when dispatch_module_type_ is kDataPage/kDictionaryPage and the
@@ -155,6 +164,13 @@ class PARQUET_EXPORT ParquetCryptoProviderDecryptorAdapter
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<encryption::EncodingProperties> encoding_properties =
           nullptr) override;
+
+  // Delegates to provider_->VerifyFooterSignature(), converting its Result<> into
+  // the throw-based DecryptorInterface convention.
+  bool VerifyFooterSignature(std::span<const uint8_t> footer,
+                             std::span<const uint8_t> stored_signature,
+                             std::span<const uint8_t> footer_aad,
+                             std::span<const uint8_t> dek = {}) override;
 
  private:
   // Reads the 4-byte little-endian length prefix EncryptWithManagedBuffer() wrote

@@ -60,6 +60,12 @@ class PARQUET_EXPORT Decryptor {
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
 
+  // Verifies a stored plaintext-footer (PAR1-mode) signature by recomputing it and
+  // comparing (constant-time, done inside decryptor_instance_). `footer_aad`
+  // (CreateFooterAad()'s result) is already stored as aad_ from construction.
+  bool VerifyFooterSignature(std::span<const uint8_t> footer,
+                             std::span<const uint8_t> stored_signature);
+
  private:
   std::unique_ptr<encryption::DecryptorInterface> decryptor_instance_;
   ::arrow::util::SecureString key_;

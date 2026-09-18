@@ -48,6 +48,19 @@ class XorBlockCryptoProvider : public ParquetCryptoProvider {
   ::arrow::Status DecryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
                                std::span<const uint8_t> dek) override;
 
+  // XORs footer_aad||footer with the same fixed key as EncryptBlock(); no nonce
+  // needed since XOR is deterministic (mirrors HMAC's determinism, not GCM's).
+  ::arrow::Result<std::vector<uint8_t>> SignFooter(std::span<const uint8_t> footer_bytes,
+                                                   const ParquetCryptoContext& ctx,
+                                                   std::span<const uint8_t> footer_aad,
+                                                   std::span<const uint8_t> dek) override;
+
+  ::arrow::Result<bool> VerifyFooterSignature(std::span<const uint8_t> footer_bytes,
+                                              std::span<const uint8_t> stored_signature,
+                                              const ParquetCryptoContext& ctx,
+                                              std::span<const uint8_t> footer_aad,
+                                              std::span<const uint8_t> dek) override;
+
   [[nodiscard]] int encrypt_block_calls() const { return encrypt_block_calls_.load(); }
   [[nodiscard]] int decrypt_block_calls() const { return decrypt_block_calls_.load(); }
   [[nodiscard]] int encrypt_cells_calls() const { return encrypt_cells_calls_.load(); }
@@ -102,6 +115,19 @@ class XorCellCryptoProvider : public ParquetCryptoProvider {
 
   ::arrow::Status DecryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
                                std::span<const uint8_t> dek) override;
+
+  // Not exercised by any test today (footer signing is dispatched independently of
+  // SupportsTypedValues()); provided only so this class remains instantiable.
+  ::arrow::Result<std::vector<uint8_t>> SignFooter(std::span<const uint8_t> footer_bytes,
+                                                   const ParquetCryptoContext& ctx,
+                                                   std::span<const uint8_t> footer_aad,
+                                                   std::span<const uint8_t> dek) override;
+
+  ::arrow::Result<bool> VerifyFooterSignature(std::span<const uint8_t> footer_bytes,
+                                              std::span<const uint8_t> stored_signature,
+                                              const ParquetCryptoContext& ctx,
+                                              std::span<const uint8_t> footer_aad,
+                                              std::span<const uint8_t> dek) override;
 
   [[nodiscard]] int encrypt_cells_calls() const { return encrypt_cells_calls_.load(); }
   [[nodiscard]] int decrypt_cells_calls() const { return decrypt_cells_calls_.load(); }

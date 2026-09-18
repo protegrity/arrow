@@ -62,6 +62,20 @@ class NoOpParquetCryptoProvider : public ParquetCryptoProvider {
                                std::span<const uint8_t> dek) override {
     return ::arrow::Status::OK();
   }
+
+  ::arrow::Result<std::vector<uint8_t>> SignFooter(
+      std::span<const uint8_t> footer_bytes, const ParquetCryptoContext& ctx,
+      std::span<const uint8_t> footer_aad, std::span<const uint8_t> dek) override {
+    return std::vector<uint8_t>(footer_bytes.begin(), footer_bytes.end());
+  }
+
+  ::arrow::Result<bool> VerifyFooterSignature(std::span<const uint8_t> footer_bytes,
+                                              std::span<const uint8_t> stored_signature,
+                                              const ParquetCryptoContext& ctx,
+                                              std::span<const uint8_t> footer_aad,
+                                              std::span<const uint8_t> dek) override {
+    return true;
+  }
 };
 }  // namespace
 
