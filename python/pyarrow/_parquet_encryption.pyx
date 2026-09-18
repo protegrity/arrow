@@ -699,7 +699,7 @@ cdef class ParquetCryptoProvider(_Weakrefable):
         raise NotImplementedError()
 
     def sign_footer(self, footer_bytes, key_metadata, column_path,
-                   app_context, footer_aad, dek):
+                    app_context, footer_aad, dek):
         """Sign a plaintext (plaintext_footer=True) footer. Must return bytes --
         an opaque signature blob verified later via verify_footer_signature."""
         raise NotImplementedError()
