@@ -61,6 +61,9 @@ class PARQUET_EXPORT EncodingProperties {
   [[nodiscard]] parquet::Type::type GetPhysicalType() const {
     return physical_type_.value();
   }
+  [[nodiscard]] int64_t GetFixedLengthBytes() const {
+    return fixed_length_bytes_.value();
+  }
   [[nodiscard]] ::arrow::Compression::type GetCompressionCodec() const {
     return compression_codec_.value();
   }

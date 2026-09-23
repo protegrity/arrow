@@ -17,7 +17,7 @@
 //
 // Covers ParquetPageDecoder::SplitAndDecompressDataPageV2() (the levels/values
 // buffer-framing step), Decompress()'s rep/def level decoding, and value decoding
-// for PLAIN-encoded fixed-width numeric physical types. BOOLEAN/FIXED_LEN_BYTE_ARRAY/
+// for PLAIN-encoded fixed-width physical types (numeric, BOOLEAN, FIXED_LEN_BYTE_ARRAY).
 // BYTE_ARRAY value decode and Recompress() remain unimplemented.
 
 #include <cstdint>
@@ -28,9 +28,12 @@
 
 #include <gtest/gtest.h>
 
+#include "arrow/buffer.h"
 #include "arrow/testing/gtest_util.h"
+#include "arrow/util/bit_util.h"
 #include "arrow/util/compression.h"
 #include "parquet/column_writer.h"
+#include "parquet/encoding.h"
 
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/encryption/parquet_page_decoder_internal.h"
@@ -82,20 +85,23 @@ std::vector<uint8_t> EncodeLevelsRLE(const std::vector<int16_t>& levels,
 std::unique_ptr<EncodingProperties> MakeDataPageV2PropsForDecompress(
     int32_t definition_levels_byte_length, int32_t repetition_levels_byte_length,
     int64_t num_values, int16_t max_definition_level, int16_t max_repetition_level,
-    Type::type physical_type = Type::INT32) {
-  return EncodingProperties::Builder()
-      .PageType(PageType::DATA_PAGE_V2)
-      .PhysicalType(physical_type)
-      .PageEncoding(Encoding::PLAIN)
-      .CompressionCodec(::arrow::Compression::UNCOMPRESSED)
-      .PageV2DefinitionLevelsByteLength(definition_levels_byte_length)
-      .PageV2RepetitionLevelsByteLength(repetition_levels_byte_length)
-      .PageV2NumNulls(0)
-      .PageV2IsCompressed(false)
-      .DataPageNumValues(num_values)
-      .DataPageMaxDefinitionLevel(max_definition_level)
-      .DataPageMaxRepetitionLevel(max_repetition_level)
-      .Build();
+    Type::type physical_type = Type::INT32, int64_t fixed_length_bytes = 0) {
+  auto builder = EncodingProperties::Builder()
+                     .PageType(PageType::DATA_PAGE_V2)
+                     .PhysicalType(physical_type)
+                     .PageEncoding(Encoding::PLAIN)
+                     .CompressionCodec(::arrow::Compression::UNCOMPRESSED)
+                     .PageV2DefinitionLevelsByteLength(definition_levels_byte_length)
+                     .PageV2RepetitionLevelsByteLength(repetition_levels_byte_length)
+                     .PageV2NumNulls(0)
+                     .PageV2IsCompressed(false)
+                     .DataPageNumValues(num_values)
+                     .DataPageMaxDefinitionLevel(max_definition_level)
+                     .DataPageMaxRepetitionLevel(max_repetition_level);
+  if (physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
+    builder.FixedLengthBytes(fixed_length_bytes);
+  }
+  return builder.Build();
 }
 
 // PLAIN-encodes `values` the same way the on-disk format does (raw native-endian
@@ -110,6 +116,15 @@ std::vector<uint8_t> EncodeValuesPlain(const std::vector<T>& values) {
 // Kept as a named alias at existing call sites for readability.
 std::vector<uint8_t> EncodeInt32ValuesPlain(const std::vector<int32_t>& values) {
   return EncodeValuesPlain(values);
+}
+
+// PLAIN-encodes `values` via Arrow's own BooleanEncoder, matching the real
+// bit-packed (LSB-first) on-disk layout exactly -- avoids hand-rolled bit math.
+std::vector<uint8_t> EncodeBooleanValuesPlain(const std::vector<bool>& values) {
+  auto encoder = MakeTypedEncoder<BooleanType>(Encoding::PLAIN);
+  encoder->Put(values, static_cast<int>(values.size()));
+  std::shared_ptr<::arrow::Buffer> buffer = encoder->FlushValues();
+  return std::vector<uint8_t>(buffer->data(), buffer->data() + buffer->size());
 }
 
 }  // namespace
@@ -367,6 +382,69 @@ TEST(ParquetPageDecoderTest, DecompressRejectsUnsupportedPhysicalType) {
       /*num_values=*/1, /*max_definition_level=*/0, /*max_repetition_level=*/0,
       Type::BYTE_ARRAY);
   EXPECT_THROW(ParquetPageDecoder::Decompress(values, *props), ParquetException);
+}
+
+TEST(ParquetPageDecoderTest, DecompressBooleanValues) {
+  const std::vector<bool> present_values = {true, false, true, true, false};
+  std::vector<uint8_t> values = EncodeBooleanValuesPlain(present_values);
+
+  auto props = MakeDataPageV2PropsForDecompress(
+      /*definition_levels_byte_length=*/0, /*repetition_levels_byte_length=*/0,
+      /*num_values=*/5, /*max_definition_level=*/0, /*max_repetition_level=*/0,
+      Type::BOOLEAN);
+
+  TypedColumnValues result = ParquetPageDecoder::Decompress(values, *props);
+  auto decoded = std::get<std::span<uint8_t>>(result.values());
+  ASSERT_EQ(decoded.size(),
+            ::arrow::bit_util::BytesForBits(static_cast<int64_t>(present_values.size())));
+  // Byte-identical to the encoder's own output -- PLAIN BOOLEAN has zero framing
+  // overhead, so this holds independent of GetBit()'s own correctness below.
+  EXPECT_EQ(std::vector<uint8_t>(decoded.begin(), decoded.end()), values);
+  for (size_t i = 0; i < present_values.size(); ++i) {
+    EXPECT_EQ(::arrow::bit_util::GetBit(decoded.data(), static_cast<int64_t>(i)),
+              present_values[i]);
+  }
+}
+
+TEST(ParquetPageDecoderTest, DecompressBooleanValuesExcludesNulls) {
+  // OPTIONAL column: only the 3 non-null entries have bits on the wire.
+  const std::vector<int16_t> def_levels = {1, 0, 1, 0, 1};
+  std::vector<uint8_t> def_bytes = EncodeLevelsRLE(def_levels, /*max_level=*/1);
+  const std::vector<bool> present_values = {true, false, true};
+  std::vector<uint8_t> values = EncodeBooleanValuesPlain(present_values);
+
+  std::vector<uint8_t> page = def_bytes;
+  page.insert(page.end(), values.begin(), values.end());
+
+  auto props = MakeDataPageV2PropsForDecompress(
+      /*definition_levels_byte_length=*/static_cast<int32_t>(def_bytes.size()),
+      /*repetition_levels_byte_length=*/0, /*num_values=*/5,
+      /*max_definition_level=*/1, /*max_repetition_level=*/0, Type::BOOLEAN);
+
+  TypedColumnValues result = ParquetPageDecoder::Decompress(page, *props);
+  EXPECT_EQ(result.num_values(), 5);  // Logical count includes nulls.
+  auto decoded = std::get<std::span<uint8_t>>(result.values());
+  ASSERT_EQ(decoded.size(),
+            ::arrow::bit_util::BytesForBits(static_cast<int64_t>(present_values.size())));
+  for (size_t i = 0; i < present_values.size(); ++i) {
+    EXPECT_EQ(::arrow::bit_util::GetBit(decoded.data(), static_cast<int64_t>(i)),
+              present_values[i]);
+  }
+}
+
+TEST(ParquetPageDecoderTest, DecompressFixedLenByteArrayValues) {
+  const int64_t type_length = 4;
+  const std::vector<uint8_t> present_values = {0xAA, 0xBB, 0xCC, 0xDD,
+                                               0x11, 0x22, 0x33, 0x44};  // 2 values.
+
+  auto props = MakeDataPageV2PropsForDecompress(
+      /*definition_levels_byte_length=*/0, /*repetition_levels_byte_length=*/0,
+      /*num_values=*/2, /*max_definition_level=*/0, /*max_repetition_level=*/0,
+      Type::FIXED_LEN_BYTE_ARRAY, type_length);
+
+  TypedColumnValues result = ParquetPageDecoder::Decompress(present_values, *props);
+  auto decoded = std::get<std::span<uint8_t>>(result.values());
+  EXPECT_EQ(std::vector<uint8_t>(decoded.begin(), decoded.end()), present_values);
 }
 
 }  // namespace parquet::encryption::test

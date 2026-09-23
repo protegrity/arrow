@@ -21,6 +21,7 @@
 #include <limits>
 #include <utility>
 
+#include "arrow/util/bit_util.h"
 #include "arrow/util/compression.h"
 #include "arrow/util/int_util_overflow.h"
 #include "parquet/column_reader.h"
@@ -64,6 +65,52 @@ std::vector<typename DType::c_type> DecodePlainValues(
     throw ParquetException("ParquetPageDecoder: failed to decode all values");
   }
   return values;
+}
+
+// Decodes `num_non_null` PLAIN-encoded BOOLEAN values into a bit-packed buffer,
+// matching Parquet's on-disk PLAIN BOOLEAN layout exactly (LSB-first) -- no
+// unpacking to one-bool-per-byte, since CryptoValueBuffer's BOOLEAN alternative
+// is the packed span<uint8_t> itself (see parquet_crypto_provider.h).
+std::vector<uint8_t> DecodePlainBooleanValues(std::span<const uint8_t> values_bytes,
+                                              int64_t num_non_null) {
+  if (num_non_null < 0 || num_non_null > std::numeric_limits<int>::max()) {
+    throw ParquetException("ParquetPageDecoder: invalid non-null value count");
+  }
+  if (values_bytes.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    throw ParquetException("ParquetPageDecoder: values buffer too large to decode");
+  }
+  auto decoder = MakeTypedDecoder<BooleanType>(Encoding::PLAIN);
+  decoder->SetData(static_cast<int>(num_non_null), values_bytes.data(),
+                   static_cast<int>(values_bytes.size()));
+  std::vector<uint8_t> packed(
+      static_cast<size_t>(::arrow::bit_util::BytesForBits(num_non_null)));
+  int decoded = decoder->Decode(packed.data(), static_cast<int>(num_non_null));
+  if (decoded != static_cast<int>(num_non_null)) {
+    throw ParquetException("ParquetPageDecoder: failed to decode all values");
+  }
+  return packed;
+}
+
+// Copies `num_non_null * type_length` raw bytes out of `values_bytes` for a
+// FIXED_LEN_BYTE_ARRAY column. PLAIN FIXED_LEN_BYTE_ARRAY has no per-value framing
+// at all (schema-fixed width, no length prefix), so this is a straight copy rather
+// than a decoder call -- deliberately avoids FLBADecoder/DecodePlain<FixedLenByteArray>,
+// which return FixedLenByteArray structs whose `ptr` aliases the original page buffer
+// (see decoder.cc); that buffer is a local variable in Decompress() and would leave
+// CryptoValueBuffer's span dangling once this function returns.
+std::vector<uint8_t> DecodePlainFixedLenByteArrayValues(
+    std::span<const uint8_t> values_bytes, int64_t num_non_null, int64_t type_length) {
+  if (num_non_null < 0 || type_length < 0) {
+    throw ParquetException("ParquetPageDecoder: invalid FIXED_LEN_BYTE_ARRAY parameters");
+  }
+  int64_t total_bytes = 0;
+  if (::arrow::internal::MultiplyWithOverflow(num_non_null, type_length, &total_bytes) ||
+      total_bytes > static_cast<int64_t>(values_bytes.size())) {
+    throw ParquetException(
+        "ParquetPageDecoder: FIXED_LEN_BYTE_ARRAY values exceed the page buffer");
+  }
+  return std::vector<uint8_t>(values_bytes.begin(),
+                              values_bytes.begin() + static_cast<size_t>(total_bytes));
 }
 
 }  // namespace
@@ -135,10 +182,10 @@ std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
   return result;
 }
 
-// Decompress() decodes rep/def levels and, for PLAIN-encoded fixed-width numeric
-// types, the values themselves. BOOLEAN/FIXED_LEN_BYTE_ARRAY/BYTE_ARRAY value decode
-// is not yet implemented. Recompress() remains a throwing stub until value decode is
-// implemented for every physical type.
+// Decompress() decodes rep/def levels and, for PLAIN-encoded fixed-width types
+// (numeric, BOOLEAN, FIXED_LEN_BYTE_ARRAY), the values themselves. BYTE_ARRAY value
+// decode is not yet implemented. Recompress() remains a throwing stub until value
+// decode is implemented for every physical type.
 TypedColumnValues ParquetPageDecoder::Decompress(
     std::span<const uint8_t> compressed_page,
     const encryption::EncodingProperties& props) {
@@ -238,7 +285,12 @@ TypedColumnValues ParquetPageDecoder::Decompress(
           DecodePlainValues<DoubleType>(values_bytes, num_non_null));
       break;
     case Type::BOOLEAN:
+      result.SetFixedWidthValues(DecodePlainBooleanValues(values_bytes, num_non_null));
+      break;
     case Type::FIXED_LEN_BYTE_ARRAY:
+      result.SetFixedWidthValues(DecodePlainFixedLenByteArrayValues(
+          values_bytes, num_non_null, props.GetFixedLengthBytes()));
+      break;
     case Type::BYTE_ARRAY:
       throw ParquetException(
           "ParquetPageDecoder::Decompress: value decoding for this physical type is "

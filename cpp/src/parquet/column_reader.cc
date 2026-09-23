@@ -489,6 +489,9 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
     }
     if (crypto_ctx_.column_descriptor) {
       builder.PhysicalType(crypto_ctx_.column_descriptor->physical_type());
+      if (crypto_ctx_.column_descriptor->physical_type() == Type::FIXED_LEN_BYTE_ARRAY) {
+        builder.FixedLengthBytes(crypto_ctx_.column_descriptor->type_length());
+      }
     }
   } else if (page_type_from_header ==
              format::PageType::DATA_PAGE) {  // this is DataPageV1
@@ -508,6 +511,9 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
           crypto_ctx_.column_descriptor->max_definition_level());
       builder.DataPageMaxRepetitionLevel(
           crypto_ctx_.column_descriptor->max_repetition_level());
+      if (crypto_ctx_.column_descriptor->physical_type() == Type::FIXED_LEN_BYTE_ARRAY) {
+        builder.FixedLengthBytes(crypto_ctx_.column_descriptor->type_length());
+      }
     } else {
       // TODO (argmarco): handle this case.
     }
@@ -530,6 +536,9 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
           crypto_ctx_.column_descriptor->max_definition_level());
       builder.DataPageMaxRepetitionLevel(
           crypto_ctx_.column_descriptor->max_repetition_level());
+      if (crypto_ctx_.column_descriptor->physical_type() == Type::FIXED_LEN_BYTE_ARRAY) {
+        builder.FixedLengthBytes(crypto_ctx_.column_descriptor->type_length());
+      }
     } else {
       // TODO (argmarco): handle this case.
     }
