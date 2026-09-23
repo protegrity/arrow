@@ -53,8 +53,35 @@ class PARQUET_EXPORT EncodingProperties {
 
   std::map<std::string, std::string> ToPropertiesMap() const;
 
-  // Lightweight accessor to avoid building maps when only page type is needed
-  parquet::PageType::type GetPageType() const { return page_type_; }
+  // Lightweight accessors to avoid building a map when only one field is needed.
+  [[nodiscard]] parquet::PageType::type GetPageType() const { return page_type_; }
+  [[nodiscard]] parquet::Type::type GetPhysicalType() const {
+    return physical_type_.value();
+  }
+  [[nodiscard]] ::arrow::Compression::type GetCompressionCodec() const {
+    return compression_codec_.value();
+  }
+  [[nodiscard]] int64_t GetDataPageNumValues() const {
+    return data_page_num_values_.value();
+  }
+  [[nodiscard]] int16_t GetDataPageMaxDefinitionLevel() const {
+    return data_page_max_definition_level_.value();
+  }
+  [[nodiscard]] int16_t GetDataPageMaxRepetitionLevel() const {
+    return data_page_max_repetition_level_.value();
+  }
+  [[nodiscard]] int32_t GetPageV2DefinitionLevelsByteLength() const {
+    return page_v2_definition_levels_byte_length_.value();
+  }
+  [[nodiscard]] int32_t GetPageV2RepetitionLevelsByteLength() const {
+    return page_v2_repetition_levels_byte_length_.value();
+  }
+  [[nodiscard]] bool GetPageV2IsCompressed() const {
+    return page_v2_is_compressed_.value();
+  }
+  [[nodiscard]] int64_t GetPageV2UncompressedPageSize() const {
+    return page_v2_uncompressed_page_size_.value();
+  }
 
  private:
   // Private constructor for builder
@@ -112,6 +139,11 @@ class PARQUET_EXPORT EncodingProperties {
   std::optional<int32_t> page_v2_num_nulls_;
   std::optional<bool>
       page_v2_is_compressed_;  // this does not exist in V1 nor dictionary pages.
+  // Whole-page (levels + values) uncompressed size, i.e. the wire format's
+  // PageHeader.uncompressed_page_size -- needed to one-shot decompress the values
+  // portion without requiring a streaming Decompressor (not all codecs, e.g.
+  // Snappy, implement one).
+  std::optional<int64_t> page_v2_uncompressed_page_size_;
 
   //--------------------------------
   // Dictionary page properties.
@@ -154,6 +186,7 @@ class PARQUET_EXPORT EncodingPropertiesBuilder {
   EncodingPropertiesBuilder& PageV2RepetitionLevelsByteLength(int32_t byte_length);
   EncodingPropertiesBuilder& PageV2NumNulls(int32_t num_nulls);
   EncodingPropertiesBuilder& PageV2IsCompressed(bool is_compressed);
+  EncodingPropertiesBuilder& PageV2UncompressedPageSize(int64_t uncompressed_page_size);
 
   // Dictionary page properties
   EncodingPropertiesBuilder& DictPageNumValues(int32_t num_values);
@@ -189,6 +222,7 @@ class PARQUET_EXPORT EncodingPropertiesBuilder {
   std::optional<int32_t> page_v2_repetition_levels_byte_length_;
   std::optional<int32_t> page_v2_num_nulls_;
   std::optional<bool> page_v2_is_compressed_;
+  std::optional<int64_t> page_v2_uncompressed_page_size_;
 
   // Dictionary page properties
   std::optional<int32_t> dict_page_num_values_;

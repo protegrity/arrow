@@ -302,6 +302,7 @@ class SerializedPageReader : public PageReader {
       InitDecryption();
     }
     max_page_header_size_ = kDefaultMaxPageHeaderSize;
+    codec_ = codec;
     decompressor_ = GetCodec(codec);
     always_compressed_ = always_compressed;
   }
@@ -339,6 +340,7 @@ class SerializedPageReader : public PageReader {
   format::PageHeader current_page_header_;
 
   // Compression codec to use.
+  Compression::type codec_;
   std::unique_ptr<::arrow::util::Codec> decompressor_;
   std::shared_ptr<ResizableBuffer> decompression_buffer_;
 
@@ -471,6 +473,7 @@ bool SerializedPageReader::ShouldSkipPage(EncodedStatistics* data_page_statistic
 std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
     format::PageHeader& page_header) {
   EncodingPropertiesBuilder builder;
+  builder.CompressionCodec(codec_);
 
   format::PageType::type page_type_from_header = page_header.type;
 
@@ -483,6 +486,9 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
     builder.DictPageNumValues(dictionary_page_header.num_values);
     if (dictionary_page_header.__isset.is_sorted) {
       builder.DictPageIsSorted(dictionary_page_header.is_sorted);
+    }
+    if (crypto_ctx_.column_descriptor) {
+      builder.PhysicalType(crypto_ctx_.column_descriptor->physical_type());
     }
   } else if (page_type_from_header ==
              format::PageType::DATA_PAGE) {  // this is DataPageV1
@@ -497,6 +503,7 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
         ToParquetEncoding(data_page_header.repetition_level_encoding));
 
     if (crypto_ctx_.column_descriptor) {
+      builder.PhysicalType(crypto_ctx_.column_descriptor->physical_type());
       builder.DataPageMaxDefinitionLevel(
           crypto_ctx_.column_descriptor->max_definition_level());
       builder.DataPageMaxRepetitionLevel(
@@ -515,8 +522,10 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
     builder.PageV2RepetitionLevelsByteLength(
         data_page_header_v2.repetition_levels_byte_length);
     builder.PageV2IsCompressed(data_page_header_v2.is_compressed);
+    builder.PageV2UncompressedPageSize(page_header.uncompressed_page_size);
 
     if (crypto_ctx_.column_descriptor) {
+      builder.PhysicalType(crypto_ctx_.column_descriptor->physical_type());
       builder.DataPageMaxDefinitionLevel(
           crypto_ctx_.column_descriptor->max_definition_level());
       builder.DataPageMaxRepetitionLevel(

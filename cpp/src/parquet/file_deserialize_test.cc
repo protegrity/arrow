@@ -1059,13 +1059,28 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
     PARQUET_THROW_NOT_OK(plaintext->Resize(ciphertext.size()));
     std::memcpy(plaintext->mutable_data(), ciphertext.data(), ciphertext.size());
     if (encoding_properties != nullptr) {
+      // Capture what SerializedPageReader::GetEncodingProperties() itself populated
+      // (via crypto_ctx_.column_descriptor / the reader's codec), before this test's
+      // own set_physical_type()/set_compression_codec() calls below overwrite them.
+      std::map<std::string, std::string> raw_props;
+      raw_props["raw_physical_type"] =
+          parquet::encryption::EnumToString(encoding_properties->GetPhysicalType());
+      raw_props["raw_compression_codec"] =
+          parquet::encryption::EnumToString(encoding_properties->GetCompressionCodec());
+      if (encoding_properties->GetPageType() == parquet::PageType::DATA_PAGE_V2) {
+        raw_props["raw_page_v2_uncompressed_page_size"] =
+            std::to_string(encoding_properties->GetPageV2UncompressedPageSize());
+      }
+
       // Fill column-level properties so validate() succeeds
       encoding_properties->set_column_path(column_path_);
       encoding_properties->set_physical_type(physical_type_);
       encoding_properties->set_compression_codec(compression_codec_);
 
       encoding_properties->validate();
-      sink_->entries.emplace_back(encoding_properties->ToPropertiesMap());
+      auto entry = encoding_properties->ToPropertiesMap();
+      entry.insert(raw_props.begin(), raw_props.end());
+      sink_->entries.emplace_back(std::move(entry));
     } else {
       throw ParquetException("Encoding properties are null");
     }
@@ -1196,6 +1211,12 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDictionaryPageEncodingProperties) {
   ASSERT_EQ(props.at("dict_page_num_values"), std::to_string(num_rows));
   // is_sorted is not set in the thrift header by default, so it should be absent
   ASSERT_EQ(props.count("dict_page_is_sorted"), 0);
+  // Values GetEncodingProperties() itself derived from crypto_ctx_.column_descriptor/
+  // the reader's codec, captured before this test's set_physical_type()/
+  // set_compression_codec() calls overwrote them -- proves the reader path, not just
+  // this test's own setters, populates these fields correctly.
+  ASSERT_EQ(props.at("raw_physical_type"), std::string("INT32"));
+  ASSERT_EQ(props.at("raw_compression_codec"), std::string("UNCOMPRESSED"));
 }
 
 TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV1EncodingProperties) {
@@ -1248,6 +1269,8 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV1EncodingProperties) {
             std::to_string(descr->max_definition_level()));
   ASSERT_EQ(props.at("data_page_max_repetition_level"),
             std::to_string(descr->max_repetition_level()));
+  ASSERT_EQ(props.at("raw_physical_type"), std::string("INT32"));
+  ASSERT_EQ(props.at("raw_compression_codec"), std::string("UNCOMPRESSED"));
 }
 
 TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV2EncodingProperties) {
@@ -1304,6 +1327,91 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV2EncodingProperties) {
             std::to_string(descr->max_definition_level()));
   ASSERT_EQ(props.at("data_page_max_repetition_level"),
             std::to_string(descr->max_repetition_level()));
+  ASSERT_EQ(props.at("raw_physical_type"), std::string("INT32"));
+  ASSERT_EQ(props.at("raw_compression_codec"), std::string("UNCOMPRESSED"));
+  ASSERT_EQ(props.at("raw_page_v2_uncompressed_page_size"), std::to_string(data_size));
+}
+
+TEST_F(EncodingPropertiesSerdeTest, CapturesCompressedDataPageV2EncodingProperties) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
+  // Pick whichever real codec this build actually compiled in.
+  ::arrow::Compression::type codec_type = ::arrow::Compression::UNCOMPRESSED;
+  bool found_codec = false;
+  for (auto candidate : {::arrow::Compression::SNAPPY, ::arrow::Compression::GZIP,
+                         ::arrow::Compression::ZSTD, ::arrow::Compression::LZ4,
+                         ::arrow::Compression::BROTLI, ::arrow::Compression::BZ2}) {
+    if (::arrow::util::Codec::IsAvailable(candidate)) {
+      codec_type = candidate;
+      found_codec = true;
+      break;
+    }
+  }
+  if (!found_codec) {
+    GTEST_SKIP() << "No optional compression codec built into this Arrow build";
+  }
+
+  const std::vector<uint8_t> levels(6, 0x11);    // arbitrary rep/def level bytes
+  const std::vector<uint8_t> values(200, 0x5A);  // highly compressible
+
+  ASSERT_OK_AND_ASSIGN(auto codec, ::arrow::util::Codec::Create(codec_type));
+  std::vector<uint8_t> compressed(
+      codec->MaxCompressedLen(static_cast<int64_t>(values.size()), values.data()));
+  ASSERT_OK_AND_ASSIGN(
+      int64_t compressed_len,
+      codec->Compress(static_cast<int64_t>(values.size()), values.data(),
+                      static_cast<int64_t>(compressed.size()), compressed.data()));
+  compressed.resize(static_cast<size_t>(compressed_len));
+
+  data_page_header_v2_.encoding = format::Encoding::PLAIN;
+  data_page_header_v2_.num_values = 12;
+  data_page_header_v2_.num_nulls = 0;
+  data_page_header_v2_.definition_levels_byte_length = 3;
+  data_page_header_v2_.repetition_levels_byte_length = 3;
+  data_page_header_v2_.is_compressed = true;
+
+  const int32_t uncompressed_size = static_cast<int32_t>(levels.size() + values.size());
+  const int32_t compressed_size = static_cast<int32_t>(levels.size() + compressed.size());
+  ASSERT_NO_FATAL_FAILURE(WriteDataPageHeaderV2(/*max_serialized_len=*/1024,
+                                                uncompressed_size, compressed_size));
+  ASSERT_OK(out_stream_->Write(levels.data(), levels.size()));
+  ASSERT_OK(out_stream_->Write(compressed.data(), compressed.size()));
+
+  auto schema = MakeNestedOptionalRepeatedIntSchema();
+  const ColumnDescriptor* descr = schema->Column(0);
+  auto sink = std::make_shared<CapturedEncodingProps>();
+
+  CryptoContext ctx;
+  ctx.column_descriptor = descr;
+  ctx.data_decryptor_factory = [sink, descr, codec_type]() {
+    auto iface = std::make_unique<CapturingTestDecryptor>(
+        sink, descr->path()->ToDotString(), descr->physical_type(), codec_type);
+    return std::make_unique<Decryptor>(
+        std::move(iface), /*key*/ ::arrow::util::SecureString(),
+        /*file_aad*/ std::string("aad_test"),
+        /*aad*/ std::string(), ::arrow::default_memory_pool());
+  };
+
+  ReaderProperties reader_props;
+  OpenWithCryptoContext(/*num_rows=*/12, codec_type, reader_props, ctx);
+
+  std::shared_ptr<Page> page = page_reader_->NextPage();
+  ASSERT_NE(page, nullptr);
+  ASSERT_EQ(PageType::DATA_PAGE_V2, page->type());
+
+  ASSERT_EQ(sink->entries.size(), 1);
+  const auto& props = sink->entries[0];
+  ASSERT_EQ(props.at("page_v2_is_compressed"), std::string("true"));
+  // What GetEncodingProperties() itself derived from the reader's real codec and
+  // the real on-wire PageHeader.uncompressed_page_size -- this is the only test
+  // that exercises these two fields through the real SerializedPageReader path
+  // (parquet_page_decoder_test.cc's compressed-page test builds EncodingProperties
+  // directly via the Builder, bypassing this path entirely).
+  ASSERT_EQ(props.at("raw_compression_codec"),
+            parquet::encryption::EnumToString(codec_type));
+  ASSERT_EQ(props.at("raw_page_v2_uncompressed_page_size"),
+            std::to_string(uncompressed_size));
 }
 
 // The test below exercises the legacy external adapter path

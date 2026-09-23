@@ -45,6 +45,7 @@ EncodingProperties::EncodingProperties(const EncodingPropertiesBuilder& builder)
           builder.page_v2_repetition_levels_byte_length_),
       page_v2_num_nulls_(builder.page_v2_num_nulls_),
       page_v2_is_compressed_(builder.page_v2_is_compressed_),
+      page_v2_uncompressed_page_size_(builder.page_v2_uncompressed_page_size_),
       dict_page_num_values_(builder.dict_page_num_values_),
       dict_page_is_sorted_(builder.dict_page_is_sorted_) {}
 
@@ -171,6 +172,7 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
         data_page_v2.repetition_levels_byte_length());
     builder.PageV2NumNulls(data_page_v2.num_nulls());
     builder.PageV2IsCompressed(data_page_v2.is_compressed());
+    builder.PageV2UncompressedPageSize(data_page_v2.uncompressed_size());
   } else if (column_page.type() == parquet::PageType::DICTIONARY_PAGE) {
     DictionaryPage dict_page = static_cast<const DictionaryPage&>(column_page);
     builder.PageEncoding(dict_page.encoding());
@@ -331,6 +333,12 @@ EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2NumNulls(int32_t num
 EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2IsCompressed(
     bool is_compressed) {
   page_v2_is_compressed_ = is_compressed;
+  return *this;
+}
+
+EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2UncompressedPageSize(
+    int64_t uncompressed_page_size) {
+  page_v2_uncompressed_page_size_ = uncompressed_page_size;
   return *this;
 }
 

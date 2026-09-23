@@ -471,6 +471,7 @@ if(PARQUET_REQUIRE_ENCRYPTION)
                    SOURCES
                    encryption/test_mock_crypto_providers.cc
                    encryption/parquet_column_crypto_provider_test.cc
+                   encryption/parquet_page_decoder_test.cc
                    encryption/test_encryption_util.cc
                    encryption/test_in_memory_kms.cc)
 endif()
