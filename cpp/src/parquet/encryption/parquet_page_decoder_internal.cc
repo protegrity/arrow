@@ -24,10 +24,49 @@
 #include "arrow/util/compression.h"
 #include "arrow/util/int_util_overflow.h"
 #include "parquet/column_reader.h"
+#include "parquet/encoding.h"
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/exception.h"
 
 namespace parquet {
+
+namespace {
+
+// Number of leaf values PLAIN encoding actually stores in the values portion of a
+// page: nulls contribute a definition level below the max but no bytes at all, so
+// only entries at max_definition_level are "present" and need decoding.
+int64_t CountNonNullValues(const std::vector<int16_t>& definition_levels,
+                           int16_t max_definition_level) {
+  if (max_definition_level == 0) {
+    return static_cast<int64_t>(definition_levels.size());
+  }
+  return std::count(definition_levels.begin(), definition_levels.end(),
+                    max_definition_level);
+}
+
+// Decodes `num_non_null` PLAIN-encoded values of DType from `values_bytes` into a
+// freshly allocated, tightly-sized vector.
+template <typename DType>
+std::vector<typename DType::c_type> DecodePlainValues(
+    std::span<const uint8_t> values_bytes, int64_t num_non_null) {
+  if (num_non_null < 0 || num_non_null > std::numeric_limits<int>::max()) {
+    throw ParquetException("ParquetPageDecoder: invalid non-null value count");
+  }
+  if (values_bytes.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    throw ParquetException("ParquetPageDecoder: values buffer too large to decode");
+  }
+  auto decoder = MakeTypedDecoder<DType>(Encoding::PLAIN);
+  decoder->SetData(static_cast<int>(num_non_null), values_bytes.data(),
+                   static_cast<int>(values_bytes.size()));
+  std::vector<typename DType::c_type> values(static_cast<size_t>(num_non_null));
+  int decoded = decoder->Decode(values.data(), static_cast<int>(num_non_null));
+  if (decoded != static_cast<int>(num_non_null)) {
+    throw ParquetException("ParquetPageDecoder: failed to decode all values");
+  }
+  return values;
+}
+
+}  // namespace
 
 std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
     std::span<const uint8_t> page, const encryption::EncodingProperties& props) {
@@ -96,13 +135,20 @@ std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
   return result;
 }
 
-// Decompress() decodes rep/def levels; per-physical-type value decode is not yet
-// implemented, so values() is left in its default (empty) state. Recompress()
-// remains a throwing stub until value decode is implemented.
+// Decompress() decodes rep/def levels and, for PLAIN-encoded fixed-width numeric
+// types, the values themselves. BOOLEAN/FIXED_LEN_BYTE_ARRAY/BYTE_ARRAY value decode
+// is not yet implemented. Recompress() remains a throwing stub until value decode is
+// implemented for every physical type.
 TypedColumnValues ParquetPageDecoder::Decompress(
     std::span<const uint8_t> compressed_page,
     const encryption::EncodingProperties& props) {
   std::vector<uint8_t> page = SplitAndDecompressDataPageV2(compressed_page, props);
+
+  if (props.GetPageEncoding() != Encoding::PLAIN) {
+    throw ParquetException(
+        "ParquetPageDecoder::Decompress: only PLAIN value encoding is currently "
+        "supported");
+  }
 
   TypedColumnValues result(props.GetPhysicalType(), props.GetDataPageMaxDefinitionLevel(),
                            props.GetDataPageMaxRepetitionLevel());
@@ -152,6 +198,54 @@ TypedColumnValues ParquetPageDecoder::Decompress(
   } else {
     // Required column: every value is present, definition level 0 for all.
     std::fill(result.definition_levels().begin(), result.definition_levels().end(), 0);
+  }
+  // Unconditional for the same reason as the repetition-level advance above --
+  // buffer must reach the values portion regardless of whether def_len was 0.
+  buffer += def_len;
+
+  // Defensive: SplitAndDecompressDataPageV2() already guarantees rep_len+def_len
+  // fits within page.size(), but that invariant is established in a different
+  // function -- re-check here rather than rely on it silently holding, since a
+  // violation would otherwise underflow the size passed to values_bytes below.
+  if (buffer > page.data() + page.size()) {
+    throw ParquetException("ParquetPageDecoder: level bytes exceed the page buffer");
+  }
+
+  const int64_t num_non_null =
+      CountNonNullValues(result.definition_levels(), result.max_definition_level());
+  std::span<const uint8_t> values_bytes(
+      buffer, static_cast<size_t>(page.data() + page.size() - buffer));
+
+  switch (result.physical_type()) {
+    case Type::INT32:
+      result.SetFixedWidthValues(
+          DecodePlainValues<Int32Type>(values_bytes, num_non_null));
+      break;
+    case Type::INT64:
+      result.SetFixedWidthValues(
+          DecodePlainValues<Int64Type>(values_bytes, num_non_null));
+      break;
+    case Type::INT96:
+      result.SetFixedWidthValues(
+          DecodePlainValues<Int96Type>(values_bytes, num_non_null));
+      break;
+    case Type::FLOAT:
+      result.SetFixedWidthValues(
+          DecodePlainValues<FloatType>(values_bytes, num_non_null));
+      break;
+    case Type::DOUBLE:
+      result.SetFixedWidthValues(
+          DecodePlainValues<DoubleType>(values_bytes, num_non_null));
+      break;
+    case Type::BOOLEAN:
+    case Type::FIXED_LEN_BYTE_ARRAY:
+    case Type::BYTE_ARRAY:
+      throw ParquetException(
+          "ParquetPageDecoder::Decompress: value decoding for this physical type is "
+          "not yet implemented");
+    case Type::UNDEFINED:
+    default:
+      throw ParquetException("ParquetPageDecoder: unsupported physical type");
   }
 
   return result;

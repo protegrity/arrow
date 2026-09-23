@@ -18,6 +18,9 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include "parquet/encryption/parquet_crypto_provider.h"
@@ -35,7 +38,7 @@ namespace parquet {
 /// the transformed values). `values()` holds one CryptoValueBuffer for the
 /// whole page's non-null entries, in row order; definition_levels()/
 /// repetition_levels() cover every logical value in the page, nulls included,
-/// and are unchanged by the vendor.
+/// and are unchanged by the implementation.
 class PARQUET_EXPORT TypedColumnValues {
  public:
   /// \param physical_type Type shared by every element of values().
@@ -49,10 +52,29 @@ class PARQUET_EXPORT TypedColumnValues {
         max_definition_level_(max_definition_level),
         max_repetition_level_(max_repetition_level) {}
 
+  // values() may hold a span into this instance's own owned storage (see
+  // SetFixedWidthValues() below); copying would leave the copy's span dangling into
+  // the original's storage, so only moving is allowed. Moving a std::vector does not
+  // relocate its heap buffer, so the span stays valid across a move.
+  TypedColumnValues(const TypedColumnValues&) = delete;
+  TypedColumnValues& operator=(const TypedColumnValues&) = delete;
+  TypedColumnValues(TypedColumnValues&&) = default;
+  TypedColumnValues& operator=(TypedColumnValues&&) = default;
+
   /// Non-null decoded values for this page, in row order. Providers operate
   /// on this in place via ParquetCryptoProvider::EncryptCells()/DecryptCells().
   CryptoValueBuffer& values() { return values_; }
   [[nodiscard]] const CryptoValueBuffer& values() const { return values_; }
+
+  /// Takes ownership of `storage` and points values() at a span over it. `T` must be
+  /// one of CryptoValueBuffer's fixed-width span alternatives (uint8_t, int32_t,
+  /// int64_t, Int96, float, double); BYTE_ARRAY's owning vector<string> alternative
+  /// needs no separate backing storage and can be assigned to values() directly.
+  template <typename T>
+  void SetFixedWidthValues(std::vector<T> storage) {
+    auto& owned = owned_storage_.emplace<std::vector<T>>(std::move(storage));
+    values_ = std::span<T>(owned);
+  }
 
   /// Physical type shared by every element of values().
   [[nodiscard]] Type::type physical_type() const { return physical_type_; }
@@ -85,6 +107,13 @@ class PARQUET_EXPORT TypedColumnValues {
   CryptoValueBuffer values_;
   std::vector<int16_t> definition_levels_;
   std::vector<int16_t> repetition_levels_;
+  // Backing storage for values_'s fixed-width span alternatives, populated by
+  // SetFixedWidthValues(). Unused (monostate) for BYTE_ARRAY, whose vector<string> is
+  // already owning and lives directly in values_.
+  std::variant<std::monostate, std::vector<uint8_t>, std::vector<int32_t>,
+               std::vector<int64_t>, std::vector<Int96>, std::vector<float>,
+               std::vector<double>>
+      owned_storage_;
 };
 
 }  // namespace parquet

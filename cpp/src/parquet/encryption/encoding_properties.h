@@ -55,6 +55,9 @@ class PARQUET_EXPORT EncodingProperties {
 
   // Lightweight accessors to avoid building a map when only one field is needed.
   [[nodiscard]] parquet::PageType::type GetPageType() const { return page_type_; }
+  [[nodiscard]] parquet::Encoding::type GetPageEncoding() const {
+    return page_encoding_.value();
+  }
   [[nodiscard]] parquet::Type::type GetPhysicalType() const {
     return physical_type_.value();
   }
