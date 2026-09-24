@@ -40,9 +40,8 @@ class PARQUET_EXPORT ParquetPageDecoder {
  public:
   /// Splits and decompresses `compressed_page` (DataPageV2 + PLAIN only; DataPageV1
   /// is not yet supported), decodes its rep/def levels, and decodes PLAIN-encoded
-  /// values for fixed-width physical types (INT32/INT64/INT96/FLOAT/DOUBLE/BOOLEAN/
-  /// FIXED_LEN_BYTE_ARRAY) into the returned TypedColumnValues. BYTE_ARRAY value
-  /// decoding and non-PLAIN value encodings are not yet implemented and throw.
+  /// values for every physical type into the returned TypedColumnValues. Non-PLAIN
+  /// value encodings are not yet implemented and throw.
   static TypedColumnValues Decompress(std::span<const uint8_t> compressed_page,
                                       const encryption::EncodingProperties& props);
 

@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <string>
 #include <utility>
 
 #include "arrow/util/bit_util.h"
@@ -113,6 +114,36 @@ std::vector<uint8_t> DecodePlainFixedLenByteArrayValues(
                               values_bytes.begin() + static_cast<size_t>(total_bytes));
 }
 
+// Decodes `num_non_null` PLAIN-encoded BYTE_ARRAY values (4-byte length prefix +
+// data, per value) into owned strings. Each decoded ByteArray's `ptr` aliases
+// `values_bytes` (see decoder.cc's ReadByteArray()); copied into std::string
+// immediately, since values_bytes points into Decompress()'s local page buffer
+// and would otherwise leave CryptoValueBuffer's owning vector<string> holding
+// dangling pointers once this function returns.
+std::vector<std::string> DecodePlainByteArrayValues(std::span<const uint8_t> values_bytes,
+                                                    int64_t num_non_null) {
+  if (num_non_null < 0 || num_non_null > std::numeric_limits<int>::max()) {
+    throw ParquetException("ParquetPageDecoder: invalid non-null value count");
+  }
+  if (values_bytes.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    throw ParquetException("ParquetPageDecoder: values buffer too large to decode");
+  }
+  auto decoder = MakeTypedDecoder<ByteArrayType>(Encoding::PLAIN);
+  decoder->SetData(static_cast<int>(num_non_null), values_bytes.data(),
+                   static_cast<int>(values_bytes.size()));
+  std::vector<ByteArray> raw(static_cast<size_t>(num_non_null));
+  int decoded = decoder->Decode(raw.data(), static_cast<int>(num_non_null));
+  if (decoded != static_cast<int>(num_non_null)) {
+    throw ParquetException("ParquetPageDecoder: failed to decode all values");
+  }
+  std::vector<std::string> values;
+  values.reserve(raw.size());
+  for (const ByteArray& byte_array : raw) {
+    values.emplace_back(reinterpret_cast<const char*>(byte_array.ptr), byte_array.len);
+  }
+  return values;
+}
+
 }  // namespace
 
 std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
@@ -182,10 +213,9 @@ std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
   return result;
 }
 
-// Decompress() decodes rep/def levels and, for PLAIN-encoded fixed-width types
-// (numeric, BOOLEAN, FIXED_LEN_BYTE_ARRAY), the values themselves. BYTE_ARRAY value
-// decode is not yet implemented. Recompress() remains a throwing stub until value
-// decode is implemented for every physical type.
+// Decompress() decodes rep/def levels and, for every PLAIN-encoded physical type,
+// the values themselves. Recompress() remains a throwing stub -- re-encoding is a
+// separate, not-yet-implemented milestone.
 TypedColumnValues ParquetPageDecoder::Decompress(
     std::span<const uint8_t> compressed_page,
     const encryption::EncodingProperties& props) {
@@ -292,9 +322,8 @@ TypedColumnValues ParquetPageDecoder::Decompress(
           values_bytes, num_non_null, props.GetFixedLengthBytes()));
       break;
     case Type::BYTE_ARRAY:
-      throw ParquetException(
-          "ParquetPageDecoder::Decompress: value decoding for this physical type is "
-          "not yet implemented");
+      result.SetByteArrayValues(DecodePlainByteArrayValues(values_bytes, num_non_null));
+      break;
     case Type::UNDEFINED:
     default:
       throw ParquetException("ParquetPageDecoder: unsupported physical type");

@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -74,6 +75,12 @@ class PARQUET_EXPORT TypedColumnValues {
   void SetFixedWidthValues(std::vector<T> storage) {
     auto& owned = owned_storage_.emplace<std::vector<T>>(std::move(storage));
     values_ = std::span<T>(owned);
+  }
+
+  /// Assigns BYTE_ARRAY values directly -- vector<string> is already owning, so
+  /// unlike SetFixedWidthValues() there's no separate backing storage to manage.
+  void SetByteArrayValues(std::vector<std::string> values) {
+    values_ = std::move(values);
   }
 
   /// Physical type shared by every element of values().
