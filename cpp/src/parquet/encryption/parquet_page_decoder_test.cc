@@ -16,8 +16,9 @@
 // under the License.
 //
 // Covers ParquetPageDecoder::SplitAndDecompressDataPageV2() (the levels/values
-// buffer-framing step), Decompress()'s rep/def level decoding, and value decoding
-// for every PLAIN-encoded physical type. Recompress() remains unimplemented.
+// buffer-framing step), Decompress()'s rep/def level decoding, value decoding for
+// every PLAIN-encoded physical type, and Recompress()'s round trip (including
+// output size growth, e.g. a BYTE_ARRAY value whose length changed).
 
 #include <cstdint>
 #include <cstring>
@@ -508,6 +509,168 @@ TEST(ParquetPageDecoderTest, DecompressByteArrayValuesAllNull) {
   EXPECT_EQ(result.num_values(), 3);
   auto decoded = std::get<std::vector<std::string>>(result.values());
   EXPECT_TRUE(decoded.empty());
+}
+
+TEST(ParquetPageDecoderTest, RecompressRoundTripsInt32Values) {
+  const std::vector<int32_t> present_values = {10, -20, 30};
+  std::vector<uint8_t> values = EncodeInt32ValuesPlain(present_values);
+
+  auto props = MakeDataPageV2PropsForDecompress(
+      /*definition_levels_byte_length=*/0, /*repetition_levels_byte_length=*/0,
+      /*num_values=*/3, /*max_definition_level=*/0, /*max_repetition_level=*/0);
+
+  TypedColumnValues typed = ParquetPageDecoder::Decompress(values, *props);
+  int64_t new_uncompressed_size = -1;
+  std::vector<uint8_t> recompressed =
+      ParquetPageDecoder::Recompress(typed, *props, &new_uncompressed_size);
+  EXPECT_EQ(new_uncompressed_size, static_cast<int64_t>(values.size()));
+  // PLAIN INT32 has zero framing overhead -- re-encoding unmutated values must
+  // reproduce the exact original wire bytes.
+  EXPECT_EQ(recompressed, values);
+
+  TypedColumnValues reread = ParquetPageDecoder::Decompress(recompressed, *props);
+  auto decoded = std::get<std::span<int32_t>>(reread.values());
+  EXPECT_EQ(std::vector<int32_t>(decoded.begin(), decoded.end()), present_values);
+}
+
+TEST(ParquetPageDecoderTest, RecompressPreservesLevelsByteIdentical) {
+  // repeated string field, max_definition_level=2, max_repetition_level=1 -- same
+  // shape as DecompressNestedSchemaDefinitionAndRepetitionLevels above.
+  const std::vector<int16_t> def_levels = {2, 2, 0, 2};
+  const std::vector<int16_t> rep_levels = {0, 1, 0, 0};
+  std::vector<uint8_t> def_bytes = EncodeLevelsRLE(def_levels, /*max_level=*/2);
+  std::vector<uint8_t> rep_bytes = EncodeLevelsRLE(rep_levels, /*max_level=*/1);
+  const std::vector<int32_t> present_values = {1, 2, 3};
+  std::vector<uint8_t> values = EncodeInt32ValuesPlain(present_values);
+
+  std::vector<uint8_t> page = rep_bytes;
+  page.insert(page.end(), def_bytes.begin(), def_bytes.end());
+  page.insert(page.end(), values.begin(), values.end());
+
+  auto props = MakeDataPageV2PropsForDecompress(
+      /*definition_levels_byte_length=*/static_cast<int32_t>(def_bytes.size()),
+      /*repetition_levels_byte_length=*/static_cast<int32_t>(rep_bytes.size()),
+      /*num_values=*/4, /*max_definition_level=*/2, /*max_repetition_level=*/1);
+
+  TypedColumnValues typed = ParquetPageDecoder::Decompress(page, *props);
+  int64_t new_uncompressed_size = -1;
+  std::vector<uint8_t> recompressed =
+      ParquetPageDecoder::Recompress(typed, *props, &new_uncompressed_size);
+  // Levels are never mutated by ParquetCryptoProvider::EncryptCells()/DecryptCells()
+  // -- re-encoding them must reproduce the exact original wire bytes (only the
+  // values portion's size can legitimately change).
+  EXPECT_EQ(recompressed, page);
+  EXPECT_EQ(new_uncompressed_size, static_cast<int64_t>(page.size()));
+}
+
+TEST(ParquetPageDecoderTest, RecompressByteArrayGrowsValueLength) {
+  const std::vector<std::string> present_values = {"hello", "hi", "world"};
+  std::vector<uint8_t> values = EncodeByteArrayValuesPlain(present_values);
+
+  auto props = MakeDataPageV2PropsForDecompress(
+      /*definition_levels_byte_length=*/0, /*repetition_levels_byte_length=*/0,
+      /*num_values=*/3, /*max_definition_level=*/0, /*max_repetition_level=*/0,
+      Type::BYTE_ARRAY);
+
+  TypedColumnValues typed = ParquetPageDecoder::Decompress(values, *props);
+  // Simulate a provider changing a value's length ("hi", 2 bytes -> a much longer
+  // replacement) -- the scenario that breaks a frozen page-header
+  // uncompressed_page_size field if it isn't recomputed after Recompress().
+  auto& mutable_values = std::get<std::vector<std::string>>(typed.values());
+  mutable_values[1] = "MUCH_LONGER_REPLACEMENT_VALUE";
+  const std::vector<std::string> expected_values = {
+      "hello", "MUCH_LONGER_REPLACEMENT_VALUE", "world"};
+
+  int64_t new_uncompressed_size = -1;
+  std::vector<uint8_t> recompressed =
+      ParquetPageDecoder::Recompress(typed, *props, &new_uncompressed_size);
+  // The grown value must make the recompressed page strictly larger than the
+  // original -- proving Recompress()'s dynamic-growth path works, not a fixed-size
+  // assumption inherited from the original page.
+  EXPECT_GT(new_uncompressed_size, static_cast<int64_t>(values.size()));
+
+  TypedColumnValues reread = ParquetPageDecoder::Decompress(recompressed, *props);
+  auto decoded = std::get<std::vector<std::string>>(reread.values());
+  EXPECT_EQ(decoded, expected_values);
+}
+
+TEST(ParquetPageDecoderTest, RecompressRoundTripsWithCompressionCodec) {
+  const std::vector<int32_t> present_values = {1, 2, 3, 4, 5};
+  std::vector<uint8_t> values_bytes = EncodeInt32ValuesPlain(present_values);
+
+  PARQUET_ASSIGN_OR_THROW(auto codec,
+                          ::arrow::util::Codec::Create(::arrow::Compression::GZIP));
+  std::vector<uint8_t> compressed_values(codec->MaxCompressedLen(
+      static_cast<int64_t>(values_bytes.size()), values_bytes.data()));
+  PARQUET_ASSIGN_OR_THROW(
+      int64_t compressed_len,
+      codec->Compress(static_cast<int64_t>(values_bytes.size()), values_bytes.data(),
+                      static_cast<int64_t>(compressed_values.size()),
+                      compressed_values.data()));
+  compressed_values.resize(static_cast<size_t>(compressed_len));
+
+  auto decode_props =
+      EncodingProperties::Builder()
+          .PageType(PageType::DATA_PAGE_V2)
+          .PhysicalType(Type::INT32)
+          .PageEncoding(Encoding::PLAIN)
+          .CompressionCodec(::arrow::Compression::GZIP)
+          .PageV2DefinitionLevelsByteLength(0)
+          .PageV2RepetitionLevelsByteLength(0)
+          .PageV2NumNulls(0)
+          .PageV2IsCompressed(true)
+          .PageV2UncompressedPageSize(static_cast<int64_t>(values_bytes.size()))
+          .DataPageNumValues(static_cast<int64_t>(present_values.size()))
+          .DataPageMaxDefinitionLevel(0)
+          .DataPageMaxRepetitionLevel(0)
+          .Build();
+
+  TypedColumnValues typed =
+      ParquetPageDecoder::Decompress(compressed_values, *decode_props);
+  int64_t new_uncompressed_size = -1;
+  std::vector<uint8_t> recompressed =
+      ParquetPageDecoder::Recompress(typed, *decode_props, &new_uncompressed_size);
+  EXPECT_EQ(new_uncompressed_size, static_cast<int64_t>(values_bytes.size()));
+
+  auto reread_props = EncodingProperties::Builder()
+                          .PageType(PageType::DATA_PAGE_V2)
+                          .PhysicalType(Type::INT32)
+                          .PageEncoding(Encoding::PLAIN)
+                          .CompressionCodec(::arrow::Compression::GZIP)
+                          .PageV2DefinitionLevelsByteLength(0)
+                          .PageV2RepetitionLevelsByteLength(0)
+                          .PageV2NumNulls(0)
+                          .PageV2IsCompressed(true)
+                          .PageV2UncompressedPageSize(new_uncompressed_size)
+                          .DataPageNumValues(static_cast<int64_t>(present_values.size()))
+                          .DataPageMaxDefinitionLevel(0)
+                          .DataPageMaxRepetitionLevel(0)
+                          .Build();
+  TypedColumnValues reread = ParquetPageDecoder::Decompress(recompressed, *reread_props);
+  auto decoded = std::get<std::span<int32_t>>(reread.values());
+  EXPECT_EQ(std::vector<int32_t>(decoded.begin(), decoded.end()), present_values);
+}
+
+TEST(ParquetPageDecoderTest, RecompressRejectsNonPlainEncoding) {
+  TypedColumnValues typed(Type::INT32, /*max_definition_level=*/0,
+                          /*max_repetition_level=*/0);
+  typed.definition_levels().assign({0, 0});
+  typed.SetFixedWidthValues(std::vector<int32_t>{1, 2});
+
+  auto props = EncodingProperties::Builder()
+                   .PageType(PageType::DATA_PAGE_V2)
+                   .PhysicalType(Type::INT32)
+                   .PageEncoding(Encoding::RLE_DICTIONARY)
+                   .CompressionCodec(::arrow::Compression::UNCOMPRESSED)
+                   .PageV2DefinitionLevelsByteLength(0)
+                   .PageV2RepetitionLevelsByteLength(0)
+                   .PageV2NumNulls(0)
+                   .PageV2IsCompressed(false)
+                   .DataPageNumValues(2)
+                   .DataPageMaxDefinitionLevel(0)
+                   .DataPageMaxRepetitionLevel(0)
+                   .Build();
+  EXPECT_THROW(ParquetPageDecoder::Recompress(typed, *props), ParquetException);
 }
 
 }  // namespace parquet::encryption::test

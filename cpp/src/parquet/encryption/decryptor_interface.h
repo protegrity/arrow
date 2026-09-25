@@ -76,10 +76,16 @@ class PARQUET_EXPORT DecryptorInterface {
   ///     already hold their key (e.g. AES, bound at construction) ignore it.
   /// \param encoding_properties Page value/level encoding context, forwarded to
   ///     implementations that need it to decode a self-describing buffer.
+  /// \param new_uncompressed_size Out-param: if non-null and the implementation's
+  ///     output represents different content than what the on-disk page header
+  ///     recorded (e.g. the cell path restoring a value to its original, different
+  ///     length), set to the new, correct pre-decompression size. Left untouched
+  ///     otherwise; callers must not assume it was set.
   virtual int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
-      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
+      int64_t* new_uncompressed_size = nullptr) = 0;
 
   /// Verify a standalone, opaque footer-signature blob produced by
   /// EncryptorInterface::ComputeFooterSignature() (as opposed to recomputing and

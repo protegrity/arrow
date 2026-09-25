@@ -104,7 +104,8 @@ bool ParquetCryptoProviderEncryptorAdapter::UseCellPath() const {
 int32_t ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer(
     std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
     std::span<const uint8_t> aad, std::span<const uint8_t> dek,
-    std::unique_ptr<encryption::EncodingProperties> encoding_properties) {
+    std::unique_ptr<encryption::EncodingProperties> encoding_properties,
+    int64_t* new_uncompressed_size) {
   std::vector<uint8_t> result_bytes;
 
   if (UseCellPath()) {
@@ -116,7 +117,8 @@ int32_t ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer(
     TypedColumnValues typed =
         ParquetPageDecoder::Decompress(plaintext, *encoding_properties);
     PARQUET_THROW_NOT_OK(provider_->EncryptCells(typed.values(), ctx_, dek));
-    result_bytes = ParquetPageDecoder::Recompress(typed, *encoding_properties);
+    result_bytes = ParquetPageDecoder::Recompress(typed, *encoding_properties,
+                                                  new_uncompressed_size);
   } else {
     // aad is the module AAD Encryptor::UpdateAad() already computed via
     // CreateModuleAad()/QuickUpdatePageAad() — the same per-page positional binding
@@ -177,7 +179,8 @@ int32_t ParquetCryptoProviderDecryptorAdapter::GetCiphertextLength(
 int32_t ParquetCryptoProviderDecryptorAdapter::DecryptWithManagedBuffer(
     std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
     std::span<const uint8_t> aad, std::span<const uint8_t> dek,
-    std::unique_ptr<encryption::EncodingProperties> encoding_properties) {
+    std::unique_ptr<encryption::EncodingProperties> encoding_properties,
+    int64_t* new_uncompressed_size) {
   std::vector<uint8_t> result_bytes;
 
   if (UseCellPath()) {
@@ -189,7 +192,8 @@ int32_t ParquetCryptoProviderDecryptorAdapter::DecryptWithManagedBuffer(
     TypedColumnValues typed =
         ParquetPageDecoder::Decompress(ciphertext, *encoding_properties);
     PARQUET_THROW_NOT_OK(provider_->DecryptCells(typed.values(), ctx_, dek));
-    result_bytes = ParquetPageDecoder::Recompress(typed, *encoding_properties);
+    result_bytes = ParquetPageDecoder::Recompress(typed, *encoding_properties,
+                                                  new_uncompressed_size);
   } else {
     // Strip the 4-byte length prefix EncryptWithManagedBuffer() wrote, so the
     // provider only ever sees its own real ciphertext — never trailing garbage

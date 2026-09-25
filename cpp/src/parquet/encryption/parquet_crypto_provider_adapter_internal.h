@@ -75,12 +75,14 @@ class PARQUET_EXPORT ParquetCryptoProviderEncryptorAdapter
   // modules must always go through the block path regardless of that flag. `aad` is
   // the module AAD Encryptor::UpdateAad() already computed via CreateModuleAad();
   // `dek` is the column's or footer's resolved key. Both are forwarded straight
-  // through to the block path; the cell path forwards only `dek`.
+  // through to the block path; the cell path forwards only `dek`. `new_uncompressed_size`
+  // is set on the cell path only, to Recompress()'s reported pre-recompression size —
+  // forwarded straight through from Recompress()'s own out-param.
   int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
-      std::unique_ptr<encryption::EncodingProperties> encoding_properties =
-          nullptr) override;
+      std::unique_ptr<encryption::EncodingProperties> encoding_properties = nullptr,
+      int64_t* new_uncompressed_size = nullptr) override;
 
   // AES-GCM-shaped (explicit nonce, fixed output); footer signing is routed to the
   // provider via ComputeFooterSignature() below instead, so this is unreachable.
@@ -158,12 +160,14 @@ class PARQUET_EXPORT ParquetCryptoProviderDecryptorAdapter
   // ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer()'s gating rule).
   // `aad` is the module AAD Decryptor::UpdateAad() already computed; `dek` is the
   // column's or footer's resolved key. Both are forwarded straight through to the block
-  // path; the cell path forwards only `dek`.
+  // path; the cell path forwards only `dek`. `new_uncompressed_size` is set on the
+  // cell path only, to Recompress()'s reported post-decryption size —
+  // forwarded straight through from Recompress()'s own out-param.
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
-      std::unique_ptr<encryption::EncodingProperties> encoding_properties =
-          nullptr) override;
+      std::unique_ptr<encryption::EncodingProperties> encoding_properties = nullptr,
+      int64_t* new_uncompressed_size = nullptr) override;
 
   // Delegates to provider_->VerifyFooterSignature(), converting its Result<> into
   // the throw-based DecryptorInterface convention.

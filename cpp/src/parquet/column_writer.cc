@@ -344,7 +344,7 @@ class SerializedPageWriter : public PageWriter {
                 static_cast<const DictionaryPage&>(page));
         output_data_len = data_encryptor_->EncryptWithManagedBuffer(
             compressed_data->span_as<uint8_t>(), encryption_buffer_.get(),
-            std::move(encoding_properties));
+            std::move(encoding_properties), &uncompressed_size);
       }
 
       output_data_buffer = encryption_buffer_->data();
@@ -423,7 +423,7 @@ class SerializedPageWriter : public PageWriter {
   }
 
   int64_t WriteDataPage(const DataPage& page) override {
-    const int64_t uncompressed_size = page.uncompressed_size();
+    int64_t uncompressed_size = page.uncompressed_size();
     if (uncompressed_size > std::numeric_limits<int32_t>::max()) {
       throw ParquetException("Uncompressed data page size overflows INT32_MAX. Size:",
                              uncompressed_size);
@@ -468,7 +468,7 @@ class SerializedPageWriter : public PageWriter {
                                                  static_cast<const DataPage&>(page));
         output_data_len = data_encryptor_->EncryptWithManagedBuffer(
             compressed_data->span_as<uint8_t>(), encryption_buffer_.get(),
-            std::move(encoding_properties));
+            std::move(encoding_properties), &uncompressed_size);
       }
       output_data_buffer = encryption_buffer_->data();
 

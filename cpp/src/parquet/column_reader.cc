@@ -642,9 +642,19 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {
         std::unique_ptr<EncodingProperties> encoding_properties =
             GetEncodingProperties(current_page_header_);
         decryption_buffer = AllocateBuffer(properties_.memory_pool(), 0);
+        // DecryptCells() can restore a value to a different length than what the
+        // on-disk header recorded (e.g. a BYTE_ARRAY value shrinking back to its
+        // original size) -- new_uncompressed_len captures that, so the
+        // DecompressIfNeeded() calls below check against the real, current size
+        // instead of the frozen on-disk one.
+        // Widened to int64_t only because the out-param's type is shared with the
+        // write side's int64_t page sizes; starts equal to the on-disk value, so
+        // it's already correct if the cell path leaves it untouched.
+        int64_t new_uncompressed_len = uncompressed_len;
         compressed_len = data_decryptor_->DecryptWithManagedBuffer(
             page_buffer->span_as<uint8_t>(), decryption_buffer.get(),
-            std::move(encoding_properties));
+            std::move(encoding_properties), &new_uncompressed_len);
+        uncompressed_len = static_cast<int32_t>(new_uncompressed_len);
       }
 
       page_buffer = decryption_buffer;

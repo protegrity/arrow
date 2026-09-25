@@ -45,9 +45,20 @@ class PARQUET_EXPORT ParquetPageDecoder {
   static TypedColumnValues Decompress(std::span<const uint8_t> compressed_page,
                                       const encryption::EncodingProperties& props);
 
-  /// Not yet implemented; always throws.
+  /// Re-encodes `values` (after ParquetCryptoProvider::EncryptCells()/DecryptCells()
+  /// has mutated them in place) into a PLAIN-encoded DataPageV2 buffer, mirroring
+  /// Decompress(), and recompresses the values portion per `props`. The values'
+  /// definition/repetition levels are never mutated by the provider, so their byte
+  /// lengths always match `props`'s frozen originals; only `new_uncompressed_size`
+  /// (when non-null) can legitimately differ from what `props` reports -- set to
+  /// the encoded (levels+values) size *before* recompression, which
+  /// column_writer.cc's WriteDataPage()/WriteDictionaryPage() must use for the page
+  /// header's uncompressed_page_size field instead of the pre-transform page's own
+  /// size, since EncryptCells()/DecryptCells() can change a value's length (e.g. for
+  /// BYTE_ARRAY).
   static std::vector<uint8_t> Recompress(const TypedColumnValues& values,
-                                         const encryption::EncodingProperties& props);
+                                         const encryption::EncodingProperties& props,
+                                         int64_t* new_uncompressed_size = nullptr);
 
   /// Returns one buffer holding a DataPageV2's rep/def level bytes followed by its
   /// decompressed values, split via the caller-supplied level-length fields. Level

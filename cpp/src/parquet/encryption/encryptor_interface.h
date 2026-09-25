@@ -62,10 +62,16 @@ class PARQUET_EXPORT EncryptorInterface {
   ///     already hold their key (e.g. AES, bound at construction) ignore it.
   /// \param encoding_properties Page value/level encoding context, forwarded to
   ///     implementations that need it to encode a self-describing buffer.
+  /// \param new_uncompressed_size Out-param: if non-null and the implementation's
+  ///     output represents different content than what the caller's `plaintext`
+  ///     decompresses to (e.g. the cell path changing a value's length), set to
+  ///     the new, correct pre-recompression size. Left untouched otherwise;
+  ///     callers must not assume it was set.
   virtual int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
-      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
+      int64_t* new_uncompressed_size = nullptr) = 0;
 
   /// Return column-level metadata accumulated during encryption of a single page.
   ///

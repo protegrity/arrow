@@ -19,13 +19,16 @@
 
 #include <algorithm>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
+#include <variant>
 
 #include "arrow/util/bit_util.h"
 #include "arrow/util/compression.h"
 #include "arrow/util/int_util_overflow.h"
 #include "parquet/column_reader.h"
+#include "parquet/column_writer.h"
 #include "parquet/encoding.h"
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/exception.h"
@@ -144,6 +147,78 @@ std::vector<std::string> DecodePlainByteArrayValues(std::span<const uint8_t> val
   return values;
 }
 
+// RLE-encodes `levels` the same way column_writer.cc's LevelEncoder does for
+// DataPageV2 -- mirrors the test suite's EncodeLevelsRLE() helper, reused here
+// since Recompress() needs genuine on-wire level bytes, not a hand-rolled stand-in.
+std::vector<uint8_t> EncodeLevelsRLE(const std::vector<int16_t>& levels,
+                                     int16_t max_level) {
+  std::vector<uint8_t> buffer(LevelEncoder::MaxBufferSize(
+      Encoding::RLE, max_level, static_cast<int>(levels.size())));
+  LevelEncoder encoder;
+  encoder.Init(Encoding::RLE, max_level, static_cast<int>(levels.size()), buffer.data(),
+               static_cast<int>(buffer.size()));
+  int num_encoded = encoder.Encode(static_cast<int>(levels.size()), levels.data());
+  if (num_encoded != static_cast<int>(levels.size())) {
+    throw ParquetException("ParquetPageDecoder: failed to encode all levels");
+  }
+  buffer.resize(static_cast<size_t>(encoder.len()));
+  return buffer;
+}
+
+// Mirrors DecodePlainValues<DType>(): PLAIN-encodes fixed-width values via Arrow's
+// own Encoder<DType> machinery -- no independent codec logic, matching the class's
+// documented design.
+template <typename DType>
+std::vector<uint8_t> EncodePlainValues(std::span<const typename DType::c_type> values) {
+  auto encoder = MakeTypedEncoder<DType>(Encoding::PLAIN);
+  encoder->Put(values.data(), static_cast<int>(values.size()));
+  std::shared_ptr<::arrow::Buffer> buffer = encoder->FlushValues();
+  return std::vector<uint8_t>(buffer->data(), buffer->data() + buffer->size());
+}
+
+// Mirrors DecodePlainByteArrayValues(): re-derives and writes each value's 4-byte
+// length prefix via Arrow's own Encoder<ByteArrayType>, from whatever length the
+// string ended up at after EncryptCells()/DecryptCells() ran.
+std::vector<uint8_t> EncodePlainByteArrayValues(const std::vector<std::string>& values) {
+  const std::vector<ByteArray> byte_arrays(values.begin(), values.end());
+  auto encoder = MakeTypedEncoder<ByteArrayType>(Encoding::PLAIN);
+  encoder->Put(byte_arrays.data(), static_cast<int>(byte_arrays.size()));
+  std::shared_ptr<::arrow::Buffer> buffer = encoder->FlushValues();
+  return std::vector<uint8_t>(buffer->data(), buffer->data() + buffer->size());
+}
+
+// Mirrors Decompress()'s switch, in the opposite direction: PLAIN-encodes `values`
+// back into bytes. BOOLEAN/FIXED_LEN_BYTE_ARRAY are a straight copy rather than a
+// round trip through an encoder -- CryptoValueBuffer already stores their bytes in
+// exactly the on-disk PLAIN layout (packed bits for BOOLEAN, raw fixed-width bytes
+// for FIXED_LEN_BYTE_ARRAY; see parquet_crypto_provider.h), and TypedEncoder<
+// BooleanType> has no packed-bits-in overload to reuse (only bool*/vector<bool>).
+std::vector<uint8_t> EncodeValuesPortion(const TypedColumnValues& values) {
+  switch (values.physical_type()) {
+    case Type::INT32:
+      return EncodePlainValues<Int32Type>(std::get<std::span<int32_t>>(values.values()));
+    case Type::INT64:
+      return EncodePlainValues<Int64Type>(std::get<std::span<int64_t>>(values.values()));
+    case Type::INT96:
+      return EncodePlainValues<Int96Type>(std::get<std::span<Int96>>(values.values()));
+    case Type::FLOAT:
+      return EncodePlainValues<FloatType>(std::get<std::span<float>>(values.values()));
+    case Type::DOUBLE:
+      return EncodePlainValues<DoubleType>(std::get<std::span<double>>(values.values()));
+    case Type::BOOLEAN:
+    case Type::FIXED_LEN_BYTE_ARRAY: {
+      std::span<uint8_t> packed = std::get<std::span<uint8_t>>(values.values());
+      return std::vector<uint8_t>(packed.begin(), packed.end());
+    }
+    case Type::BYTE_ARRAY:
+      return EncodePlainByteArrayValues(
+          std::get<std::vector<std::string>>(values.values()));
+    case Type::UNDEFINED:
+    default:
+      throw ParquetException("ParquetPageDecoder: unsupported physical type");
+  }
+}
+
 }  // namespace
 
 std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
@@ -214,8 +289,7 @@ std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
 }
 
 // Decompress() decodes rep/def levels and, for every PLAIN-encoded physical type,
-// the values themselves. Recompress() remains a throwing stub -- re-encoding is a
-// separate, not-yet-implemented milestone.
+// the values themselves. Recompress() (below) mirrors it in reverse.
 TypedColumnValues ParquetPageDecoder::Decompress(
     std::span<const uint8_t> compressed_page,
     const encryption::EncodingProperties& props) {
@@ -333,10 +407,69 @@ TypedColumnValues ParquetPageDecoder::Decompress(
 }
 
 std::vector<uint8_t> ParquetPageDecoder::Recompress(
-    const TypedColumnValues& values, const encryption::EncodingProperties& props) {
-  throw ParquetException(
-      "ParquetPageDecoder::Recompress is not implemented: the cell path is a future "
-      "extension, not yet dispatched to this adapter");
+    const TypedColumnValues& values, const encryption::EncodingProperties& props,
+    int64_t* new_uncompressed_size) {
+  if (props.GetPageType() != PageType::DATA_PAGE_V2) {
+    throw ParquetException(
+        "ParquetPageDecoder::Recompress only supports DataPageV2 pages");
+  }
+  if (props.GetPageEncoding() != Encoding::PLAIN) {
+    throw ParquetException(
+        "ParquetPageDecoder::Recompress: only PLAIN value encoding is currently "
+        "supported");
+  }
+
+  // Repetition/definition levels are never mutated by ParquetCryptoProvider::
+  // EncryptCells()/DecryptCells() -- only values() is -- so re-encoding them always
+  // reproduces byte-identical output to props's frozen originals; only the values
+  // portion's size can legitimately change (e.g. a BYTE_ARRAY value's length
+  // changing).
+  std::vector<uint8_t> rep_bytes;
+  if (values.max_repetition_level() > 0) {
+    rep_bytes =
+        EncodeLevelsRLE(values.repetition_levels(), values.max_repetition_level());
+  }
+  std::vector<uint8_t> def_bytes;
+  if (values.max_definition_level() > 0) {
+    def_bytes =
+        EncodeLevelsRLE(values.definition_levels(), values.max_definition_level());
+  }
+
+  std::vector<uint8_t> values_bytes = EncodeValuesPortion(values);
+
+  const int64_t uncompressed_size =
+      static_cast<int64_t>(rep_bytes.size() + def_bytes.size() + values_bytes.size());
+
+  std::vector<uint8_t> output_values;
+  if (!props.GetPageV2IsCompressed()) {
+    output_values = std::move(values_bytes);
+  } else if (!values_bytes.empty()) {
+    // Mirrors SplitAndDecompressDataPageV2()'s inverse: only the values portion is
+    // ever compressed in a DataPageV2 -- levels never are.
+    PARQUET_ASSIGN_OR_THROW(auto codec,
+                            ::arrow::util::Codec::Create(props.GetCompressionCodec()));
+    const int64_t max_compressed_len = codec->MaxCompressedLen(
+        static_cast<int64_t>(values_bytes.size()), values_bytes.data());
+    output_values.resize(static_cast<size_t>(max_compressed_len));
+    PARQUET_ASSIGN_OR_THROW(
+        int64_t actual_len,
+        codec->Compress(static_cast<int64_t>(values_bytes.size()), values_bytes.data(),
+                        max_compressed_len, output_values.data()));
+    output_values.resize(static_cast<size_t>(actual_len));
+  }
+  // else: a page may have zero values when every row is null (GH-31992); some
+  // codecs reject a zero-length compressed input, so skip the call entirely,
+  // mirroring SplitAndDecompressDataPageV2()'s same skip on the decode side.
+
+  if (new_uncompressed_size != nullptr) {
+    *new_uncompressed_size = uncompressed_size;
+  }
+  std::vector<uint8_t> page_bytes;
+  page_bytes.reserve(rep_bytes.size() + def_bytes.size() + output_values.size());
+  page_bytes.insert(page_bytes.end(), rep_bytes.begin(), rep_bytes.end());
+  page_bytes.insert(page_bytes.end(), def_bytes.begin(), def_bytes.end());
+  page_bytes.insert(page_bytes.end(), output_values.begin(), output_values.end());
+  return page_bytes;
 }
 
 }  // namespace parquet

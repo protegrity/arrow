@@ -58,7 +58,8 @@ class PARQUET_EXPORT Decryptor {
                   std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
-      std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
+      std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
+      int64_t* new_uncompressed_size = nullptr);
 
   // Verifies a stored plaintext-footer (PAR1-mode) signature by recomputing it and
   // comparing (constant-time, done inside decryptor_instance_). `footer_aad`
