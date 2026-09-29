@@ -173,7 +173,14 @@ void WriteBatch(int rows, const NextFunc get_next_column) {
                      column.raw_repetition_levels(), column.raw_values());
 }
 
-FileEncryptor::FileEncryptor() { schema_ = SetupEncryptionSchema(); }
+FileEncryptor::FileEncryptor(bool disable_dictionary_encoding,
+                             Compression::type compression,
+                             ParquetDataPageVersion data_page_version)
+    : disable_dictionary_encoding_(disable_dictionary_encoding),
+      compression_(compression),
+      data_page_version_(data_page_version) {
+  schema_ = SetupEncryptionSchema();
+}
 
 std::shared_ptr<GroupNode> FileEncryptor::SetupEncryptionSchema() {
   parquet::schema::NodeVector fields;
@@ -211,7 +218,15 @@ void FileEncryptor::EncryptFile(
     std::string file,
     std::shared_ptr<parquet::FileEncryptionProperties> encryption_configurations) {
   WriterProperties::Builder prop_builder;
-  prop_builder.compression(parquet::Compression::UNCOMPRESSED);
+  prop_builder.compression(compression_);
+  prop_builder.data_page_version(data_page_version_);
+  if (disable_dictionary_encoding_) {
+    prop_builder.disable_dictionary();
+    // BOOLEAN + DataPageV2 defaults to RLE regardless of the dictionary setting
+    // (see ColumnWriter::Make()); force PLAIN globally so every column's data
+    // pages are PLAIN-encoded, as the cell path currently requires.
+    prop_builder.encoding(Encoding::PLAIN);
+  }
   prop_builder.encryption(encryption_configurations);
   prop_builder.enable_write_page_index();
   std::shared_ptr<WriterProperties> writer_properties = prop_builder.build();

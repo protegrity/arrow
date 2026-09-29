@@ -100,7 +100,15 @@ std::string BuildColumnKeyMapping();
 // and verify the correctness of data values.
 class FileEncryptor {
  public:
-  FileEncryptor();
+  // disable_dictionary_encoding forces every column to PLAIN value encoding, and
+  // data_page_version selects DataPageV2 -- both needed by cell-path
+  // (ParquetCryptoProvider::EncryptCells()) round trips, since ParquetPageDecoder
+  // only supports DataPageV2 + PLAIN today; anything else is rejected instead of
+  // silently mishandled.
+  explicit FileEncryptor(
+      bool disable_dictionary_encoding = false,
+      Compression::type compression = Compression::UNCOMPRESSED,
+      ParquetDataPageVersion data_page_version = ParquetDataPageVersion::V1);
 
   void EncryptFile(
       std::string file,
@@ -111,6 +119,9 @@ class FileEncryptor {
 
   int num_rowgroups_ = 5;
   int rows_per_rowgroup_ = 50;
+  bool disable_dictionary_encoding_;
+  Compression::type compression_;
+  ParquetDataPageVersion data_page_version_;
   std::shared_ptr<schema::GroupNode> schema_;
 };
 

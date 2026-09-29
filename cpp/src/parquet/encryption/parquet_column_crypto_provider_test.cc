@@ -16,10 +16,8 @@
 // under the License.
 //
 // Full read/write round-trip tests for ParquetCryptoProvider (EXTERNAL_PROTECT_V1)
-// using the XOR mock providers. Block-path only: cell-path cases (a provider with
-// SupportsTypedValues()==true actually receiving EncryptCells/DecryptCells through
-// a real file) are blocked on ParquetPageDecoder::Decompress()/Recompress(), which
-// are not yet implemented.
+// using the XOR mock providers. Covers both the block path (XorBlockCryptoProvider)
+// and the cell path (XorTypedValuesCryptoProvider) through real Parquet files.
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -221,6 +219,139 @@ TEST_F(ParquetColumnCryptoProviderTest, FullFileRoundTrip) {
 
   EXPECT_GT(provider->decrypt_block_calls(), 0);
   EXPECT_EQ(provider->decrypt_cells_calls(), 0);
+}
+
+// Cell-path full-file coverage: data pages for every physical type route
+// through EncryptCells()/DecryptCells() and round-trip correctly, while the
+// footer and column metadata (never cell-path eligible) still route through
+// EncryptBlock()/DecryptBlock() on the same provider instance.
+//
+// data_page_version=V2 and disable_dictionary_encoding=true are both required:
+// ParquetPageDecoder only supports DataPageV2 + PLAIN value encoding today, and
+// per-page encoding-aware cell-path routing does not exist yet, so a DataPageV1
+// or dictionary-encoded page (the defaults for this low-cardinality test data)
+// would reach ParquetPageDecoder::Decompress() and throw instead of being
+// silently mishandled -- see CellPathRejectsDictionaryEncodedDataPage below,
+// which pins that exact behavior.
+TEST_F(ParquetColumnCryptoProviderTest, CellPathFullFileRoundTrip) {
+  auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
+
+  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
+  enc_config.column_keys = BuildColumnKeyMapping();
+  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+  // BuildColumnKeyMapping() covers 6 of the 8 columns; add the repeated int64
+  // and the int96 column too, so every physical type -- and the repetition-
+  // level round trip -- is exercised through the cell path.
+  ColumnEncryptionAttributes int64_attrs;
+  int64_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
+  int64_attrs.key_id = kColumnMasterKeyIds[0];
+  enc_config.per_column_encryption[kInt64FieldName] = int64_attrs;
+  ColumnEncryptionAttributes int96_attrs;
+  int96_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
+  int96_attrs.key_id = kColumnMasterKeyIds[1];
+  enc_config.per_column_encryption[kInt96FieldName] = int96_attrs;
+  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
+      kms_config_, enc_config, provider);
+  ASSERT_NE(encryption_props, nullptr);
+
+  const std::string file_path = TempFilePath("cell_path_full_file_round_trip.parquet");
+  FileEncryptor encryptor(/*disable_dictionary_encoding=*/true,
+                          /*compression=*/Compression::UNCOMPRESSED,
+                          /*data_page_version=*/ParquetDataPageVersion::V2);
+  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
+
+  // Footer + column metadata always use the block path; every column's data
+  // (and, for the repeated int64 column, its levels) uses the cell path.
+  EXPECT_GT(provider->encrypt_block_calls(), 0);
+  EXPECT_GT(provider->encrypt_cells_calls(), 0);
+
+  ExternalDecryptionConfiguration dec_config;
+  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
+      kms_config_, dec_config, provider);
+  ASSERT_NE(decryption_props, nullptr);
+
+  // FileDecryptor::DecryptFile() asserts every column's read-back values match
+  // what FileEncryptor wrote -- a real per-physical-type correctness check for
+  // the cell path's Decompress()/EncryptCells()/Recompress() round trip, not
+  // just "no exception thrown".
+  FileDecryptor decryptor;
+  EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
+
+  EXPECT_GT(provider->decrypt_block_calls(), 0);
+  EXPECT_GT(provider->decrypt_cells_calls(), 0);
+}
+
+// Same cell-path coverage as CellPathFullFileRoundTrip, but with a real
+// compression codec instead of UNCOMPRESSED -- proves Decompress()/
+// Recompress() correctly reverse the values-portion codec independently of
+// the (always-uncompressed) level bytes.
+TEST_F(ParquetColumnCryptoProviderTest, CellPathFullFileRoundTripWithCompressionCodec) {
+  auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
+
+  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
+  enc_config.column_keys = BuildColumnKeyMapping();
+  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+  ColumnEncryptionAttributes int64_attrs;
+  int64_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
+  int64_attrs.key_id = kColumnMasterKeyIds[0];
+  enc_config.per_column_encryption[kInt64FieldName] = int64_attrs;
+  ColumnEncryptionAttributes int96_attrs;
+  int96_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
+  int96_attrs.key_id = kColumnMasterKeyIds[1];
+  enc_config.per_column_encryption[kInt96FieldName] = int96_attrs;
+  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
+      kms_config_, enc_config, provider);
+  ASSERT_NE(encryption_props, nullptr);
+
+  const std::string file_path =
+      TempFilePath("cell_path_full_file_round_trip_gzip.parquet");
+  FileEncryptor encryptor(/*disable_dictionary_encoding=*/true,
+                          /*compression=*/Compression::GZIP,
+                          /*data_page_version=*/ParquetDataPageVersion::V2);
+  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
+
+  EXPECT_GT(provider->encrypt_cells_calls(), 0);
+
+  ExternalDecryptionConfiguration dec_config;
+  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
+      kms_config_, dec_config, provider);
+  ASSERT_NE(decryption_props, nullptr);
+
+  FileDecryptor decryptor;
+  EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
+
+  EXPECT_GT(provider->decrypt_cells_calls(), 0);
+}
+
+// Pins today's documented limitation: until per-page encoding-aware cell-path
+// routing exists, a dictionary-encoded data page reaches
+// ParquetPageDecoder::Decompress() (which only understands PLAIN-encoded
+// values) and throws a clear error instead of silently misinterpreting
+// dictionary indices as real values.
+TEST_F(ParquetColumnCryptoProviderTest, CellPathRejectsDictionaryEncodedDataPage) {
+  auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
+
+  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
+  enc_config.column_keys = BuildColumnKeyMapping();
+  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
+      kms_config_, enc_config, provider);
+  ASSERT_NE(encryption_props, nullptr);
+
+  // disable_dictionary_encoding defaults to false: this column data is low
+  // cardinality and small enough to stay dictionary-encoded throughout.
+  FileEncryptor encryptor(/*disable_dictionary_encoding=*/false,
+                          /*compression=*/Compression::UNCOMPRESSED,
+                          /*data_page_version=*/ParquetDataPageVersion::V2);
+  try {
+    encryptor.EncryptFile(TempFilePath("cell_path_dictionary_rejected.parquet"),
+                          encryption_props);
+    FAIL() << "ParquetException should have been raised";
+  } catch (const ParquetException& xcp) {
+    EXPECT_THAT(xcp.what(), HasSubstr("only PLAIN value encoding"));
+  } catch (...) {
+    FAIL() << "Caught unexpected exception type";
+  }
 }
 
 namespace {
@@ -1075,13 +1206,13 @@ TEST(ParquetCryptoProviderAdapterCellPathGatingTest,
             static_cast<int32_t>(ciphertext.size()));
 }
 
-// Known gap: the cell path's page decompress/recompress step
-// (ParquetPageDecoder::Decompress()/Recompress()) is not yet implemented, so
-// passing real EncodingProperties still throws today -- this pins the current
-// behavior rather than asserting a real cell-path round trip, which does not
-// exist yet.
+// Known gap: ParquetPageDecoder only supports DataPageV2 today (DataPageV1
+// buffer framing is not yet implemented), so a DataPageV1 EncodingProperties
+// still throws on the cell path -- this pins that specific limitation rather
+// than a general "cell path doesn't work" gap, which no longer exists (see
+// CellPathFullFileRoundTrip* below for real DataPageV2 round trips).
 TEST(ParquetCryptoProviderAdapterCellPathGatingTest,
-     CellPathWithEncodingPropertiesNotYetImplemented) {
+     CellPathRejectsDataPageV1EncodingProperties) {
   auto provider = std::make_shared<XorCellCryptoProvider>();
   ParquetCryptoContext ctx;
 

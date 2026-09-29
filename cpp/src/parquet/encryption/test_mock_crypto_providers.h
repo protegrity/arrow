@@ -91,11 +91,13 @@ class XorBlockCryptoProvider : public ParquetCryptoProvider {
   std::vector<std::vector<uint8_t>> seen_module_aads_;
 };
 
-// Minimal ParquetCryptoProvider exercising the cell path (EncryptCells/DecryptCells).
-// XORs each character of every BYTE_ARRAY string value with a fixed key. The cell
-// path is not yet reachable through a real file round-trip (ParquetPageDecoder's
-// Decompress()/Recompress() are not yet implemented); this class exists now so
-// that implementation only needs to add tests, not a new mock provider.
+// Minimal ParquetCryptoProvider exercising only the cell path's gating logic
+// (EncryptCells/DecryptCells). XORs each character of every BYTE_ARRAY string
+// value with a fixed key; EncryptBlock/DecryptBlock deliberately always fail, so
+// tests asserting the adapter never falls back to the block path for a
+// data/dictionary-page module get a distinct, unambiguous error if that
+// invariant is ever broken. Not a full provider -- see
+// XorTypedValuesCryptoProvider below for real full-file round trips.
 class XorCellCryptoProvider : public ParquetCryptoProvider {
  public:
   // Unreachable: SupportsTypedValues() is always true for this provider.
@@ -133,6 +135,54 @@ class XorCellCryptoProvider : public ParquetCryptoProvider {
   [[nodiscard]] int decrypt_cells_calls() const { return decrypt_cells_calls_.load(); }
 
  private:
+  std::atomic<int> encrypt_cells_calls_{0};
+  std::atomic<int> decrypt_cells_calls_{0};
+};
+
+// A complete ParquetCryptoProvider exercising both paths for real end-to-end
+// file round trips: the block path (EncryptBlock/DecryptBlock, XOR-based, used
+// for the footer and column metadata, which are never cell-path eligible) and
+// the cell path (EncryptCells/DecryptCells, used for data/dictionary pages).
+// Unlike XorCellCryptoProvider above, every CryptoValueBuffer alternative is
+// handled -- not just BYTE_ARRAY -- by XOR-ing the raw bytes of each span's
+// underlying storage (self-inverse regardless of the element type).
+class XorTypedValuesCryptoProvider : public ParquetCryptoProvider {
+ public:
+  ::arrow::Result<std::vector<uint8_t>> EncryptBlock(
+      std::span<const uint8_t> plaintext, const ParquetCryptoContext& ctx,
+      std::span<const uint8_t> module_aad, std::span<const uint8_t> dek) override;
+
+  ::arrow::Result<std::vector<uint8_t>> DecryptBlock(
+      std::span<const uint8_t> ciphertext, const ParquetCryptoContext& ctx,
+      std::span<const uint8_t> module_aad, std::span<const uint8_t> dek) override;
+
+  [[nodiscard]] bool SupportsTypedValues() const override { return true; }
+
+  ::arrow::Status EncryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
+                               std::span<const uint8_t> dek) override;
+
+  ::arrow::Status DecryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
+                               std::span<const uint8_t> dek) override;
+
+  ::arrow::Result<std::vector<uint8_t>> SignFooter(std::span<const uint8_t> footer_bytes,
+                                                   const ParquetCryptoContext& ctx,
+                                                   std::span<const uint8_t> footer_aad,
+                                                   std::span<const uint8_t> dek) override;
+
+  ::arrow::Result<bool> VerifyFooterSignature(std::span<const uint8_t> footer_bytes,
+                                              std::span<const uint8_t> stored_signature,
+                                              const ParquetCryptoContext& ctx,
+                                              std::span<const uint8_t> footer_aad,
+                                              std::span<const uint8_t> dek) override;
+
+  [[nodiscard]] int encrypt_block_calls() const { return encrypt_block_calls_.load(); }
+  [[nodiscard]] int decrypt_block_calls() const { return decrypt_block_calls_.load(); }
+  [[nodiscard]] int encrypt_cells_calls() const { return encrypt_cells_calls_.load(); }
+  [[nodiscard]] int decrypt_cells_calls() const { return decrypt_cells_calls_.load(); }
+
+ private:
+  std::atomic<int> encrypt_block_calls_{0};
+  std::atomic<int> decrypt_block_calls_{0};
   std::atomic<int> encrypt_cells_calls_{0};
   std::atomic<int> decrypt_cells_calls_{0};
 };
