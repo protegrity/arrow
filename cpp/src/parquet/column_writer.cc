@@ -341,7 +341,7 @@ class SerializedPageWriter : public PageWriter {
         std::unique_ptr<EncodingProperties> encoding_properties =
             EncodingProperties::MakeFromMetadata(
                 metadata_->descr(), metadata_->properties(),
-                static_cast<const DictionaryPage&>(page));
+                static_cast<const DictionaryPage&>(page), uncompressed_size);
         output_data_len = data_encryptor_->EncryptWithManagedBuffer(
             compressed_data->span_as<uint8_t>(), encryption_buffer_.get(),
             std::move(encoding_properties), &uncompressed_size);

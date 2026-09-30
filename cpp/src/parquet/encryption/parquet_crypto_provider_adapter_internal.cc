@@ -36,7 +36,7 @@ namespace {
 // output can be read back from a buffer whose exact boundary Arrow doesn't
 // already know ahead of time (a page-header reader peeks a progressively larger,
 // over-sized buffer before it knows the header's real extent). The cell path
-// never has this ambiguity — the surrounding PageHeader already states the
+// never has this ambiguity -- the surrounding PageHeader already states the
 // page's exact compressed size.
 constexpr size_t kLengthPrefixSize = 4;
 
@@ -95,10 +95,22 @@ ParquetCryptoProviderEncryptorAdapter::ParquetCryptoProviderEncryptorAdapter(
       ctx_(std::move(ctx)),
       dispatch_module_type_(dispatch_module_type) {}
 
-bool ParquetCryptoProviderEncryptorAdapter::UseCellPath() const {
-  return provider_->SupportsTypedValues() &&
-         (dispatch_module_type_ == encryption::kDataPage ||
-          dispatch_module_type_ == encryption::kDictionaryPage);
+bool ParquetCryptoProviderEncryptorAdapter::UseCellPath(
+    const encryption::EncodingProperties* encoding_properties) const {
+  if (!provider_->SupportsTypedValues() ||
+      (dispatch_module_type_ != encryption::kDataPage &&
+       dispatch_module_type_ != encryption::kDictionaryPage)) {
+    return false;
+  }
+  if (encoding_properties == nullptr) {
+    return true;
+  }
+  // ParquetPageDecoder only understands PLAIN-encoded DataPageV2 and DictionaryPage
+  // pages; any other DataPage encoding (dictionary indices, RLE, DELTA_*) or
+  // DataPageV1 always falls back to the block path.
+  return encoding_properties->GetPageType() == PageType::DICTIONARY_PAGE ||
+         (encoding_properties->GetPageType() == PageType::DATA_PAGE_V2 &&
+          encoding_properties->GetPageEncoding() == Encoding::PLAIN);
 }
 
 int32_t ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer(
@@ -108,7 +120,7 @@ int32_t ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer(
     int64_t* new_uncompressed_size) {
   std::vector<uint8_t> result_bytes;
 
-  if (UseCellPath()) {
+  if (UseCellPath(encoding_properties.get())) {
     if (encoding_properties == nullptr) {
       throw ParquetException(
           "ParquetCryptoProviderEncryptorAdapter: EncodingProperties required for cell "
@@ -121,8 +133,8 @@ int32_t ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer(
                                                   new_uncompressed_size);
   } else {
     // aad is the module AAD Encryptor::UpdateAad() already computed via
-    // CreateModuleAad()/QuickUpdatePageAad() — the same per-page positional binding
-    // Internal PME uses for AES-GCM — forwarded straight through to the provider.
+    // CreateModuleAad()/QuickUpdatePageAad() -- the same per-page positional binding
+    // Internal PME uses for AES-GCM -- forwarded straight through to the provider.
     std::vector<uint8_t> block_payload;
     PARQUET_ASSIGN_OR_THROW(block_payload,
                             provider_->EncryptBlock(plaintext, ctx_, aad, dek));
@@ -160,15 +172,29 @@ ParquetCryptoProviderDecryptorAdapter::ParquetCryptoProviderDecryptorAdapter(
       ctx_(std::move(ctx)),
       dispatch_module_type_(dispatch_module_type) {}
 
-bool ParquetCryptoProviderDecryptorAdapter::UseCellPath() const {
-  return provider_->SupportsTypedValues() &&
-         (dispatch_module_type_ == encryption::kDataPage ||
-          dispatch_module_type_ == encryption::kDictionaryPage);
+bool ParquetCryptoProviderDecryptorAdapter::UseCellPath(
+    const encryption::EncodingProperties* encoding_properties) const {
+  if (!provider_->SupportsTypedValues() ||
+      (dispatch_module_type_ != encryption::kDataPage &&
+       dispatch_module_type_ != encryption::kDictionaryPage)) {
+    return false;
+  }
+  if (encoding_properties == nullptr) {
+    return true;
+  }
+  // See ParquetCryptoProviderEncryptorAdapter::UseCellPath()'s comment above.
+  return encoding_properties->GetPageType() == PageType::DICTIONARY_PAGE ||
+         (encoding_properties->GetPageType() == PageType::DATA_PAGE_V2 &&
+          encoding_properties->GetPageEncoding() == Encoding::PLAIN);
 }
 
 int32_t ParquetCryptoProviderDecryptorAdapter::GetCiphertextLength(
     std::span<const uint8_t> ciphertext) const {
-  if (UseCellPath()) {
+  // The dispatch-module-type check alone is sufficient here: GetCiphertextLength()
+  // is only ever reached for footer/column-metadata deserialization (thrift_internal.h),
+  // never for a real data/dictionary page, so passing null never risks the
+  // encoding-dependent branch below being evaluated for an eligible module.
+  if (UseCellPath(/*encoding_properties=*/nullptr)) {
     // The cell path is never read via a peeked/ambiguous buffer (its caller
     // always already knows the exact page size), so no length prefix exists.
     return static_cast<int32_t>(ciphertext.size());
@@ -183,7 +209,7 @@ int32_t ParquetCryptoProviderDecryptorAdapter::DecryptWithManagedBuffer(
     int64_t* new_uncompressed_size) {
   std::vector<uint8_t> result_bytes;
 
-  if (UseCellPath()) {
+  if (UseCellPath(encoding_properties.get())) {
     if (encoding_properties == nullptr) {
       throw ParquetException(
           "ParquetCryptoProviderDecryptorAdapter: EncodingProperties required for "
@@ -196,13 +222,13 @@ int32_t ParquetCryptoProviderDecryptorAdapter::DecryptWithManagedBuffer(
                                                   new_uncompressed_size);
   } else {
     // Strip the 4-byte length prefix EncryptWithManagedBuffer() wrote, so the
-    // provider only ever sees its own real ciphertext — never trailing garbage
+    // provider only ever sees its own real ciphertext -- never trailing garbage
     // from an over-sized peeked buffer (e.g. a page header read speculatively
     // before its real extent is known).
     uint32_t payload_len = ReadLengthPrefix(ciphertext);
     std::span<const uint8_t> payload = ciphertext.subspan(kLengthPrefixSize, payload_len);
-    // aad is the module AAD Decryptor::UpdateAad() already computed — the same
-    // per-page positional binding Internal PME uses for AES-GCM — forwarded
+    // aad is the module AAD Decryptor::UpdateAad() already computed -- the same
+    // per-page positional binding Internal PME uses for AES-GCM -- forwarded
     // straight through to the provider.
     PARQUET_ASSIGN_OR_THROW(result_bytes,
                             provider_->DecryptBlock(payload, ctx_, aad, dek));

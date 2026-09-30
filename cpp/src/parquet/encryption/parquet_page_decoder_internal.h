@@ -38,23 +38,25 @@ namespace parquet {
 /// encoder.cc) and arrow::Compression::MakeCodec() — no independent codec logic.
 class PARQUET_EXPORT ParquetPageDecoder {
  public:
-  /// Splits and decompresses `compressed_page` (DataPageV2 + PLAIN only; DataPageV1
-  /// is not yet supported), decodes its rep/def levels, and decodes PLAIN-encoded
-  /// values for every physical type into the returned TypedColumnValues. Non-PLAIN
+  /// Decompresses and decodes `compressed_page` (DataPageV2 or DictionaryPage,
+  /// PLAIN value encoding only; DataPageV1 is not yet supported) into the returned
+  /// TypedColumnValues. A DataPageV2's rep/def levels are decoded too; a
+  /// DictionaryPage has none (see TypedColumnValues::num_values()). Non-PLAIN
   /// value encodings are not yet implemented and throw.
   static TypedColumnValues Decompress(std::span<const uint8_t> compressed_page,
                                       const encryption::EncodingProperties& props);
 
   /// Re-encodes `values` (after ParquetCryptoProvider::EncryptCells()/DecryptCells()
-  /// has mutated them in place) into a PLAIN-encoded DataPageV2 buffer, mirroring
-  /// Decompress(), and recompresses the values portion per `props`. The values'
-  /// definition/repetition levels are never mutated by the provider, so their byte
-  /// lengths always match `props`'s frozen originals; only `new_uncompressed_size`
-  /// (when non-null) can legitimately differ from what `props` reports -- set to
-  /// the encoded (levels+values) size *before* recompression, which
-  /// column_writer.cc's WriteDataPage()/WriteDictionaryPage() must use for the page
-  /// header's uncompressed_page_size field instead of the pre-transform page's own
-  /// size, since EncryptCells()/DecryptCells() can change a value's length (e.g. for
+  /// has mutated them in place) into a PLAIN-encoded DataPageV2 or DictionaryPage
+  /// buffer, mirroring Decompress(), and recompresses the values portion per
+  /// `props`. A DataPageV2's definition/repetition levels are never mutated by the
+  /// provider, so their byte lengths always match `props`'s frozen originals; only
+  /// `new_uncompressed_size` (when non-null) can legitimately differ from what
+  /// `props` reports -- set to the encoded (levels+values, or just values for a
+  /// DictionaryPage) size *before* recompression, which column_writer.cc's
+  /// WriteDataPage()/WriteDictionaryPage() must use for the page header's
+  /// uncompressed_page_size field instead of the pre-transform page's own size,
+  /// since EncryptCells()/DecryptCells() can change a value's length (e.g. for
   /// BYTE_ARRAY).
   static std::vector<uint8_t> Recompress(const TypedColumnValues& values,
                                          const encryption::EncodingProperties& props,

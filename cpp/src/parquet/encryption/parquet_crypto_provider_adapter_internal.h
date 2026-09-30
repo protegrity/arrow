@@ -29,36 +29,36 @@
 
 namespace parquet {
 
-// Arrow-internal bridge from the external-provider-facing ParquetCryptoProvider
-// interface to Arrow's page-writer-facing EncryptorInterface. Never exposed to
-// provider implementations; created inline by
-// InternalFileEncryptor::GetColumnEncryptor() — one instance per column per file
-// write, reused across all row groups (see column_data_map_ cache).
+/// Arrow-internal bridge from the external-provider-facing ParquetCryptoProvider
+/// interface to Arrow's page-writer-facing EncryptorInterface. Never exposed to
+/// provider implementations; created inline by
+/// InternalFileEncryptor::GetColumnEncryptor() -- one instance per column per file
+/// write, reused across all row groups (see column_data_map_ cache).
 class PARQUET_EXPORT ParquetCryptoProviderEncryptorAdapter
     : public encryption::EncryptorInterface {
  public:
-  // dispatch_module_type is one of parquet::encryption's module-type constants
-  // (encryption_utils.h) — the same values CreateModuleAad()/GetKeyValueMetadata()
-  // already use. Fixed once for this adapter's lifetime (one instance per column or
-  // footer); used only to gate UseCellPath().
+  /// dispatch_module_type is one of parquet::encryption's module-type constants
+  /// (encryption_utils.h) -- the same values CreateModuleAad()/GetKeyValueMetadata()
+  /// already use. Fixed once for this adapter's lifetime (one instance per column or
+  /// footer); used only to gate UseCellPath().
   ParquetCryptoProviderEncryptorAdapter(std::shared_ptr<ParquetCryptoProvider> provider,
                                         ParquetCryptoContext ctx,
                                         int8_t dispatch_module_type);
 
-  // Always false: every call is routed through EncryptWithManagedBuffer(), which
-  // lets the provider return an arbitrarily-sized owned buffer (block path) or the
-  // recompressed page (cell path) without Arrow pre-sizing anything.
+  /// Always false: every call is routed through EncryptWithManagedBuffer(), which
+  /// lets the provider return an arbitrarily-sized owned buffer (block path) or the
+  /// recompressed page (cell path) without Arrow pre-sizing anything.
   [[nodiscard]] bool CanCalculateCiphertextLength() const override { return false; }
 
-  // Unreachable: Arrow only calls this pre-allocated-buffer path when
-  // CanCalculateCiphertextLength()==true, which this adapter never returns.
+  /// Unreachable: Arrow only calls this pre-allocated-buffer path when
+  /// CanCalculateCiphertextLength()==true, which this adapter never returns.
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override {
     throw ParquetException(
         "ParquetCryptoProviderEncryptorAdapter::CiphertextLength is unreachable: "
         "CanCalculateCiphertextLength() always returns false");
   }
 
-  // Unreachable for the same reason as CiphertextLength().
+  /// Unreachable for the same reason as CiphertextLength().
   int32_t Encrypt(std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
                   std::span<const uint8_t> aad, std::span<uint8_t> ciphertext,
                   std::unique_ptr<encryption::EncodingProperties> encoding_properties =
@@ -69,83 +69,92 @@ class PARQUET_EXPORT ParquetCryptoProviderEncryptorAdapter
         "pre-allocated-buffer path when CanCalculateCiphertextLength() is true");
   }
 
-  // The real entry point. Routes to the block or cell path based on
-  // dispatch_module_type_ and provider_->SupportsTypedValues() — never on
-  // SupportsTypedValues() alone, since footer/column-metadata/index/bloom-filter
-  // modules must always go through the block path regardless of that flag. `aad` is
-  // the module AAD Encryptor::UpdateAad() already computed via CreateModuleAad();
-  // `dek` is the column's or footer's resolved key. Both are forwarded straight
-  // through to the block path; the cell path forwards only `dek`. `new_uncompressed_size`
-  // is set on the cell path only, to Recompress()'s reported pre-recompression size —
-  // forwarded straight through from Recompress()'s own out-param.
+  /// The real entry point. Routes to the block or cell path based on
+  /// dispatch_module_type_ and provider_->SupportsTypedValues() -- never on
+  /// SupportsTypedValues() alone, since footer/column-metadata/index/bloom-filter
+  /// modules must always go through the block path regardless of that flag. `aad` is
+  /// the module AAD Encryptor::UpdateAad() already computed via CreateModuleAad();
+  /// `dek` is the column's or footer's resolved key. Both are forwarded straight
+  /// through to the block path; the cell path forwards only `dek`.
+  /// `new_uncompressed_size` is set on the cell path only, to Recompress()'s
+  /// reported pre-recompression size -- forwarded straight through from
+  /// Recompress()'s own out-param.
   int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<encryption::EncodingProperties> encoding_properties = nullptr,
       int64_t* new_uncompressed_size = nullptr) override;
 
-  // AES-GCM-shaped (explicit nonce, fixed output); footer signing is routed to the
-  // provider via ComputeFooterSignature() below instead, so this is unreachable.
+  /// AES-GCM-shaped (explicit nonce, fixed output); footer signing is routed to the
+  /// provider via ComputeFooterSignature() below instead, so this is unreachable.
   int32_t SignedFooterEncrypt(std::span<const uint8_t> footer,
                               std::span<const uint8_t> key, std::span<const uint8_t> aad,
                               std::span<const uint8_t> nonce,
                               std::span<uint8_t> encrypted_footer) override;
 
-  // Delegates to provider_->SignFooter(), converting its Result<> into the
-  // throw-based EncryptorInterface convention via PARQUET_ASSIGN_OR_THROW. Named
-  // ComputeFooterSignature() (not SignFooter()) at this interface layer to stay
-  // visually distinct from AesEncryptor's SignedFooterEncrypt() in the same header.
+  /// Delegates to provider_->SignFooter(), converting its Result<> into the
+  /// throw-based EncryptorInterface convention via PARQUET_ASSIGN_OR_THROW. Named
+  /// ComputeFooterSignature() (not SignFooter()) at this interface layer to stay
+  /// visually distinct from AesEncryptor's SignedFooterEncrypt() in the same header.
   std::vector<uint8_t> ComputeFooterSignature(std::span<const uint8_t> footer,
                                               std::span<const uint8_t> footer_aad,
                                               std::span<const uint8_t> dek = {}) override;
 
  private:
-  // True only when dispatch_module_type_ is kDataPage/kDictionaryPage and the
-  // provider supports typed values. Footer/column-metadata adapters always use the
-  // block path, regardless of SupportsTypedValues().
-  [[nodiscard]] bool UseCellPath() const;
+  // True when the provider should receive the page's decoded values instead of
+  // opaque ciphertext bytes: the provider supports typed values, the dispatch
+  // module is a data or dictionary page, and -- when encoding_properties is known --
+  // the page is either a real DictionaryPage (always PLAIN by spec) or a DataPageV2
+  // with PLAIN value encoding. A dictionary-encoded DataPage's indices
+  // (RLE_DICTIONARY/PLAIN_DICTIONARY) and any other non-PLAIN encoding (RLE,
+  // DELTA_*) always fall back to the block path. encoding_properties is null
+  // before the cell-path-required check below has run; UseCellPath() still
+  // returns true in that case so the caller's own null check raises the real
+  // error instead of silently choosing the block path.
+  [[nodiscard]] bool UseCellPath(
+      const encryption::EncodingProperties* encoding_properties) const;
 
   std::shared_ptr<ParquetCryptoProvider> provider_;
   ParquetCryptoContext ctx_;
   int8_t dispatch_module_type_;
 };
 
-// Arrow-internal bridge from the external-provider-facing ParquetCryptoProvider
-// interface to Arrow's page-reader-facing DecryptorInterface. Never exposed to
-// provider implementations; created inline by InternalFileDecryptor's
-// footer/column-metadata/data-page dispatch — one instance per call (no shared
-// cache, unlike the AES path's key-size-keyed cache, since ParquetCryptoContext is
-// per-column/footer and not content-addressable).
+/// Arrow-internal bridge from the external-provider-facing ParquetCryptoProvider
+/// interface to Arrow's page-reader-facing DecryptorInterface. Never exposed to
+/// provider implementations; created inline by InternalFileDecryptor's
+/// footer/column-metadata/data-page dispatch -- one instance per call (no shared
+/// cache, unlike the AES path's key-size-keyed cache, since ParquetCryptoContext is
+/// per-column/footer and not content-addressable).
 class PARQUET_EXPORT ParquetCryptoProviderDecryptorAdapter
     : public encryption::DecryptorInterface {
  public:
-  // See ParquetCryptoProviderEncryptorAdapter's constructor comment for what
-  // dispatch_module_type is used for.
+  /// See ParquetCryptoProviderEncryptorAdapter's constructor comment for what
+  /// dispatch_module_type is used for.
   ParquetCryptoProviderDecryptorAdapter(std::shared_ptr<ParquetCryptoProvider> provider,
                                         ParquetCryptoContext ctx,
                                         int8_t dispatch_module_type);
 
-  // Always false: every call is routed through DecryptWithManagedBuffer(), which
-  // lets the provider return an arbitrarily-sized owned buffer (block path) or the
-  // recompressed page (cell path) without Arrow pre-sizing anything.
+  /// Always false: every call is routed through DecryptWithManagedBuffer(), which
+  /// lets the provider return an arbitrarily-sized owned buffer (block path) or the
+  /// recompressed page (cell path) without Arrow pre-sizing anything.
   [[nodiscard]] bool CanCalculateLengths() const override { return false; }
 
-  // Unreachable: Arrow only calls this pre-allocated-buffer path when
-  // CanCalculateLengths()==true, which this adapter never returns.
+  /// Unreachable: Arrow only calls this pre-allocated-buffer path when
+  /// CanCalculateLengths()==true, which this adapter never returns.
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override {
     throw ParquetException(
         "ParquetCryptoProviderDecryptorAdapter::PlaintextLength is unreachable: "
         "CanCalculateLengths() always returns false");
   }
 
-  // Unreachable for the same reason as PlaintextLength().
+  /// Unreachable for the same reason as PlaintextLength().
   [[nodiscard]] int32_t CiphertextLength(int32_t plaintext_len) const override {
     throw ParquetException(
         "ParquetCryptoProviderDecryptorAdapter::CiphertextLength is unreachable: "
         "CanCalculateLengths() always returns false");
   }
 
-  // Unreachable for the same reason as PlaintextLength().
+  /// Unreachable for the same reason as PlaintextLength().
   int32_t Decrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
                   std::span<const uint8_t> aad, std::span<uint8_t> plaintext,
                   std::unique_ptr<encryption::EncodingProperties> encoding_properties =
@@ -155,22 +164,22 @@ class PARQUET_EXPORT ParquetCryptoProviderDecryptorAdapter
         "calls the pre-allocated-buffer path when CanCalculateLengths() is true");
   }
 
-  // The real entry point. Routes to the block or cell path based on
-  // dispatch_module_type_ and provider_->SupportsTypedValues() (mirrors
-  // ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer()'s gating rule).
-  // `aad` is the module AAD Decryptor::UpdateAad() already computed; `dek` is the
-  // column's or footer's resolved key. Both are forwarded straight through to the block
-  // path; the cell path forwards only `dek`. `new_uncompressed_size` is set on the
-  // cell path only, to Recompress()'s reported post-decryption size —
-  // forwarded straight through from Recompress()'s own out-param.
+  /// The real entry point. Routes to the block or cell path based on
+  /// dispatch_module_type_ and provider_->SupportsTypedValues() (mirrors
+  /// ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer()'s gating rule).
+  /// `aad` is the module AAD Decryptor::UpdateAad() already computed; `dek` is the
+  /// column's or footer's resolved key. Both are forwarded straight through to the block
+  /// path; the cell path forwards only `dek`. `new_uncompressed_size` is set on the
+  /// cell path only, to Recompress()'s reported post-decryption size --
+  /// forwarded straight through from Recompress()'s own out-param.
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<encryption::EncodingProperties> encoding_properties = nullptr,
       int64_t* new_uncompressed_size = nullptr) override;
 
-  // Delegates to provider_->VerifyFooterSignature(), converting its Result<> into
-  // the throw-based DecryptorInterface convention.
+  /// Delegates to provider_->VerifyFooterSignature(), converting its Result<> into
+  /// the throw-based DecryptorInterface convention.
   bool VerifyFooterSignature(std::span<const uint8_t> footer,
                              std::span<const uint8_t> stored_signature,
                              std::span<const uint8_t> footer_aad,
@@ -189,10 +198,10 @@ class PARQUET_EXPORT ParquetCryptoProviderDecryptorAdapter
   [[nodiscard]] int32_t GetCiphertextLength(
       std::span<const uint8_t> ciphertext) const override;
 
-  // True only when dispatch_module_type_ is kDataPage/kDictionaryPage and the
-  // provider supports typed values. Footer/column-metadata adapters always use the
-  // block path, regardless of SupportsTypedValues().
-  [[nodiscard]] bool UseCellPath() const;
+  // See ParquetCryptoProviderEncryptorAdapter::UseCellPath()'s comment above --
+  // identical gating logic, mirrored for the decrypt side.
+  [[nodiscard]] bool UseCellPath(
+      const encryption::EncodingProperties* encoding_properties) const;
   std::shared_ptr<ParquetCryptoProvider> provider_;
 
   ParquetCryptoContext ctx_;

@@ -57,7 +57,7 @@ std::unique_ptr<EncodingProperties> MakeDataPageV2Props(
       .PageV2RepetitionLevelsByteLength(repetition_levels_byte_length)
       .PageV2NumNulls(0)
       .PageV2IsCompressed(is_compressed)
-      .PageV2UncompressedPageSize(uncompressed_page_size)
+      .UncompressedPageSize(uncompressed_page_size)
       .DataPageNumValues(0)
       .DataPageMaxDefinitionLevel(0)
       .DataPageMaxRepetitionLevel(0)
@@ -102,6 +102,20 @@ std::unique_ptr<EncodingProperties> MakeDataPageV2PropsForDecompress(
     builder.FixedLengthBytes(fixed_length_bytes);
   }
   return builder.Build();
+}
+
+std::unique_ptr<EncodingProperties> MakeDictionaryPageProps(
+    int32_t num_values, Type::type physical_type = Type::INT32,
+    ::arrow::Compression::type codec = ::arrow::Compression::UNCOMPRESSED,
+    int64_t uncompressed_page_size = 0) {
+  return EncodingProperties::Builder()
+      .PageType(PageType::DICTIONARY_PAGE)
+      .PhysicalType(physical_type)
+      .PageEncoding(Encoding::PLAIN)
+      .CompressionCodec(codec)
+      .UncompressedPageSize(uncompressed_page_size)
+      .DictPageNumValues(num_values)
+      .Build();
 }
 
 // PLAIN-encodes `values` the same way the on-disk format does (raw native-endian
@@ -609,21 +623,20 @@ TEST(ParquetPageDecoderTest, RecompressRoundTripsWithCompressionCodec) {
                       compressed_values.data()));
   compressed_values.resize(static_cast<size_t>(compressed_len));
 
-  auto decode_props =
-      EncodingProperties::Builder()
-          .PageType(PageType::DATA_PAGE_V2)
-          .PhysicalType(Type::INT32)
-          .PageEncoding(Encoding::PLAIN)
-          .CompressionCodec(::arrow::Compression::GZIP)
-          .PageV2DefinitionLevelsByteLength(0)
-          .PageV2RepetitionLevelsByteLength(0)
-          .PageV2NumNulls(0)
-          .PageV2IsCompressed(true)
-          .PageV2UncompressedPageSize(static_cast<int64_t>(values_bytes.size()))
-          .DataPageNumValues(static_cast<int64_t>(present_values.size()))
-          .DataPageMaxDefinitionLevel(0)
-          .DataPageMaxRepetitionLevel(0)
-          .Build();
+  auto decode_props = EncodingProperties::Builder()
+                          .PageType(PageType::DATA_PAGE_V2)
+                          .PhysicalType(Type::INT32)
+                          .PageEncoding(Encoding::PLAIN)
+                          .CompressionCodec(::arrow::Compression::GZIP)
+                          .PageV2DefinitionLevelsByteLength(0)
+                          .PageV2RepetitionLevelsByteLength(0)
+                          .PageV2NumNulls(0)
+                          .PageV2IsCompressed(true)
+                          .UncompressedPageSize(static_cast<int64_t>(values_bytes.size()))
+                          .DataPageNumValues(static_cast<int64_t>(present_values.size()))
+                          .DataPageMaxDefinitionLevel(0)
+                          .DataPageMaxRepetitionLevel(0)
+                          .Build();
 
   TypedColumnValues typed =
       ParquetPageDecoder::Decompress(compressed_values, *decode_props);
@@ -641,7 +654,7 @@ TEST(ParquetPageDecoderTest, RecompressRoundTripsWithCompressionCodec) {
                           .PageV2RepetitionLevelsByteLength(0)
                           .PageV2NumNulls(0)
                           .PageV2IsCompressed(true)
-                          .PageV2UncompressedPageSize(new_uncompressed_size)
+                          .UncompressedPageSize(new_uncompressed_size)
                           .DataPageNumValues(static_cast<int64_t>(present_values.size()))
                           .DataPageMaxDefinitionLevel(0)
                           .DataPageMaxRepetitionLevel(0)
@@ -671,6 +684,98 @@ TEST(ParquetPageDecoderTest, RecompressRejectsNonPlainEncoding) {
                    .DataPageMaxRepetitionLevel(0)
                    .Build();
   EXPECT_THROW(ParquetPageDecoder::Recompress(typed, *props), ParquetException);
+}
+
+// A DictionaryPage has no rep/def levels at all -- Decompress() must leave both
+// level vectors empty and derive num_values() from the decoded values themselves.
+TEST(ParquetPageDecoderTest, DecompressDictionaryPageValues) {
+  const std::vector<int32_t> present_values = {11, 22, 33};
+  std::vector<uint8_t> page = EncodeInt32ValuesPlain(present_values);
+
+  auto props = MakeDictionaryPageProps(static_cast<int32_t>(present_values.size()));
+  TypedColumnValues result = ParquetPageDecoder::Decompress(page, *props);
+
+  EXPECT_EQ(result.physical_type(), Type::INT32);
+  EXPECT_EQ(result.max_definition_level(), 0);
+  EXPECT_EQ(result.max_repetition_level(), 0);
+  EXPECT_TRUE(result.definition_levels().empty());
+  EXPECT_TRUE(result.repetition_levels().empty());
+  EXPECT_EQ(result.num_values(), 3);
+  auto decoded = std::get<std::span<int32_t>>(result.values());
+  EXPECT_EQ(std::vector<int32_t>(decoded.begin(), decoded.end()), present_values);
+}
+
+// An empty dictionary (zero distinct values) is a valid, if unusual, page.
+TEST(ParquetPageDecoderTest, DecompressDictionaryPageAllowsEmptyDictionary) {
+  const std::vector<uint8_t> page;
+  auto props = MakeDictionaryPageProps(/*num_values=*/0);
+  TypedColumnValues result = ParquetPageDecoder::Decompress(page, *props);
+  EXPECT_EQ(result.num_values(), 0);
+}
+
+TEST(ParquetPageDecoderTest, DecompressDictionaryPageCompressed) {
+  ::arrow::Compression::type codec_type = ::arrow::Compression::UNCOMPRESSED;
+  for (auto candidate : {::arrow::Compression::GZIP, ::arrow::Compression::ZSTD,
+                         ::arrow::Compression::SNAPPY}) {
+    if (::arrow::util::Codec::IsAvailable(candidate)) {
+      codec_type = candidate;
+      break;
+    }
+  }
+  if (codec_type == ::arrow::Compression::UNCOMPRESSED) {
+    GTEST_SKIP() << "No optional compression codec built into this Arrow build";
+  }
+
+  const std::vector<int32_t> present_values = {1, 2, 3, 4, 5};
+  std::vector<uint8_t> raw_values = EncodeInt32ValuesPlain(present_values);
+
+  ASSERT_OK_AND_ASSIGN(auto codec, ::arrow::util::Codec::Create(codec_type));
+  std::vector<uint8_t> compressed(
+      static_cast<size_t>(codec->MaxCompressedLen(raw_values.size(), raw_values.data())));
+  ASSERT_OK_AND_ASSIGN(
+      int64_t compressed_len,
+      codec->Compress(static_cast<int64_t>(raw_values.size()), raw_values.data(),
+                      static_cast<int64_t>(compressed.size()), compressed.data()));
+  compressed.resize(static_cast<size_t>(compressed_len));
+
+  auto props =
+      MakeDictionaryPageProps(static_cast<int32_t>(present_values.size()), Type::INT32,
+                              codec_type, static_cast<int64_t>(raw_values.size()));
+  TypedColumnValues result = ParquetPageDecoder::Decompress(compressed, *props);
+  auto decoded = std::get<std::span<int32_t>>(result.values());
+  EXPECT_EQ(std::vector<int32_t>(decoded.begin(), decoded.end()), present_values);
+}
+
+// Full round trip through both Decompress() and Recompress() -- the levels-free
+// counterpart to RecompressRoundTripsInt32Values above.
+TEST(ParquetPageDecoderTest, RecompressDictionaryPageRoundTrip) {
+  const std::vector<int32_t> present_values = {7, 8, 9};
+  std::vector<uint8_t> page = EncodeInt32ValuesPlain(present_values);
+
+  auto decompress_props =
+      MakeDictionaryPageProps(static_cast<int32_t>(present_values.size()));
+  TypedColumnValues typed = ParquetPageDecoder::Decompress(page, *decompress_props);
+
+  auto recompress_props =
+      MakeDictionaryPageProps(static_cast<int32_t>(present_values.size()));
+  int64_t new_uncompressed_size = -1;
+  std::vector<uint8_t> recompressed =
+      ParquetPageDecoder::Recompress(typed, *recompress_props, &new_uncompressed_size);
+
+  EXPECT_EQ(recompressed, page);
+  EXPECT_EQ(new_uncompressed_size, static_cast<int64_t>(page.size()));
+}
+
+TEST(ParquetPageDecoderTest, DecompressDictionaryPageRejectsNonPlainEncoding) {
+  const std::vector<uint8_t> page = {1, 2, 3, 4};
+  auto props = EncodingProperties::Builder()
+                   .PageType(PageType::DICTIONARY_PAGE)
+                   .PhysicalType(Type::INT32)
+                   .PageEncoding(Encoding::RLE_DICTIONARY)
+                   .CompressionCodec(::arrow::Compression::UNCOMPRESSED)
+                   .DictPageNumValues(1)
+                   .Build();
+  EXPECT_THROW(ParquetPageDecoder::Decompress(page, *props), ParquetException);
 }
 
 }  // namespace parquet::encryption::test

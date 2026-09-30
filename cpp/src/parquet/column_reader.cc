@@ -484,6 +484,7 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
     builder.PageType(parquet::PageType::type::DICTIONARY_PAGE);
     builder.PageEncoding(ToParquetEncoding(dictionary_page_header.encoding));
     builder.DictPageNumValues(dictionary_page_header.num_values);
+    builder.UncompressedPageSize(page_header.uncompressed_page_size);
     if (dictionary_page_header.__isset.is_sorted) {
       builder.DictPageIsSorted(dictionary_page_header.is_sorted);
     }
@@ -528,7 +529,7 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
     builder.PageV2RepetitionLevelsByteLength(
         data_page_header_v2.repetition_levels_byte_length);
     builder.PageV2IsCompressed(data_page_header_v2.is_compressed);
-    builder.PageV2UncompressedPageSize(page_header.uncompressed_page_size);
+    builder.UncompressedPageSize(page_header.uncompressed_page_size);
 
     if (crypto_ctx_.column_descriptor) {
       builder.PhysicalType(crypto_ctx_.column_descriptor->physical_type());

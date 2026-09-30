@@ -37,9 +37,10 @@ namespace parquet {
 /// (decompress + decode a page into `values()`, hand it to
 /// ParquetCryptoProvider::EncryptCells()/DecryptCells(), then re-encode from
 /// the transformed values). `values()` holds one CryptoValueBuffer for the
-/// whole page's non-null entries, in row order; definition_levels()/
-/// repetition_levels() cover every logical value in the page, nulls included,
-/// and are unchanged by the implementation.
+/// whole page's non-null entries, in row order; for a DataPageV2,
+/// definition_levels()/repetition_levels() cover every logical value in the
+/// page, nulls included, and are unchanged by the implementation. A
+/// DictionaryPage has no levels at all (both stay empty) -- see num_values().
 class PARQUET_EXPORT TypedColumnValues {
  public:
   /// \param physical_type Type shared by every element of values().
@@ -102,9 +103,16 @@ class PARQUET_EXPORT TypedColumnValues {
   [[nodiscard]] int16_t max_definition_level() const { return max_definition_level_; }
   [[nodiscard]] int16_t max_repetition_level() const { return max_repetition_level_; }
 
-  /// Total logical value count for the page, including nulls.
+  /// Total logical value count for the page, including nulls. For a DataPageV2,
+  /// this is definition_levels()'s size (always populated, one entry per value --
+  /// see SetFixedWidthValues()'s caller). A DictionaryPage has no levels at all
+  /// (no logical-null concept), so its count is derived from values() directly.
   [[nodiscard]] int64_t num_values() const {
-    return static_cast<int64_t>(definition_levels_.size());
+    if (!definition_levels_.empty()) {
+      return static_cast<int64_t>(definition_levels_.size());
+    }
+    return std::visit([](const auto& v) { return static_cast<int64_t>(v.size()); },
+                      values_);
   }
 
  private:

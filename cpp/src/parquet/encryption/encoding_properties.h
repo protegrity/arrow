@@ -35,9 +35,14 @@ class PARQUET_EXPORT EncodingPropertiesBuilder;
 
 class PARQUET_EXPORT EncodingProperties {
  public:
+  // dictionary_page_uncompressed_size is only meaningful (and only read) when
+  // column_page is a DictionaryPage -- unlike DataPageV2, DictionaryPage carries no
+  // uncompressed-size accessor of its own, so the caller (column_writer.cc, which
+  // already computes this value before compressing the page) must pass it in.
   static std::unique_ptr<EncodingProperties> MakeFromMetadata(
       const ColumnDescriptor* column_descriptor,
-      const WriterProperties* writer_properties, const Page& column_page);
+      const WriterProperties* writer_properties, const Page& column_page,
+      std::optional<int64_t> dictionary_page_uncompressed_size = std::nullopt);
 
   // Builder pattern
   static EncodingPropertiesBuilder Builder();
@@ -85,8 +90,11 @@ class PARQUET_EXPORT EncodingProperties {
   [[nodiscard]] bool GetPageV2IsCompressed() const {
     return page_v2_is_compressed_.value();
   }
-  [[nodiscard]] int64_t GetPageV2UncompressedPageSize() const {
-    return page_v2_uncompressed_page_size_.value();
+  [[nodiscard]] int64_t GetUncompressedPageSize() const {
+    return uncompressed_page_size_.value();
+  }
+  [[nodiscard]] int32_t GetDictPageNumValues() const {
+    return dict_page_num_values_.value();
   }
 
  private:
@@ -145,11 +153,12 @@ class PARQUET_EXPORT EncodingProperties {
   std::optional<int32_t> page_v2_num_nulls_;
   std::optional<bool>
       page_v2_is_compressed_;  // this does not exist in V1 nor dictionary pages.
-  // Whole-page (levels + values) uncompressed size, i.e. the wire format's
-  // PageHeader.uncompressed_page_size -- needed to one-shot decompress the values
-  // portion without requiring a streaming Decompressor (not all codecs, e.g.
-  // Snappy, implement one).
-  std::optional<int64_t> page_v2_uncompressed_page_size_;
+  // Whole-page (levels + values, when present) uncompressed size, i.e. the wire
+  // format's PageHeader.uncompressed_page_size -- needed to one-shot decompress the
+  // values portion without requiring a streaming Decompressor (not all codecs, e.g.
+  // Snappy, implement one). Populated for DataPageV2 and DictionaryPage; not needed
+  // for V1 (ParquetPageDecoder does not support V1 framing).
+  std::optional<int64_t> uncompressed_page_size_;
 
   //--------------------------------
   // Dictionary page properties.
@@ -192,7 +201,8 @@ class PARQUET_EXPORT EncodingPropertiesBuilder {
   EncodingPropertiesBuilder& PageV2RepetitionLevelsByteLength(int32_t byte_length);
   EncodingPropertiesBuilder& PageV2NumNulls(int32_t num_nulls);
   EncodingPropertiesBuilder& PageV2IsCompressed(bool is_compressed);
-  EncodingPropertiesBuilder& PageV2UncompressedPageSize(int64_t uncompressed_page_size);
+  // Applies to DataPageV2 and DictionaryPage; see uncompressed_page_size_'s comment.
+  EncodingPropertiesBuilder& UncompressedPageSize(int64_t uncompressed_page_size);
 
   // Dictionary page properties
   EncodingPropertiesBuilder& DictPageNumValues(int32_t num_values);
@@ -228,7 +238,7 @@ class PARQUET_EXPORT EncodingPropertiesBuilder {
   std::optional<int32_t> page_v2_repetition_levels_byte_length_;
   std::optional<int32_t> page_v2_num_nulls_;
   std::optional<bool> page_v2_is_compressed_;
-  std::optional<int64_t> page_v2_uncompressed_page_size_;
+  std::optional<int64_t> uncompressed_page_size_;
 
   // Dictionary page properties
   std::optional<int32_t> dict_page_num_values_;
