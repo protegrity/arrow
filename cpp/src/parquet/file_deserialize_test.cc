@@ -1069,7 +1069,7 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
           parquet::encryption::EnumToString(encoding_properties->GetCompressionCodec());
       if (encoding_properties->GetPageType() == parquet::PageType::DATA_PAGE_V2) {
         raw_props["raw_page_v2_uncompressed_page_size"] =
-            std::to_string(encoding_properties->GetPageV2UncompressedPageSize());
+            std::to_string(encoding_properties->GetUncompressedPageSize());
       }
 
       // Fill column-level properties so validate() succeeds
