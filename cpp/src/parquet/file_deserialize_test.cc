@@ -1055,7 +1055,8 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> /*aad*/, std::span<const uint8_t> /*dek*/,
       std::unique_ptr<parquet::encryption::EncodingProperties> encoding_properties,
-      int64_t* /*new_uncompressed_size*/) override {
+      int64_t* /*new_uncompressed_size*/,
+      ::arrow::util::Codec* /*codec*/ = nullptr) override {
     PARQUET_THROW_NOT_OK(plaintext->Resize(ciphertext.size()));
     std::memcpy(plaintext->mutable_data(), ciphertext.data(), ciphertext.size());
     if (encoding_properties != nullptr) {
