@@ -270,19 +270,29 @@ std::vector<uint8_t> EncodeValuesPortion(const TypedColumnValues& values) {
 // MaxCompressedLen()/Compress()/Decompress() primitives (no owned-buffer
 // convenience wrapper), so this resize/call/verify sequence is written once here
 // and shared by DataPageV2's and DictionaryPage's decompress paths below, which
-// otherwise differ only in how they arrive at `uncompressed_len`.
+// otherwise differ only in how they arrive at `uncompressed_len`. `codec`, when
+// non-null, is reused instead of constructing a fresh one -- lets a long-lived
+// caller (e.g. an adapter that persists for a whole column chunk) amortize codec
+// construction across every page, mirroring column_reader.cc's cached
+// `decompressor_`.
 std::vector<uint8_t> DecompressBuffer(std::span<const uint8_t> data,
                                       int64_t uncompressed_len,
-                                      ::arrow::Compression::type codec_type) {
+                                      ::arrow::Compression::type codec_type,
+                                      ::arrow::util::Codec* codec = nullptr) {
   std::vector<uint8_t> decompressed(static_cast<size_t>(uncompressed_len));
   if (uncompressed_len > 0) {
     // A page/dictionary may be empty (GH-31992); some codecs reject a
     // zero-length compressed input, so skip the call entirely in that case.
-    PARQUET_ASSIGN_OR_THROW(auto codec, ::arrow::util::Codec::Create(codec_type));
+    std::unique_ptr<::arrow::util::Codec> owned_codec;
+    ::arrow::util::Codec* codec_ptr = codec;
+    if (codec_ptr == nullptr) {
+      PARQUET_ASSIGN_OR_THROW(owned_codec, ::arrow::util::Codec::Create(codec_type));
+      codec_ptr = owned_codec.get();
+    }
     PARQUET_ASSIGN_OR_THROW(
         int64_t actual_len,
-        codec->Decompress(static_cast<int64_t>(data.size()), data.data(),
-                          uncompressed_len, decompressed.data()));
+        codec_ptr->Decompress(static_cast<int64_t>(data.size()), data.data(),
+                              uncompressed_len, decompressed.data()));
     if (actual_len != uncompressed_len) {
       throw ParquetException(
           "ParquetPageDecoder: values did not decompress to the expected size");
@@ -291,16 +301,24 @@ std::vector<uint8_t> DecompressBuffer(std::span<const uint8_t> data,
   return decompressed;
 }
 
-// Mirrors DecompressBuffer() in reverse; see its comment.
+// Mirrors DecompressBuffer() in reverse; see its comment (including the `codec`
+// reuse parameter).
 std::vector<uint8_t> CompressBuffer(std::span<const uint8_t> data,
-                                    ::arrow::Compression::type codec_type) {
-  PARQUET_ASSIGN_OR_THROW(auto codec, ::arrow::util::Codec::Create(codec_type));
+                                    ::arrow::Compression::type codec_type,
+                                    ::arrow::util::Codec* codec = nullptr) {
+  std::unique_ptr<::arrow::util::Codec> owned_codec;
+  ::arrow::util::Codec* codec_ptr = codec;
+  if (codec_ptr == nullptr) {
+    PARQUET_ASSIGN_OR_THROW(owned_codec, ::arrow::util::Codec::Create(codec_type));
+    codec_ptr = owned_codec.get();
+  }
   const int64_t max_compressed_len =
-      codec->MaxCompressedLen(static_cast<int64_t>(data.size()), data.data());
+      codec_ptr->MaxCompressedLen(static_cast<int64_t>(data.size()), data.data());
   std::vector<uint8_t> output(static_cast<size_t>(max_compressed_len));
-  PARQUET_ASSIGN_OR_THROW(int64_t actual_len,
-                          codec->Compress(static_cast<int64_t>(data.size()), data.data(),
-                                          max_compressed_len, output.data()));
+  PARQUET_ASSIGN_OR_THROW(
+      int64_t actual_len,
+      codec_ptr->Compress(static_cast<int64_t>(data.size()), data.data(),
+                          max_compressed_len, output.data()));
   output.resize(static_cast<size_t>(actual_len));
   return output;
 }
@@ -313,7 +331,8 @@ std::vector<uint8_t> CompressBuffer(std::span<const uint8_t> data,
 // which compress/decompress a DictionaryPage unconditionally whenever the column
 // has a codec, with no per-page opt-out.
 std::vector<uint8_t> DecompressDictionaryPageBuffer(
-    std::span<const uint8_t> page, const encryption::EncodingProperties& props) {
+    std::span<const uint8_t> page, const encryption::EncodingProperties& props,
+    ::arrow::util::Codec* codec = nullptr) {
   if (props.GetCompressionCodec() == ::arrow::Compression::UNCOMPRESSED) {
     return std::vector<uint8_t>(page.begin(), page.end());
   }
@@ -322,24 +341,26 @@ std::vector<uint8_t> DecompressDictionaryPageBuffer(
     throw ParquetException(
         "ParquetPageDecoder: invalid DictionaryPage uncompressed size");
   }
-  return DecompressBuffer(page, uncompressed_len, props.GetCompressionCodec());
+  return DecompressBuffer(page, uncompressed_len, props.GetCompressionCodec(), codec);
 }
 
 // Mirrors DecompressDictionaryPageBuffer() in reverse -- same unconditional
 // (no per-page opt-out) compression rule.
 std::vector<uint8_t> CompressDictionaryPageBuffer(
-    std::span<const uint8_t> values_bytes, const encryption::EncodingProperties& props) {
+    std::span<const uint8_t> values_bytes, const encryption::EncodingProperties& props,
+    ::arrow::util::Codec* codec = nullptr) {
   if (props.GetCompressionCodec() == ::arrow::Compression::UNCOMPRESSED ||
       values_bytes.empty()) {
     return std::vector<uint8_t>(values_bytes.begin(), values_bytes.end());
   }
-  return CompressBuffer(values_bytes, props.GetCompressionCodec());
+  return CompressBuffer(values_bytes, props.GetCompressionCodec(), codec);
 }
 
 }  // namespace
 
 std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
-    std::span<const uint8_t> page, const encryption::EncodingProperties& props) {
+    std::span<const uint8_t> page, const encryption::EncodingProperties& props,
+    ::arrow::util::Codec* codec) {
   if (props.GetPageType() != PageType::DATA_PAGE_V2) {
     throw ParquetException(
         "ParquetPageDecoder::SplitAndDecompressDataPageV2 only supports DataPageV2 "
@@ -378,7 +399,7 @@ std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
           "its level byte lengths");
     }
     decompressed_values = DecompressBuffer(values_portion, uncompressed_values_len,
-                                           props.GetCompressionCodec());
+                                           props.GetCompressionCodec(), codec);
   }
 
   // One contiguous buffer, levels then values -- mirrors DataPageV2's own
@@ -395,8 +416,8 @@ std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
 // levels at all -- see the branch below for why it's routed differently instead
 // of reusing DataPageV2's framing. Recompress() (below) mirrors this in reverse.
 TypedColumnValues ParquetPageDecoder::Decompress(
-    std::span<const uint8_t> compressed_page,
-    const encryption::EncodingProperties& props) {
+    std::span<const uint8_t> compressed_page, const encryption::EncodingProperties& props,
+    ::arrow::util::Codec* codec) {
   if (props.GetPageEncoding() != Encoding::PLAIN) {
     throw ParquetException(
         "ParquetPageDecoder::Decompress: only PLAIN value encoding is currently "
@@ -413,12 +434,12 @@ TypedColumnValues ParquetPageDecoder::Decompress(
     TypedColumnValues result(props.GetPhysicalType(), /*max_definition_level=*/0,
                              /*max_repetition_level=*/0);
     std::vector<uint8_t> values_bytes =
-        DecompressDictionaryPageBuffer(compressed_page, props);
+        DecompressDictionaryPageBuffer(compressed_page, props, codec);
     DecodeValuesPortion(values_bytes, props.GetDictPageNumValues(), props, &result);
     return result;
   }
 
-  std::vector<uint8_t> page = SplitAndDecompressDataPageV2(compressed_page, props);
+  std::vector<uint8_t> page = SplitAndDecompressDataPageV2(compressed_page, props, codec);
 
   TypedColumnValues result(props.GetPhysicalType(), props.GetDataPageMaxDefinitionLevel(),
                            props.GetDataPageMaxRepetitionLevel());
@@ -493,7 +514,7 @@ TypedColumnValues ParquetPageDecoder::Decompress(
 
 std::vector<uint8_t> ParquetPageDecoder::Recompress(
     const TypedColumnValues& values, const encryption::EncodingProperties& props,
-    int64_t* new_uncompressed_size) {
+    int64_t* new_uncompressed_size, ::arrow::util::Codec* codec) {
   if (props.GetPageEncoding() != Encoding::PLAIN) {
     throw ParquetException(
         "ParquetPageDecoder::Recompress: only PLAIN value encoding is currently "
@@ -507,7 +528,7 @@ std::vector<uint8_t> ParquetPageDecoder::Recompress(
     if (new_uncompressed_size != nullptr) {
       *new_uncompressed_size = static_cast<int64_t>(values_bytes.size());
     }
-    return CompressDictionaryPageBuffer(values_bytes, props);
+    return CompressDictionaryPageBuffer(values_bytes, props, codec);
   }
 
   if (props.GetPageType() != PageType::DATA_PAGE_V2) {
@@ -543,7 +564,7 @@ std::vector<uint8_t> ParquetPageDecoder::Recompress(
   } else if (!values_bytes.empty()) {
     // Mirrors SplitAndDecompressDataPageV2()'s inverse: only the values portion is
     // ever compressed in a DataPageV2 -- levels never are.
-    output_values = CompressBuffer(values_bytes, props.GetCompressionCodec());
+    output_values = CompressBuffer(values_bytes, props.GetCompressionCodec(), codec);
   }
   // else: a page may have zero values when every row is null (GH-31992); some
   // codecs reject a zero-length compressed input, so skip the call entirely,

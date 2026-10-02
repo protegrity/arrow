@@ -342,9 +342,17 @@ class SerializedPageWriter : public PageWriter {
             EncodingProperties::MakeFromMetadata(
                 metadata_->descr(), metadata_->properties(),
                 static_cast<const DictionaryPage&>(page), uncompressed_size);
+        // compressor_ is this writer's own cached codec (built once in the
+        // constructor, reused for every page in this column chunk via Compress()
+        // above) -- passed through so the cell path reuses it too instead of
+        // constructing its own throwaway Codec per page. It's null for an
+        // uncompressed column (same as has_compressor()'s check), but that's
+        // incidental: the cell path skips compression on its own, via
+        // props.GetCompressionCodec()/GetPageV2IsCompressed(), before ever
+        // looking at this pointer.
         output_data_len = data_encryptor_->EncryptWithManagedBuffer(
             compressed_data->span_as<uint8_t>(), encryption_buffer_.get(),
-            std::move(encoding_properties), &uncompressed_size);
+            std::move(encoding_properties), &uncompressed_size, compressor_.get());
       }
 
       output_data_buffer = encryption_buffer_->data();
@@ -466,9 +474,10 @@ class SerializedPageWriter : public PageWriter {
             EncodingProperties::MakeFromMetadata(metadata_->descr(),
                                                  metadata_->properties(),
                                                  static_cast<const DataPage&>(page));
+        // See WriteDictionaryPage()'s identical compressor_ comment above.
         output_data_len = data_encryptor_->EncryptWithManagedBuffer(
             compressed_data->span_as<uint8_t>(), encryption_buffer_.get(),
-            std::move(encoding_properties), &uncompressed_size);
+            std::move(encoding_properties), &uncompressed_size, compressor_.get());
       }
       output_data_buffer = encryption_buffer_->data();
 

@@ -79,7 +79,8 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
-      int64_t* new_uncompressed_size = nullptr) override {
+      int64_t* new_uncompressed_size = nullptr,
+      ::arrow::util::Codec* codec = nullptr) override {
     throw ParquetException(
         "EncryptWithManagedBuffer is not supported in AesEncryptor, use Encrypt instead");
   }
@@ -165,7 +166,8 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
-      int64_t* new_uncompressed_size = nullptr) override {
+      int64_t* new_uncompressed_size = nullptr,
+      ::arrow::util::Codec* codec = nullptr) override {
     throw ParquetException(
         "DecryptWithManagedBuffer is not supported in AesDecryptor, use Decrypt instead");
   }

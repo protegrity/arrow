@@ -56,7 +56,7 @@ class PARQUET_EXPORT Encryptor {
   int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
-      int64_t* new_uncompressed_size = nullptr);
+      int64_t* new_uncompressed_size = nullptr, ::arrow::util::Codec* codec = nullptr);
 
   // Signs a plaintext (PAR1-mode) footer, returning an opaque signature blob to
   // write alongside the plaintext footer bytes. `footer_aad` (CreateFooterAad()'s

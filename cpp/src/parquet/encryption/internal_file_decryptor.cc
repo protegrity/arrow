@@ -94,10 +94,10 @@ int32_t Decryptor::Decrypt(std::span<const uint8_t> ciphertext,
 int32_t Decryptor::DecryptWithManagedBuffer(
     std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
     std::unique_ptr<EncodingProperties> encoding_properties,
-    int64_t* new_uncompressed_size) {
+    int64_t* new_uncompressed_size, ::arrow::util::Codec* codec) {
   return decryptor_instance_->DecryptWithManagedBuffer(
       ciphertext, plaintext, str2span(aad_), key_.as_span(),
-      std::move(encoding_properties), new_uncompressed_size);
+      std::move(encoding_properties), new_uncompressed_size, codec);
 }
 
 bool Decryptor::VerifyFooterSignature(std::span<const uint8_t> footer,

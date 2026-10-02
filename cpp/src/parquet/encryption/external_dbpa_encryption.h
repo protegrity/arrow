@@ -74,12 +74,14 @@ class PARQUET_EXPORT ExternalDBPAEncryptorAdapter : public EncryptorInterface {
   /// The buffer will be resized to the appropriate size by the agent during encryption.
   /// `aad` and `dek` are not used by this legacy DBPA adapter (the agent manages its
   /// own key material and binding); accepted only for EncryptorInterface conformance.
-  /// `new_uncompressed_size` is never set: this legacy adapter has no cell path.
+  /// `new_uncompressed_size`/`codec` are never set/used: this legacy adapter has no
+  /// cell path.
   int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
-      int64_t* new_uncompressed_size = nullptr) override;
+      int64_t* new_uncompressed_size = nullptr,
+      ::arrow::util::Codec* codec = nullptr) override;
 
   /// Encrypts plaintext footer, in order to compute footer signature (tag).
   int32_t SignedFooterEncrypt(std::span<const uint8_t> footer,
@@ -211,13 +213,14 @@ class PARQUET_EXPORT ExternalDBPADecryptorAdapter : public DecryptorInterface {
   /// Decrypt the ciphertext and leave the results in the plaintext buffer.
   /// The buffer will be resized to the correct size during decryption. This method
   /// is used when the decryptor cannot calculate the plaintext length before
-  /// decryption. `new_uncompressed_size` is never set: this legacy adapter has no
-  /// cell path.
+  /// decryption. `new_uncompressed_size`/`codec` are never set/used: this legacy
+  /// adapter has no cell path.
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
-      int64_t* new_uncompressed_size = nullptr) override;
+      int64_t* new_uncompressed_size = nullptr,
+      ::arrow::util::Codec* codec = nullptr) override;
 
  private:
   // agent_instance is assumed to be initialized at the time of construction.

@@ -24,6 +24,10 @@
 #include "parquet/exception.h"
 #include "parquet/platform.h"
 
+namespace arrow::util {
+class Codec;
+}  // namespace arrow::util
+
 namespace parquet::encryption {
 
 class PARQUET_EXPORT EncryptorInterface {
@@ -67,11 +71,18 @@ class PARQUET_EXPORT EncryptorInterface {
   ///     decompresses to (e.g. the cell path changing a value's length), set to
   ///     the new, correct pre-recompression size. Left untouched otherwise;
   ///     callers must not assume it was set.
+  /// \param codec When non-null, a long-lived Codec instance the caller already
+  ///     owns (e.g. SerializedPageWriter's own cached `compressor_`, built once
+  ///     per column chunk) that an implementation needing to compress may reuse
+  ///     instead of constructing its own -- mirrors Arrow's own compressor_/
+  ///     decompressor_ caching instead of paying codec-construction overhead on
+  ///     every page. Implementations without a compression step ignore it.
   virtual int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
-      int64_t* new_uncompressed_size = nullptr) = 0;
+      int64_t* new_uncompressed_size = nullptr,
+      ::arrow::util::Codec* codec = nullptr) = 0;
 
   /// Return column-level metadata accumulated during encryption of a single page.
   ///

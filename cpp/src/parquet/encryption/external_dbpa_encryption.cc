@@ -330,7 +330,7 @@ int32_t ExternalDBPAEncryptorAdapter::EncryptWithManagedBuffer(
     std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
     std::span<const uint8_t> aad, std::span<const uint8_t> dek,
     std::unique_ptr<EncodingProperties> encoding_properties,
-    int64_t* new_uncompressed_size) {
+    int64_t* new_uncompressed_size, ::arrow::util::Codec* codec) {
   if (encoding_properties == nullptr) {
     ARROW_LOG(ERROR) << "ExternalDBPAEncryptorAdapter:: encoding_properties is nullptr";
     throw ParquetException(
@@ -568,7 +568,7 @@ int32_t ExternalDBPADecryptorAdapter::DecryptWithManagedBuffer(
     std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
     std::span<const uint8_t> aad, std::span<const uint8_t> dek,
     std::unique_ptr<EncodingProperties> encoding_properties,
-    int64_t* new_uncompressed_size) {
+    int64_t* new_uncompressed_size, ::arrow::util::Codec* codec) {
   if (encoding_properties == nullptr) {
     ARROW_LOG(ERROR) << "ExternalDBPADecryptorAdapter:: encoding_properties is nullptr";
     throw ParquetException(

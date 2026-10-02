@@ -29,6 +29,10 @@ namespace parquet::encryption {
 class EncodingProperties;
 }  // namespace parquet::encryption
 
+namespace arrow::util {
+class Codec;
+}  // namespace arrow::util
+
 namespace parquet {
 
 /// Arrow-internal. Decompresses and decodes a Parquet data/dictionary page into a
@@ -36,6 +40,13 @@ namespace parquet {
 /// transform to reassemble a page after the provider mutates the values in place.
 /// Reuses Arrow's existing Decoder<DType>/Encoder<DType> machinery (decoder.cc/
 /// encoder.cc) and arrow::Compression::MakeCodec() — no independent codec logic.
+///
+/// `codec`, where accepted below, lets a long-lived caller (e.g. an adapter that
+/// persists for a whole column chunk) supply a cached, reused Codec instance --
+/// mirroring column_writer.cc's `compressor_`/column_reader.cc's `decompressor_`,
+/// each built once and reused across every page in the chunk, instead of paying
+/// per-page codec-construction overhead. When null (the default), a fresh Codec is
+/// constructed internally for that one call, same as before this parameter existed.
 class PARQUET_EXPORT ParquetPageDecoder {
  public:
   /// Decompresses and decodes `compressed_page` (DataPageV2 or DictionaryPage,
@@ -44,7 +55,8 @@ class PARQUET_EXPORT ParquetPageDecoder {
   /// DictionaryPage has none (see TypedColumnValues::num_values()). Non-PLAIN
   /// value encodings are not yet implemented and throw.
   static TypedColumnValues Decompress(std::span<const uint8_t> compressed_page,
-                                      const encryption::EncodingProperties& props);
+                                      const encryption::EncodingProperties& props,
+                                      ::arrow::util::Codec* codec = nullptr);
 
   /// Re-encodes `values` (after ParquetCryptoProvider::EncryptCells()/DecryptCells()
   /// has mutated them in place) into a PLAIN-encoded DataPageV2 or DictionaryPage
@@ -60,13 +72,15 @@ class PARQUET_EXPORT ParquetPageDecoder {
   /// BYTE_ARRAY).
   static std::vector<uint8_t> Recompress(const TypedColumnValues& values,
                                          const encryption::EncodingProperties& props,
-                                         int64_t* new_uncompressed_size = nullptr);
+                                         int64_t* new_uncompressed_size = nullptr,
+                                         ::arrow::util::Codec* codec = nullptr);
 
   /// Returns one buffer holding a DataPageV2's rep/def level bytes followed by its
   /// decompressed values, split via the caller-supplied level-length fields. Level
   /// bytes are decoded but not routed through ParquetCryptoProvider.
   static std::vector<uint8_t> SplitAndDecompressDataPageV2(
-      std::span<const uint8_t> page, const encryption::EncodingProperties& props);
+      std::span<const uint8_t> page, const encryption::EncodingProperties& props,
+      ::arrow::util::Codec* codec = nullptr);
 };
 
 }  // namespace parquet

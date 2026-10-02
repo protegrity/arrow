@@ -81,10 +81,10 @@ int32_t Encryptor::Encrypt(std::span<const uint8_t> plaintext,
 int32_t Encryptor::EncryptWithManagedBuffer(
     std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
     std::unique_ptr<EncodingProperties> encoding_properties,
-    int64_t* new_uncompressed_size) {
+    int64_t* new_uncompressed_size, ::arrow::util::Codec* codec) {
   return encryptor_instance_->EncryptWithManagedBuffer(
       plaintext, ciphertext, str2span(aad_), key_.as_span(),
-      std::move(encoding_properties), new_uncompressed_size);
+      std::move(encoding_properties), new_uncompressed_size, codec);
 }
 
 std::vector<uint8_t> Encryptor::ComputeFooterSignature(std::span<const uint8_t> footer) {

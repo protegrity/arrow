@@ -23,6 +23,10 @@
 #include "parquet/exception.h"
 #include "parquet/platform.h"
 
+namespace arrow::util {
+class Codec;
+}  // namespace arrow::util
+
 namespace parquet::encryption {
 
 class PARQUET_EXPORT DecryptorInterface {
@@ -81,11 +85,18 @@ class PARQUET_EXPORT DecryptorInterface {
   ///     recorded (e.g. the cell path restoring a value to its original, different
   ///     length), set to the new, correct pre-decompression size. Left untouched
   ///     otherwise; callers must not assume it was set.
+  /// \param codec When non-null, a long-lived Codec instance the caller already
+  ///     owns (e.g. SerializedPageReader's own cached `decompressor_`, built once
+  ///     per column chunk) that an implementation needing to decompress may reuse
+  ///     instead of constructing its own -- mirrors Arrow's own compressor_/
+  ///     decompressor_ caching instead of paying codec-construction overhead on
+  ///     every page. Implementations without a decompression step ignore it.
   virtual int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::span<const uint8_t> aad = {}, std::span<const uint8_t> dek = {},
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
-      int64_t* new_uncompressed_size = nullptr) = 0;
+      int64_t* new_uncompressed_size = nullptr,
+      ::arrow::util::Codec* codec = nullptr) = 0;
 
   /// Verify a standalone, opaque footer-signature blob produced by
   /// EncryptorInterface::ComputeFooterSignature() (as opposed to recomputing and

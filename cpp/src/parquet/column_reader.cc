@@ -652,9 +652,16 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {
         // write side's int64_t page sizes; starts equal to the on-disk value, so
         // it's already correct if the cell path leaves it untouched.
         int64_t new_uncompressed_len = uncompressed_len;
+        // decompressor_ is this reader's own cached codec (built once in the
+        // constructor, reused for every page in this column chunk via
+        // DecompressIfNeeded() below) -- passed through so the cell path reuses
+        // it too instead of constructing its own throwaway Codec per page. It's
+        // null for an uncompressed column (same as DecompressIfNeeded()'s check),
+        // but that's incidental: the cell path skips compression on its own, via
+        // props.GetCompressionCodec(), before ever looking at this pointer.
         compressed_len = data_decryptor_->DecryptWithManagedBuffer(
             page_buffer->span_as<uint8_t>(), decryption_buffer.get(),
-            std::move(encoding_properties), &new_uncompressed_len);
+            std::move(encoding_properties), &new_uncompressed_len, decompressor_.get());
         uncompressed_len = static_cast<int32_t>(new_uncompressed_len);
       }
 
