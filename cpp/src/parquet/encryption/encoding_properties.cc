@@ -164,6 +164,7 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
     DataPageV1 data_page_v1 = static_cast<const DataPageV1&>(column_page);
     builder.PageV1DefinitionLevelEncoding(data_page_v1.definition_level_encoding());
     builder.PageV1RepetitionLevelEncoding(data_page_v1.repetition_level_encoding());
+    builder.UncompressedPageSize(data_page_v1.uncompressed_size());
   } else if (column_page.type() == parquet::PageType::DATA_PAGE_V2) {
     DataPageV2 data_page_v2 = static_cast<const DataPageV2&>(column_page);
     builder.PageV2DefinitionLevelsByteLength(

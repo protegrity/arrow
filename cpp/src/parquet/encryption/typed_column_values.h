@@ -37,10 +37,11 @@ namespace parquet {
 /// (decompress + decode a page into `values()`, hand it to
 /// ParquetCryptoProvider::EncryptCells()/DecryptCells(), then re-encode from
 /// the transformed values). `values()` holds one CryptoValueBuffer for the
-/// whole page's non-null entries, in row order; for a DataPageV2,
-/// definition_levels()/repetition_levels() cover every logical value in the
-/// page, nulls included, and are unchanged by the implementation. A
-/// DictionaryPage has no levels at all (both stay empty) -- see num_values().
+/// whole page's non-null entries, in row order; for a DataPageV1 or
+/// DataPageV2, definition_levels()/repetition_levels() cover every logical
+/// value in the page, nulls included, and are unchanged by the
+/// implementation. A DictionaryPage has no levels at all (both stay empty)
+/// -- see num_values().
 class PARQUET_EXPORT TypedColumnValues {
  public:
   /// \param physical_type Type shared by every element of values().

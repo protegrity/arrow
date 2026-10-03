@@ -49,23 +49,28 @@ namespace parquet {
 /// constructed internally for that one call, same as before this parameter existed.
 class PARQUET_EXPORT ParquetPageDecoder {
  public:
-  /// Decompresses and decodes `compressed_page` (DataPageV2 or DictionaryPage,
-  /// PLAIN value encoding only; DataPageV1 is not yet supported) into the returned
-  /// TypedColumnValues. A DataPageV2's rep/def levels are decoded too; a
-  /// DictionaryPage has none (see TypedColumnValues::num_values()). Non-PLAIN
-  /// value encodings are not yet implemented and throw.
+  /// Decompresses and decodes `compressed_page` (DataPageV1, DataPageV2, or
+  /// DictionaryPage, PLAIN value encoding only) into the returned
+  /// TypedColumnValues. A DataPageV1/V2's rep/def levels are decoded too (either
+  /// RLE or BIT_PACKED level encoding, for V1); a DictionaryPage has none (see
+  /// TypedColumnValues::num_values()). Non-PLAIN value encodings are not yet
+  /// implemented and throw.
   static TypedColumnValues Decompress(std::span<const uint8_t> compressed_page,
                                       const encryption::EncodingProperties& props,
                                       ::arrow::util::Codec* codec = nullptr);
 
   /// Re-encodes `values` (after ParquetCryptoProvider::EncryptCells()/DecryptCells()
-  /// has mutated them in place) into a PLAIN-encoded DataPageV2 or DictionaryPage
-  /// buffer, mirroring Decompress(), and recompresses the values portion per
-  /// `props`. A DataPageV2's definition/repetition levels are never mutated by the
-  /// provider, so their byte lengths always match `props`'s frozen originals; only
-  /// `new_uncompressed_size` (when non-null) can legitimately differ from what
-  /// `props` reports -- set to the encoded (levels+values, or just values for a
-  /// DictionaryPage) size *before* recompression, which column_writer.cc's
+  /// has mutated them in place) into a PLAIN-encoded DataPageV1, DataPageV2, or
+  /// DictionaryPage buffer, mirroring Decompress(), and recompresses per `props`
+  /// (the whole levels+values blob for a DataPageV1; only the values portion for a
+  /// DataPageV2 or DictionaryPage). A DataPageV1/V2's definition/repetition levels
+  /// are never mutated by the provider, so their byte lengths always match
+  /// `props`'s frozen originals; a DataPageV1's levels can only be re-encoded as
+  /// RLE (the only encoding Arrow's own writer ever produces -- a file written by
+  /// another implementation with BIT_PACKED levels decodes fine but cannot
+  /// round-trip through the cell path, and throws here). `new_uncompressed_size`
+  /// (when non-null) can legitimately differ from what `props` reports -- set to
+  /// the encoded size *before* recompression, which column_writer.cc's
   /// WriteDataPage()/WriteDictionaryPage() must use for the page header's
   /// uncompressed_page_size field instead of the pre-transform page's own size,
   /// since EncryptCells()/DecryptCells() can change a value's length (e.g. for

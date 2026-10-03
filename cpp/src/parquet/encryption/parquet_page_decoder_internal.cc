@@ -211,6 +211,31 @@ std::vector<uint8_t> EncodeLevelsRLE(const std::vector<int16_t>& levels,
   return buffer;
 }
 
+// Mirrors EncodeLevelsRLE(), but for DataPageV1: unlike DataPageV2 (whose page
+// header already carries explicit *_levels_byte_length fields), a V1 page embeds
+// each level section's own 4-byte length prefix inline -- matches
+// column_writer.cc's RleEncodeLevels(..., include_length_prefix=true), which this
+// mirrors on the encode side, and LevelDecoder::SetData()'s RLE case, which this
+// mirrors on the decode side (see the DATA_PAGE branch in Decompress() below).
+std::vector<uint8_t> EncodeLevelsRLEWithLengthPrefix(const std::vector<int16_t>& levels,
+                                                     int16_t max_level) {
+  constexpr size_t kPrefixSize = sizeof(int32_t);
+  std::vector<uint8_t> buffer(
+      kPrefixSize + static_cast<size_t>(LevelEncoder::MaxBufferSize(
+                        Encoding::RLE, max_level, static_cast<int>(levels.size()))));
+  LevelEncoder encoder;
+  encoder.Init(Encoding::RLE, max_level, static_cast<int>(levels.size()),
+               buffer.data() + kPrefixSize,
+               static_cast<int>(buffer.size() - kPrefixSize));
+  int num_encoded = encoder.Encode(static_cast<int>(levels.size()), levels.data());
+  if (num_encoded != static_cast<int>(levels.size())) {
+    throw ParquetException("ParquetPageDecoder: failed to encode all levels");
+  }
+  reinterpret_cast<int32_t*>(buffer.data())[0] = encoder.len();
+  buffer.resize(kPrefixSize + static_cast<size_t>(encoder.len()));
+  return buffer;
+}
+
 // Mirrors DecodePlainValues<DType>(): PLAIN-encodes fixed-width values via Arrow's
 // own Encoder<DType> machinery -- no independent codec logic, matching the class's
 // documented design.
@@ -356,6 +381,38 @@ std::vector<uint8_t> CompressDictionaryPageBuffer(
   return CompressBuffer(values_bytes, props.GetCompressionCodec(), codec);
 }
 
+// Decompresses a DataPageV1's buffer in one shot. Unlike DataPageV2 (whose levels
+// are never compressed and whose page header carries explicit *_levels_byte_length
+// fields), a V1 page compresses its levels and values together as a single blob --
+// same unconditional (no per-page opt-out) compression rule as
+// DecompressDictionaryPageBuffer() above, mirrored here rather than reused directly
+// since the two page types populate uncompressed_page_size_ from different Thrift
+// fields (see encoding_properties.cc's MakeFromMetadata()).
+std::vector<uint8_t> DecompressDataPageV1Buffer(
+    std::span<const uint8_t> page, const encryption::EncodingProperties& props,
+    ::arrow::util::Codec* codec = nullptr) {
+  if (props.GetCompressionCodec() == ::arrow::Compression::UNCOMPRESSED) {
+    return std::vector<uint8_t>(page.begin(), page.end());
+  }
+  const int64_t uncompressed_len = props.GetUncompressedPageSize();
+  if (uncompressed_len < 0) {
+    throw ParquetException("ParquetPageDecoder: invalid DataPageV1 uncompressed size");
+  }
+  return DecompressBuffer(page, uncompressed_len, props.GetCompressionCodec(), codec);
+}
+
+// Mirrors DecompressDataPageV1Buffer() in reverse -- same unconditional
+// (no per-page opt-out) compression rule.
+std::vector<uint8_t> CompressDataPageV1Buffer(std::span<const uint8_t> page_bytes,
+                                              const encryption::EncodingProperties& props,
+                                              ::arrow::util::Codec* codec = nullptr) {
+  if (props.GetCompressionCodec() == ::arrow::Compression::UNCOMPRESSED ||
+      page_bytes.empty()) {
+    return std::vector<uint8_t>(page_bytes.begin(), page_bytes.end());
+  }
+  return CompressBuffer(page_bytes, props.GetCompressionCodec(), codec);
+}
+
 }  // namespace
 
 std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
@@ -411,7 +468,7 @@ std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
   return result;
 }
 
-// Decompress() decodes rep/def levels (DataPageV2 only) and, for every
+// Decompress() decodes rep/def levels (DataPageV1 and DataPageV2) and, for every
 // PLAIN-encoded physical type, the values themselves. A DictionaryPage has no
 // levels at all -- see the branch below for why it's routed differently instead
 // of reusing DataPageV2's framing. Recompress() (below) mirrors this in reverse.
@@ -436,6 +493,82 @@ TypedColumnValues ParquetPageDecoder::Decompress(
     std::vector<uint8_t> values_bytes =
         DecompressDictionaryPageBuffer(compressed_page, props, codec);
     DecodeValuesPortion(values_bytes, props.GetDictPageNumValues(), props, &result);
+    return result;
+  }
+
+  if (props.GetPageType() == PageType::DATA_PAGE) {
+    // DataPageV1 Layout: Repetition Levels - Definition Levels - encoded values,
+    // the whole blob compressed together (unlike DataPageV2, which compresses only
+    // the values). Each level section is self-delimiting (RLE: an embedded 4-byte
+    // length prefix; BIT_PACKED: a byte count derived purely from num_values and
+    // max_level) -- parsed via the same LevelDecoder::SetData() column_reader.cc's
+    // InitializeLevelDecoders() uses, which already handles both encodings, so no
+    // separate branch is needed here for which one the file actually used.
+    std::vector<uint8_t> page = DecompressDataPageV1Buffer(compressed_page, props, codec);
+
+    TypedColumnValues result(props.GetPhysicalType(),
+                             props.GetDataPageMaxDefinitionLevel(),
+                             props.GetDataPageMaxRepetitionLevel());
+
+    const int64_t num_values = props.GetDataPageNumValues();
+    if (num_values < 0 || num_values > std::numeric_limits<int>::max()) {
+      throw ParquetException("ParquetPageDecoder: invalid DataPageV1 num_values");
+    }
+    if (page.size() > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+      throw ParquetException("ParquetPageDecoder: DataPageV1 page too large");
+    }
+
+    const uint8_t* buffer = page.data();
+    int32_t remaining = static_cast<int32_t>(page.size());
+
+    // Unlike DataPageV2's ARROW-17453 unconditional advance, a V1 page omits
+    // repetition-level bytes entirely when max_repetition_level()==0 -- mirrors
+    // column_reader.cc's InitializeLevelDecoders(), which only touches the
+    // repetition-level decoder/buffer inside this same condition.
+    if (result.max_repetition_level() > 0) {
+      LevelDecoder rep_decoder(result.max_repetition_level());
+      int32_t rep_bytes = rep_decoder.SetData(
+          props.GetPageV1RepetitionLevelEncoding(), result.max_repetition_level(),
+          static_cast<int>(num_values), buffer, remaining);
+      result.repetition_levels().resize(static_cast<size_t>(num_values));
+      int decoded = rep_decoder.Decode(static_cast<int>(num_values),
+                                       result.repetition_levels().data());
+      if (decoded != static_cast<int>(num_values)) {
+        throw ParquetException(
+            "ParquetPageDecoder: failed to decode all repetition levels");
+      }
+      buffer += rep_bytes;
+      remaining -= rep_bytes;
+    }
+
+    // definition_levels() is always fully populated, even for a required (no-null)
+    // column -- TypedColumnValues::num_values() relies on its size.
+    result.definition_levels().resize(static_cast<size_t>(num_values));
+    if (result.max_definition_level() > 0) {
+      LevelDecoder def_decoder(result.max_definition_level());
+      int32_t def_bytes = def_decoder.SetData(
+          props.GetPageV1DefinitionLevelEncoding(), result.max_definition_level(),
+          static_cast<int>(num_values), buffer, remaining);
+      int decoded = def_decoder.Decode(static_cast<int>(num_values),
+                                       result.definition_levels().data());
+      if (decoded != static_cast<int>(num_values)) {
+        throw ParquetException(
+            "ParquetPageDecoder: failed to decode all definition levels");
+      }
+      buffer += def_bytes;
+      remaining -= def_bytes;
+    } else {
+      std::fill(result.definition_levels().begin(), result.definition_levels().end(), 0);
+    }
+
+    if (remaining < 0) {
+      throw ParquetException("ParquetPageDecoder: level bytes exceed the page buffer");
+    }
+
+    const int64_t num_non_null =
+        CountNonNullValues(result.definition_levels(), result.max_definition_level());
+    std::span<const uint8_t> values_bytes(buffer, static_cast<size_t>(remaining));
+    DecodeValuesPortion(values_bytes, num_non_null, props, &result);
     return result;
   }
 
@@ -531,10 +664,54 @@ std::vector<uint8_t> ParquetPageDecoder::Recompress(
     return CompressDictionaryPageBuffer(values_bytes, props, codec);
   }
 
+  if (props.GetPageType() == PageType::DATA_PAGE) {
+    // Mirrors the DICTIONARY_PAGE branch's reasoning: repetition/definition levels
+    // are never mutated by EncryptCells()/DecryptCells(), so re-encoding them
+    // always reproduces byte-identical output to props's frozen originals -- only
+    // values_bytes's size can legitimately change. Only RLE-encoded levels can be
+    // re-emitted (the only encoding Arrow's own writer ever produces for V1); a
+    // file written by another implementation with BIT_PACKED levels decodes fine
+    // (see Decompress()) but cannot round-trip through the cell path.
+    if ((values.max_repetition_level() > 0 &&
+         props.GetPageV1RepetitionLevelEncoding() != Encoding::RLE) ||
+        (values.max_definition_level() > 0 &&
+         props.GetPageV1DefinitionLevelEncoding() != Encoding::RLE)) {
+      throw ParquetException(
+          "ParquetPageDecoder::Recompress: only RLE-encoded DataPageV1 levels can "
+          "be re-encoded");
+    }
+
+    std::vector<uint8_t> rep_bytes;
+    if (values.max_repetition_level() > 0) {
+      rep_bytes = EncodeLevelsRLEWithLengthPrefix(values.repetition_levels(),
+                                                  values.max_repetition_level());
+    }
+    std::vector<uint8_t> def_bytes;
+    if (values.max_definition_level() > 0) {
+      def_bytes = EncodeLevelsRLEWithLengthPrefix(values.definition_levels(),
+                                                  values.max_definition_level());
+    }
+    std::vector<uint8_t> values_bytes = EncodeValuesPortion(values);
+
+    if (new_uncompressed_size != nullptr) {
+      *new_uncompressed_size =
+          static_cast<int64_t>(rep_bytes.size() + def_bytes.size() + values_bytes.size());
+    }
+
+    // Unlike DataPageV2, a V1 page's levels and values are compressed together as
+    // one blob -- concatenate first, then compress the whole thing.
+    std::vector<uint8_t> page_bytes;
+    page_bytes.reserve(rep_bytes.size() + def_bytes.size() + values_bytes.size());
+    page_bytes.insert(page_bytes.end(), rep_bytes.begin(), rep_bytes.end());
+    page_bytes.insert(page_bytes.end(), def_bytes.begin(), def_bytes.end());
+    page_bytes.insert(page_bytes.end(), values_bytes.begin(), values_bytes.end());
+    return CompressDataPageV1Buffer(page_bytes, props, codec);
+  }
+
   if (props.GetPageType() != PageType::DATA_PAGE_V2) {
     throw ParquetException(
-        "ParquetPageDecoder::Recompress only supports DataPageV2 and DictionaryPage "
-        "pages");
+        "ParquetPageDecoder::Recompress only supports DataPageV1, DataPageV2, and "
+        "DictionaryPage pages");
   }
 
   // Repetition/definition levels are never mutated by ParquetCryptoProvider::

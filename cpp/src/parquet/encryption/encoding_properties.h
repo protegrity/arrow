@@ -81,6 +81,12 @@ class PARQUET_EXPORT EncodingProperties {
   [[nodiscard]] int16_t GetDataPageMaxRepetitionLevel() const {
     return data_page_max_repetition_level_.value();
   }
+  [[nodiscard]] parquet::Encoding::type GetPageV1DefinitionLevelEncoding() const {
+    return page_v1_definition_level_encoding_.value();
+  }
+  [[nodiscard]] parquet::Encoding::type GetPageV1RepetitionLevelEncoding() const {
+    return page_v1_repetition_level_encoding_.value();
+  }
   [[nodiscard]] int32_t GetPageV2DefinitionLevelsByteLength() const {
     return page_v2_definition_levels_byte_length_.value();
   }
@@ -155,9 +161,10 @@ class PARQUET_EXPORT EncodingProperties {
       page_v2_is_compressed_;  // this does not exist in V1 nor dictionary pages.
   // Whole-page (levels + values, when present) uncompressed size, i.e. the wire
   // format's PageHeader.uncompressed_page_size -- needed to one-shot decompress the
-  // values portion without requiring a streaming Decompressor (not all codecs, e.g.
-  // Snappy, implement one). Populated for DataPageV2 and DictionaryPage; not needed
-  // for V1 (ParquetPageDecoder does not support V1 framing).
+  // page without requiring a streaming Decompressor (not all codecs, e.g. Snappy,
+  // implement one). Populated for DataPageV1, DataPageV2, and DictionaryPage. A V1
+  // page's levels and values are compressed together as one blob (unlike V2, which
+  // compresses only the values), so this is the whole-blob size for V1.
   std::optional<int64_t> uncompressed_page_size_;
 
   //--------------------------------
@@ -201,7 +208,8 @@ class PARQUET_EXPORT EncodingPropertiesBuilder {
   EncodingPropertiesBuilder& PageV2RepetitionLevelsByteLength(int32_t byte_length);
   EncodingPropertiesBuilder& PageV2NumNulls(int32_t num_nulls);
   EncodingPropertiesBuilder& PageV2IsCompressed(bool is_compressed);
-  // Applies to DataPageV2 and DictionaryPage; see uncompressed_page_size_'s comment.
+  // Applies to DataPageV1, DataPageV2, and DictionaryPage; see
+  // uncompressed_page_size_'s comment.
   EncodingPropertiesBuilder& UncompressedPageSize(int64_t uncompressed_page_size);
 
   // Dictionary page properties

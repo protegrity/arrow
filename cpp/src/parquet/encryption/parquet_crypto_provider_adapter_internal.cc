@@ -105,11 +105,12 @@ bool ParquetCryptoProviderEncryptorAdapter::UseCellPath(
   if (encoding_properties == nullptr) {
     return true;
   }
-  // ParquetPageDecoder only understands PLAIN-encoded DataPageV2 and DictionaryPage
-  // pages; any other DataPage encoding (dictionary indices, RLE, DELTA_*) or
-  // DataPageV1 always falls back to the block path.
+  // ParquetPageDecoder only understands PLAIN-encoded DataPageV1/V2 and
+  // DictionaryPage pages; any other DataPage encoding (dictionary indices, RLE,
+  // DELTA_*) always falls back to the block path.
   return encoding_properties->GetPageType() == PageType::DICTIONARY_PAGE ||
-         (encoding_properties->GetPageType() == PageType::DATA_PAGE_V2 &&
+         ((encoding_properties->GetPageType() == PageType::DATA_PAGE ||
+           encoding_properties->GetPageType() == PageType::DATA_PAGE_V2) &&
           encoding_properties->GetPageEncoding() == Encoding::PLAIN);
 }
 
@@ -184,7 +185,8 @@ bool ParquetCryptoProviderDecryptorAdapter::UseCellPath(
   }
   // See ParquetCryptoProviderEncryptorAdapter::UseCellPath()'s comment above.
   return encoding_properties->GetPageType() == PageType::DICTIONARY_PAGE ||
-         (encoding_properties->GetPageType() == PageType::DATA_PAGE_V2 &&
+         ((encoding_properties->GetPageType() == PageType::DATA_PAGE ||
+           encoding_properties->GetPageType() == PageType::DATA_PAGE_V2) &&
           encoding_properties->GetPageEncoding() == Encoding::PLAIN);
 }
 

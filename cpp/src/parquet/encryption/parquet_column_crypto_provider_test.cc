@@ -280,6 +280,50 @@ TEST_F(ParquetColumnCryptoProviderTest, CellPathFullFileRoundTrip) {
   EXPECT_GT(provider->decrypt_cells_calls(), 0);
 }
 
+// Same cell-path coverage as CellPathFullFileRoundTrip, but with
+// ParquetDataPageVersion::V1 -- proves ParquetPageDecoder's DataPageV1 buffer
+// framing (levels+values compressed as one blob, self-delimiting RLE level
+// sections) round-trips correctly through a real file, not just the synthetic
+// buffers parquet_page_decoder_test.cc constructs by hand.
+TEST_F(ParquetColumnCryptoProviderTest, CellPathFullFileRoundTripDataPageV1) {
+  auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
+
+  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
+  enc_config.column_keys = BuildColumnKeyMapping();
+  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+  ColumnEncryptionAttributes int64_attrs;
+  int64_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
+  int64_attrs.key_id = kColumnMasterKeyIds[0];
+  enc_config.per_column_encryption[kInt64FieldName] = int64_attrs;
+  ColumnEncryptionAttributes int96_attrs;
+  int96_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
+  int96_attrs.key_id = kColumnMasterKeyIds[1];
+  enc_config.per_column_encryption[kInt96FieldName] = int96_attrs;
+  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
+      kms_config_, enc_config, provider);
+  ASSERT_NE(encryption_props, nullptr);
+
+  const std::string file_path = TempFilePath("cell_path_full_file_round_trip_v1.parquet");
+  FileEncryptor encryptor(/*disable_dictionary_encoding=*/true,
+                          /*compression=*/Compression::UNCOMPRESSED,
+                          /*data_page_version=*/ParquetDataPageVersion::V1);
+  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
+
+  EXPECT_GT(provider->encrypt_block_calls(), 0);
+  EXPECT_GT(provider->encrypt_cells_calls(), 0);
+
+  ExternalDecryptionConfiguration dec_config;
+  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
+      kms_config_, dec_config, provider);
+  ASSERT_NE(decryption_props, nullptr);
+
+  FileDecryptor decryptor;
+  EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
+
+  EXPECT_GT(provider->decrypt_block_calls(), 0);
+  EXPECT_GT(provider->decrypt_cells_calls(), 0);
+}
+
 // Same cell-path coverage as CellPathFullFileRoundTrip, but with a real
 // compression codec instead of UNCOMPRESSED -- proves Decompress()/
 // Recompress() correctly reverse the values-portion codec independently of
@@ -352,6 +396,40 @@ TEST_F(ParquetColumnCryptoProviderTest,
   // Footer, column metadata, and every dictionary-encoded DataPage's indices
   // route through the block path; every DictionaryPage routes through the cell
   // path -- both are exercised by this one file.
+  EXPECT_GT(provider->encrypt_block_calls(), 0);
+  EXPECT_GT(provider->encrypt_cells_calls(), 0);
+
+  ExternalDecryptionConfiguration dec_config;
+  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
+      kms_config_, dec_config, provider);
+  ASSERT_NE(decryption_props, nullptr);
+
+  FileDecryptor decryptor;
+  EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
+
+  EXPECT_GT(provider->decrypt_block_calls(), 0);
+  EXPECT_GT(provider->decrypt_cells_calls(), 0);
+}
+
+// Same as above, for DataPageV1 -- confirms the encoding-aware gate's
+// page-version-independence end-to-end, not just at the adapter-unit-test level.
+TEST_F(ParquetColumnCryptoProviderTest,
+       DictionaryColumnRoutesIndicesToBlockAndDictionaryToCellsV1) {
+  auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
+
+  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
+  enc_config.column_keys = BuildColumnKeyMapping();
+  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
+      kms_config_, enc_config, provider);
+  ASSERT_NE(encryption_props, nullptr);
+
+  const std::string file_path = TempFilePath("cell_path_dictionary_fallback_v1.parquet");
+  FileEncryptor encryptor(/*disable_dictionary_encoding=*/false,
+                          /*compression=*/Compression::UNCOMPRESSED,
+                          /*data_page_version=*/ParquetDataPageVersion::V1);
+  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
+
   EXPECT_GT(provider->encrypt_block_calls(), 0);
   EXPECT_GT(provider->encrypt_cells_calls(), 0);
 
@@ -1195,6 +1273,42 @@ TEST(ParquetCryptoProviderAdapterCellPathGatingTest,
   EXPECT_EQ(provider->decrypt_cells_calls(), 0);
 }
 
+// Same as above, for DataPageV1 -- the gate's page_encoding == PLAIN check applies
+// identically regardless of page version, so a V1 dictionary-encoded page's
+// indices must fall back to the block path too.
+TEST(ParquetCryptoProviderAdapterCellPathGatingTest,
+     DictionaryEncodedDataPageV1UsesBlockPathNeverCells) {
+  auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
+  ParquetCryptoContext ctx;
+
+  ParquetCryptoProviderEncryptorAdapter encryptor(provider, ctx,
+                                                  /*dispatch_module_type=*/kDataPage);
+  const std::vector<uint8_t> plaintext = {1, 2, 3};
+  ASSERT_OK_AND_ASSIGN(auto ciphertext_buf, ::arrow::AllocateResizableBuffer(0));
+  auto enc_props = EncodingProperties::Builder()
+                       .PageType(PageType::DATA_PAGE)
+                       .PageEncoding(Encoding::RLE_DICTIONARY)
+                       .Build();
+  EXPECT_NO_THROW(encryptor.EncryptWithManagedBuffer(plaintext, ciphertext_buf.get(), {},
+                                                     {}, std::move(enc_props)));
+  EXPECT_EQ(provider->encrypt_block_calls(), 1);
+  EXPECT_EQ(provider->encrypt_cells_calls(), 0);
+
+  ParquetCryptoProviderDecryptorAdapter decryptor(provider, ctx,
+                                                  /*dispatch_module_type=*/kDataPage);
+  std::span<const uint8_t> ciphertext(ciphertext_buf->data(),
+                                      static_cast<size_t>(ciphertext_buf->size()));
+  ASSERT_OK_AND_ASSIGN(auto plaintext_buf, ::arrow::AllocateResizableBuffer(0));
+  auto dec_props = EncodingProperties::Builder()
+                       .PageType(PageType::DATA_PAGE)
+                       .PageEncoding(Encoding::RLE_DICTIONARY)
+                       .Build();
+  EXPECT_NO_THROW(decryptor.DecryptWithManagedBuffer(ciphertext, plaintext_buf.get(), {},
+                                                     {}, std::move(dec_props)));
+  EXPECT_EQ(provider->decrypt_block_calls(), 1);
+  EXPECT_EQ(provider->decrypt_cells_calls(), 0);
+}
+
 // A real DictionaryPage is a flat, non-nullable list of real (non-index) values,
 // always PLAIN-encoded -- unlike a dictionary-encoded DataPage's indices, it does
 // take the cell path. dispatch_module_type is kDataPage even here, since real
@@ -1305,42 +1419,60 @@ TEST(ParquetCryptoProviderAdapterCellPathGatingTest,
             static_cast<int32_t>(ciphertext.size()));
 }
 
-// Known gap: ParquetPageDecoder only supports DataPageV2 today (DataPageV1
-// buffer framing is not yet implemented), so a DataPageV1 EncodingProperties
-// still throws on the cell path -- this pins that specific limitation rather
-// than a general "cell path doesn't work" gap, which no longer exists (see
-// CellPathFullFileRoundTrip* below for real DataPageV2 round trips).
+// DataPageV1 now takes the cell path, same as DataPageV2 -- a flat
+// (non-nested, non-null) BYTE_ARRAY column round-trips through EncryptCells()/
+// DecryptCells() at the adapter-gating level (XorCellCryptoProvider only
+// supports BYTE_ARRAY, see its class comment). See parquet_page_decoder_test.cc
+// for the lower-level buffer-framing coverage (nested columns, compression,
+// BIT_PACKED level decoding, and the RLE-only recompress limitation).
 TEST(ParquetCryptoProviderAdapterCellPathGatingTest,
-     CellPathRejectsDataPageV1EncodingProperties) {
+     CellPathAcceptsDataPageV1EncodingProperties) {
   auto provider = std::make_shared<XorCellCryptoProvider>();
   ParquetCryptoContext ctx;
 
   ParquetCryptoProviderEncryptorAdapter encryptor(provider, ctx,
                                                   /*dispatch_module_type=*/kDataPage);
-  const std::vector<uint8_t> plaintext = {1, 2, 3};
+  // PLAIN BYTE_ARRAY: a 4-byte little-endian length prefix followed by the raw
+  // bytes, per value -- "a", "bb", "ccc".
+  const std::vector<uint8_t> plaintext = {1, 0, 0, 0, 'a',       //
+                                          2, 0, 0, 0, 'b', 'b',  //
+                                          3, 0, 0, 0, 'c', 'c', 'c'};
   ASSERT_OK_AND_ASSIGN(auto ciphertext_buf, ::arrow::AllocateResizableBuffer(0));
-  // PageEncoding(PLAIN) is set so UseCellPath() actually takes the cell path here
-  // (a real DataPageV1 page always has its encoding set too) -- the DATA_PAGE_V2-only
-  // restriction this test pins is inside Decompress() itself, not the routing gate.
   auto enc_props = EncodingProperties::Builder()
                        .PageType(PageType::DATA_PAGE)
                        .PageEncoding(Encoding::PLAIN)
+                       .PhysicalType(Type::BYTE_ARRAY)
+                       .CompressionCodec(::arrow::Compression::UNCOMPRESSED)
+                       .DataPageNumValues(3)
+                       .DataPageMaxDefinitionLevel(0)
+                       .DataPageMaxRepetitionLevel(0)
                        .Build();
-  EXPECT_THROW(encryptor.EncryptWithManagedBuffer(plaintext, ciphertext_buf.get(), {}, {},
-                                                  std::move(enc_props)),
-               ParquetException);
+  int32_t encrypted_len = encryptor.EncryptWithManagedBuffer(
+      plaintext, ciphertext_buf.get(), {}, {}, std::move(enc_props));
+  EXPECT_EQ(provider->encrypt_cells_calls(), 1);
 
   ParquetCryptoProviderDecryptorAdapter decryptor(provider, ctx,
                                                   /*dispatch_module_type=*/kDataPage);
-  const std::vector<uint8_t> ciphertext = {1, 2, 3};
+  std::span<const uint8_t> ciphertext(ciphertext_buf->data(),
+                                      static_cast<size_t>(encrypted_len));
   ASSERT_OK_AND_ASSIGN(auto plaintext_buf, ::arrow::AllocateResizableBuffer(0));
   auto dec_props = EncodingProperties::Builder()
                        .PageType(PageType::DATA_PAGE)
                        .PageEncoding(Encoding::PLAIN)
+                       .PhysicalType(Type::BYTE_ARRAY)
+                       .CompressionCodec(::arrow::Compression::UNCOMPRESSED)
+                       .DataPageNumValues(3)
+                       .DataPageMaxDefinitionLevel(0)
+                       .DataPageMaxRepetitionLevel(0)
                        .Build();
-  EXPECT_THROW(decryptor.DecryptWithManagedBuffer(ciphertext, plaintext_buf.get(), {}, {},
-                                                  std::move(dec_props)),
-               ParquetException);
+  int32_t decrypted_len = decryptor.DecryptWithManagedBuffer(
+      ciphertext, plaintext_buf.get(), {}, {}, std::move(dec_props));
+  EXPECT_EQ(provider->decrypt_cells_calls(), 1);
+
+  ASSERT_EQ(decrypted_len, static_cast<int32_t>(plaintext.size()));
+  EXPECT_EQ(
+      std::vector<uint8_t>(plaintext_buf->data(), plaintext_buf->data() + decrypted_len),
+      plaintext);
 }
 
 // Block-path aad/dek forwarding: both are passed through to the provider

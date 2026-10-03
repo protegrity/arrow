@@ -505,6 +505,7 @@ std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
         ToParquetEncoding(data_page_header.definition_level_encoding));
     builder.PageV1RepetitionLevelEncoding(
         ToParquetEncoding(data_page_header.repetition_level_encoding));
+    builder.UncompressedPageSize(page_header.uncompressed_page_size);
 
     if (crypto_ctx_.column_descriptor) {
       builder.PhysicalType(crypto_ctx_.column_descriptor->physical_type());
