@@ -110,8 +110,10 @@ class PARQUET_EXPORT ParquetCryptoProviderEncryptorAdapter
   // the page is either a real DictionaryPage (always PLAIN by spec) or a DataPageV2
   // with PLAIN value encoding. A dictionary-encoded DataPage's indices
   // (RLE_DICTIONARY/PLAIN_DICTIONARY) and any other non-PLAIN encoding (RLE,
-  // DELTA_*) always fall back to the block path. encoding_properties is null
-  // before the cell-path-required check below has run; UseCellPath() still
+  // DELTA_*) always fall back to the block path -- as does any BZ2-compressed page
+  // regardless of value encoding (ParquetPageDecoder's one-shot codec machinery
+  // can't support BZ2; the block path is codec-agnostic). encoding_properties is
+  // null before the cell-path-required check below has run; UseCellPath() still
   // returns true in that case so the caller's own null check raises the real
   // error instead of silently choosing the block path.
   [[nodiscard]] bool UseCellPath(

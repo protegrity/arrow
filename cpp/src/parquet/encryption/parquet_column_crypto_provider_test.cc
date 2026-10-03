@@ -1309,6 +1309,47 @@ TEST(ParquetCryptoProviderAdapterCellPathGatingTest,
   EXPECT_EQ(provider->decrypt_cells_calls(), 0);
 }
 
+// A typed-values-capable provider still uses the block path for a PLAIN-encoded
+// DataPage when its compression codec is BZ2 -- ParquetPageDecoder's one-shot
+// CompressBuffer()/DecompressBuffer() can never support BZ2 (Arrow's BZ2Codec has
+// no one-shot API at all), so the gate must fall back here exactly as it does for
+// a non-PLAIN value encoding, rather than let EncryptWithManagedBuffer()/
+// DecryptWithManagedBuffer() reach ParquetPageDecoder and throw.
+TEST(ParquetCryptoProviderAdapterCellPathGatingTest,
+     Bz2CompressedPageUsesBlockPathNeverCells) {
+  auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
+  ParquetCryptoContext ctx;
+
+  ParquetCryptoProviderEncryptorAdapter encryptor(provider, ctx,
+                                                  /*dispatch_module_type=*/kDataPage);
+  const std::vector<uint8_t> plaintext = {1, 2, 3};
+  ASSERT_OK_AND_ASSIGN(auto ciphertext_buf, ::arrow::AllocateResizableBuffer(0));
+  auto enc_props = EncodingProperties::Builder()
+                       .PageType(PageType::DATA_PAGE_V2)
+                       .PageEncoding(Encoding::PLAIN)
+                       .CompressionCodec(::arrow::Compression::BZ2)
+                       .Build();
+  EXPECT_NO_THROW(encryptor.EncryptWithManagedBuffer(plaintext, ciphertext_buf.get(), {},
+                                                     {}, std::move(enc_props)));
+  EXPECT_EQ(provider->encrypt_block_calls(), 1);
+  EXPECT_EQ(provider->encrypt_cells_calls(), 0);
+
+  ParquetCryptoProviderDecryptorAdapter decryptor(provider, ctx,
+                                                  /*dispatch_module_type=*/kDataPage);
+  std::span<const uint8_t> ciphertext(ciphertext_buf->data(),
+                                      static_cast<size_t>(ciphertext_buf->size()));
+  ASSERT_OK_AND_ASSIGN(auto plaintext_buf, ::arrow::AllocateResizableBuffer(0));
+  auto dec_props = EncodingProperties::Builder()
+                       .PageType(PageType::DATA_PAGE_V2)
+                       .PageEncoding(Encoding::PLAIN)
+                       .CompressionCodec(::arrow::Compression::BZ2)
+                       .Build();
+  EXPECT_NO_THROW(decryptor.DecryptWithManagedBuffer(ciphertext, plaintext_buf.get(), {},
+                                                     {}, std::move(dec_props)));
+  EXPECT_EQ(provider->decrypt_block_calls(), 1);
+  EXPECT_EQ(provider->decrypt_cells_calls(), 0);
+}
+
 // A real DictionaryPage is a flat, non-nullable list of real (non-index) values,
 // always PLAIN-encoded -- unlike a dictionary-encoded DataPage's indices, it does
 // take the cell path. dispatch_module_type is kDataPage even here, since real

@@ -233,11 +233,13 @@ TEST(ParquetPageDecoderTest, UncompressedValuesSplitVerbatim) {
 TEST(ParquetPageDecoderTest, CompressedValuesDecompressToOriginal) {
   // Pick whichever real codec this build actually compiled in -- host dev
   // builds commonly disable all optional compression libraries.
+  // BZ2 excluded: no one-shot Codec::Compress() support -- see
+  // DecompressDataPageV1AllAvailableCompressionCodecs's comment.
   ::arrow::Compression::type codec_type = ::arrow::Compression::UNCOMPRESSED;
   bool found_codec = false;
   for (auto candidate : {::arrow::Compression::SNAPPY, ::arrow::Compression::GZIP,
                          ::arrow::Compression::ZSTD, ::arrow::Compression::LZ4,
-                         ::arrow::Compression::BROTLI, ::arrow::Compression::BZ2}) {
+                         ::arrow::Compression::BROTLI}) {
     if (::arrow::util::Codec::IsAvailable(candidate)) {
       codec_type = candidate;
       found_codec = true;
@@ -903,10 +905,11 @@ TEST(ParquetPageDecoderTest, DecompressDataPageV1WithRepetitionAndDefinitionLeve
 }
 
 TEST(ParquetPageDecoderTest, DecompressDataPageV1Compressed) {
+  // BZ2 excluded -- see DecompressDataPageV1AllAvailableCompressionCodecs's comment.
   ::arrow::Compression::type codec_type = ::arrow::Compression::UNCOMPRESSED;
   for (auto candidate : {::arrow::Compression::SNAPPY, ::arrow::Compression::GZIP,
                          ::arrow::Compression::ZSTD, ::arrow::Compression::LZ4,
-                         ::arrow::Compression::BROTLI, ::arrow::Compression::BZ2}) {
+                         ::arrow::Compression::BROTLI}) {
     if (::arrow::util::Codec::IsAvailable(candidate)) {
       codec_type = candidate;
       break;
@@ -1078,9 +1081,13 @@ TEST(ParquetPageDecoderTest, DecompressDataPageV1AllAvailableCompressionCodecs) 
   std::vector<uint8_t> values_bytes = EncodeInt32ValuesPlain(present_values);
   uncompressed.insert(uncompressed.end(), values_bytes.begin(), values_bytes.end());
 
+  // BZ2 excluded: Arrow's BZ2 codec doesn't implement one-shot Codec::Compress()
+  // (only streaming), unlike every other codec here -- ParquetPageDecoder's whole
+  // compress/decompress design is one-shot-only, so BZ2 can't round-trip through
+  // it regardless of this test.
   for (auto codec_type : {::arrow::Compression::SNAPPY, ::arrow::Compression::GZIP,
                           ::arrow::Compression::ZSTD, ::arrow::Compression::LZ4,
-                          ::arrow::Compression::BROTLI, ::arrow::Compression::BZ2}) {
+                          ::arrow::Compression::BROTLI}) {
     if (!::arrow::util::Codec::IsAvailable(codec_type)) {
       continue;
     }
@@ -1107,15 +1114,33 @@ TEST(ParquetPageDecoderTest, DecompressDataPageV1AllAvailableCompressionCodecs) 
   }
 }
 
+// Pins BZ2's permanent exclusion from the loop above: Arrow's BZ2Codec implements
+// neither one-shot Compress() nor Decompress() (only streaming, see
+// compression_bz2.cc), so Decompress() must surface that as a catchable
+// ParquetException, not a crash, whenever a page genuinely uses BZ2 (e.g. written
+// by a non-Arrow tool).
+TEST(ParquetPageDecoderTest, DecompressRejectsBz2Compression) {
+  if (!::arrow::util::Codec::IsAvailable(::arrow::Compression::BZ2)) {
+    GTEST_SKIP() << "BZ2 not built into this Arrow build";
+  }
+  const std::vector<uint8_t> fake_compressed_values = {1, 2, 3, 4};
+  auto props = MakeDataPageV1PropsForDecompress(
+      /*num_values=*/1, /*max_definition_level=*/0, /*max_repetition_level=*/0,
+      Type::INT32, ::arrow::Compression::BZ2, /*uncompressed_page_size=*/8);
+  EXPECT_THROW(ParquetPageDecoder::Decompress(fake_compressed_values, *props),
+               ParquetException);
+}
+
 // Supplements RecompressRoundTripsWithCompressionCodec (GZIP-only) with every
 // other optional codec this build compiled in.
 TEST(ParquetPageDecoderTest, RecompressRoundTripsAllAvailableCompressionCodecs) {
   const std::vector<int32_t> present_values = {1, 2, 3, 4, 5};
   std::vector<uint8_t> values_bytes = EncodeInt32ValuesPlain(present_values);
 
+  // BZ2 excluded -- see DecompressDataPageV1AllAvailableCompressionCodecs's comment.
   for (auto codec_type : {::arrow::Compression::SNAPPY, ::arrow::Compression::GZIP,
                           ::arrow::Compression::ZSTD, ::arrow::Compression::LZ4,
-                          ::arrow::Compression::BROTLI, ::arrow::Compression::BZ2}) {
+                          ::arrow::Compression::BROTLI}) {
     if (!::arrow::util::Codec::IsAvailable(codec_type)) {
       continue;
     }

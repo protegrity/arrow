@@ -107,11 +107,17 @@ bool ParquetCryptoProviderEncryptorAdapter::UseCellPath(
   }
   // ParquetPageDecoder only understands PLAIN-encoded DataPageV1/V2 and
   // DictionaryPage pages; any other DataPage encoding (dictionary indices, RLE,
-  // DELTA_*) always falls back to the block path.
-  return encoding_properties->GetPageType() == PageType::DICTIONARY_PAGE ||
-         ((encoding_properties->GetPageType() == PageType::DATA_PAGE ||
-           encoding_properties->GetPageType() == PageType::DATA_PAGE_V2) &&
-          encoding_properties->GetPageEncoding() == Encoding::PLAIN);
+  // DELTA_*) always falls back to the block path. A BZ2-compressed page falls
+  // back too, regardless of value encoding, since ParquetPageDecoder's one-shot
+  // codec machinery can't support BZ2 (the block path is codec-agnostic).
+  // Short-circuiting (&&) means GetCompressionCodec() is only read once the
+  // page already qualifies, since it isn't guaranteed to be set on
+  // EncodingProperties built for an already-disqualified page (e.g. in tests).
+  return (encoding_properties->GetPageType() == PageType::DICTIONARY_PAGE ||
+          ((encoding_properties->GetPageType() == PageType::DATA_PAGE ||
+            encoding_properties->GetPageType() == PageType::DATA_PAGE_V2) &&
+           encoding_properties->GetPageEncoding() == Encoding::PLAIN)) &&
+         encoding_properties->GetCompressionCodec() != ::arrow::Compression::BZ2;
 }
 
 int32_t ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer(
@@ -184,10 +190,11 @@ bool ParquetCryptoProviderDecryptorAdapter::UseCellPath(
     return true;
   }
   // See ParquetCryptoProviderEncryptorAdapter::UseCellPath()'s comment above.
-  return encoding_properties->GetPageType() == PageType::DICTIONARY_PAGE ||
-         ((encoding_properties->GetPageType() == PageType::DATA_PAGE ||
-           encoding_properties->GetPageType() == PageType::DATA_PAGE_V2) &&
-          encoding_properties->GetPageEncoding() == Encoding::PLAIN);
+  return (encoding_properties->GetPageType() == PageType::DICTIONARY_PAGE ||
+          ((encoding_properties->GetPageType() == PageType::DATA_PAGE ||
+            encoding_properties->GetPageType() == PageType::DATA_PAGE_V2) &&
+           encoding_properties->GetPageEncoding() == Encoding::PLAIN)) &&
+         encoding_properties->GetCompressionCodec() != ::arrow::Compression::BZ2;
 }
 
 int32_t ParquetCryptoProviderDecryptorAdapter::GetCiphertextLength(
