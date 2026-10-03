@@ -61,7 +61,6 @@
 #include "parquet/encryption/encoding_properties.h"
 
 using parquet::encryption::EncodingProperties;
-using parquet::encryption::EncodingPropertiesBuilder;
 
 #ifdef _MSC_VER
 // disable warning about inheritance via dominance in the diamond pattern
@@ -472,7 +471,7 @@ bool SerializedPageReader::ShouldSkipPage(EncodedStatistics* data_page_statistic
 // this function here (as opposed to **any** .h file).
 std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
     format::PageHeader& page_header) {
-  EncodingPropertiesBuilder builder;
+  EncodingProperties::Builder builder;
   builder.CompressionCodec(codec_);
 
   format::PageType::type page_type_from_header = page_header.type;

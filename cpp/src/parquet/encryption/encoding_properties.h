@@ -31,10 +31,83 @@
 
 namespace parquet::encryption {
 
-class PARQUET_EXPORT EncodingPropertiesBuilder;
-
 class PARQUET_EXPORT EncodingProperties {
  public:
+  class PARQUET_EXPORT Builder {
+   public:
+    Builder() = default;
+
+    // Column-level properties (required)
+    Builder& ColumnPath(const std::string& column_path);
+    Builder& PhysicalType(parquet::Type::type physical_type);
+    Builder& CompressionCodec(::arrow::Compression::type compression_codec);
+    Builder& PageType(parquet::PageType::type page_type);
+
+    // Column-level optional fields
+    Builder& FixedLengthBytes(std::int64_t fixed_length_bytes);
+
+    // Data page properties
+    Builder& PageEncoding(parquet::Encoding::type page_encoding);
+    Builder& DataPageNumValues(int64_t data_page_num_values);
+
+    // V1 data page properties
+    Builder& PageV1DefinitionLevelEncoding(parquet::Encoding::type encoding);
+    Builder& PageV1RepetitionLevelEncoding(parquet::Encoding::type encoding);
+
+    // Data page common properties (apply to V1 and V2)
+    Builder& DataPageMaxDefinitionLevel(int16_t level);
+    Builder& DataPageMaxRepetitionLevel(int16_t level);
+
+    // V2 data page properties
+    Builder& PageV2DefinitionLevelsByteLength(int32_t byte_length);
+    Builder& PageV2RepetitionLevelsByteLength(int32_t byte_length);
+    Builder& PageV2NumNulls(int32_t num_nulls);
+    Builder& PageV2IsCompressed(bool is_compressed);
+    // Applies to DataPageV1, DataPageV2, and DictionaryPage; see
+    // uncompressed_page_size_'s comment.
+    Builder& UncompressedPageSize(int64_t uncompressed_page_size);
+
+    // Dictionary page properties
+    Builder& DictPageNumValues(int32_t num_values);
+    Builder& DictPageIsSorted(bool is_sorted);
+
+    // Build the final object
+    std::unique_ptr<EncodingProperties> Build();
+
+   private:
+    friend class EncodingProperties;
+
+    // Required fields
+    std::optional<std::string> column_path_;
+    std::optional<parquet::Type::type> physical_type_;
+    std::optional<::arrow::Compression::type> compression_codec_;
+    std::optional<parquet::PageType::type> page_type_;
+
+    // column metadata
+    std::optional<std::int64_t> fixed_length_bytes_;
+
+    // data page properties
+    std::optional<parquet::Encoding::type> page_encoding_;
+    std::optional<int64_t> data_page_num_values_;
+    std::optional<int16_t> data_page_max_definition_level_;
+    std::optional<int16_t> data_page_max_repetition_level_;
+
+    // V1 data page properties
+    std::optional<parquet::Encoding::type> page_v1_definition_level_encoding_;
+    std::optional<parquet::Encoding::type> page_v1_repetition_level_encoding_;
+
+    // V2 data page properties
+    std::optional<int32_t> page_v2_definition_levels_byte_length_;
+    std::optional<int32_t> page_v2_repetition_levels_byte_length_;
+    std::optional<int32_t> page_v2_num_nulls_;
+    std::optional<bool> page_v2_is_compressed_;
+    std::optional<int64_t> uncompressed_page_size_;
+
+    // Dictionary page properties
+    std::optional<int32_t> dict_page_num_values_;
+    std::optional<bool> dict_page_is_sorted_;
+  };  // class Builder
+
   // dictionary_page_uncompressed_size is only meaningful (and only read) when
   // column_page is a DictionaryPage -- unlike DataPageV2, DictionaryPage carries no
   // uncompressed-size accessor of its own, so the caller (column_writer.cc, which
@@ -43,9 +116,6 @@ class PARQUET_EXPORT EncodingProperties {
       const ColumnDescriptor* column_descriptor,
       const WriterProperties* writer_properties, const Page& column_page,
       std::optional<int64_t> dictionary_page_uncompressed_size = std::nullopt);
-
-  // Builder pattern
-  static EncodingPropertiesBuilder Builder();
 
   // Setters for column-level properties
   void set_column_path(const std::string& column_path);
@@ -105,7 +175,7 @@ class PARQUET_EXPORT EncodingProperties {
 
  private:
   // Private constructor for builder
-  explicit EncodingProperties(const EncodingPropertiesBuilder& builder);
+  explicit EncodingProperties(const Builder& builder);
 
   EncodingProperties(std::optional<std::string> column_path,
                      std::optional<parquet::Type::type> physical_type,
@@ -117,9 +187,6 @@ class PARQUET_EXPORT EncodingProperties {
                      int32_t page_v2_definition_levels_byte_length,
                      int32_t page_v2_repetition_levels_byte_length,
                      int32_t page_v2_num_nulls, bool page_v2_is_compressed);
-
-  // Allow the builder to access private constructor
-  friend class EncodingPropertiesBuilder;
 
   //--------------------------------
   // from column metadata. does not change across chunks nor data pages.
@@ -174,84 +241,6 @@ class PARQUET_EXPORT EncodingProperties {
 
   //--------------------------------
 };  // class EncodingProperties
-
-class PARQUET_EXPORT EncodingPropertiesBuilder {
- public:
-  EncodingPropertiesBuilder() = default;
-
-  // Column-level properties (required)
-  EncodingPropertiesBuilder& ColumnPath(const std::string& column_path);
-  EncodingPropertiesBuilder& PhysicalType(parquet::Type::type physical_type);
-  EncodingPropertiesBuilder& CompressionCodec(
-      ::arrow::Compression::type compression_codec);
-  EncodingPropertiesBuilder& PageType(parquet::PageType::type page_type);
-
-  // Column-level optional fields
-  EncodingPropertiesBuilder& FixedLengthBytes(std::int64_t fixed_length_bytes);
-
-  // Data page properties
-  EncodingPropertiesBuilder& PageEncoding(parquet::Encoding::type page_encoding);
-  EncodingPropertiesBuilder& DataPageNumValues(int64_t data_page_num_values);
-
-  // V1 data page properties
-  EncodingPropertiesBuilder& PageV1DefinitionLevelEncoding(
-      parquet::Encoding::type encoding);
-  EncodingPropertiesBuilder& PageV1RepetitionLevelEncoding(
-      parquet::Encoding::type encoding);
-
-  // Data page common properties (apply to V1 and V2)
-  EncodingPropertiesBuilder& DataPageMaxDefinitionLevel(int16_t level);
-  EncodingPropertiesBuilder& DataPageMaxRepetitionLevel(int16_t level);
-
-  // V2 data page properties
-  EncodingPropertiesBuilder& PageV2DefinitionLevelsByteLength(int32_t byte_length);
-  EncodingPropertiesBuilder& PageV2RepetitionLevelsByteLength(int32_t byte_length);
-  EncodingPropertiesBuilder& PageV2NumNulls(int32_t num_nulls);
-  EncodingPropertiesBuilder& PageV2IsCompressed(bool is_compressed);
-  // Applies to DataPageV1, DataPageV2, and DictionaryPage; see
-  // uncompressed_page_size_'s comment.
-  EncodingPropertiesBuilder& UncompressedPageSize(int64_t uncompressed_page_size);
-
-  // Dictionary page properties
-  EncodingPropertiesBuilder& DictPageNumValues(int32_t num_values);
-  EncodingPropertiesBuilder& DictPageIsSorted(bool is_sorted);
-
-  // Build the final object
-  std::unique_ptr<EncodingProperties> Build();
-
- private:
-  friend class EncodingProperties;
-
-  // Required fields
-  std::optional<std::string> column_path_;
-  std::optional<parquet::Type::type> physical_type_;
-  std::optional<::arrow::Compression::type> compression_codec_;
-  std::optional<parquet::PageType::type> page_type_;
-
-  // column metadata
-  std::optional<std::int64_t> fixed_length_bytes_;
-
-  // data page properties
-  std::optional<parquet::Encoding::type> page_encoding_;
-  std::optional<int64_t> data_page_num_values_;
-  std::optional<int16_t> data_page_max_definition_level_;
-  std::optional<int16_t> data_page_max_repetition_level_;
-
-  // V1 data page properties
-  std::optional<parquet::Encoding::type> page_v1_definition_level_encoding_;
-  std::optional<parquet::Encoding::type> page_v1_repetition_level_encoding_;
-
-  // V2 data page properties
-  std::optional<int32_t> page_v2_definition_levels_byte_length_;
-  std::optional<int32_t> page_v2_repetition_levels_byte_length_;
-  std::optional<int32_t> page_v2_num_nulls_;
-  std::optional<bool> page_v2_is_compressed_;
-  std::optional<int64_t> uncompressed_page_size_;
-
-  // Dictionary page properties
-  std::optional<int32_t> dict_page_num_values_;
-  std::optional<bool> dict_page_is_sorted_;
-};  // class EncodingPropertiesBuilder
 
 //--------------------------------
 // Enum to string helpers

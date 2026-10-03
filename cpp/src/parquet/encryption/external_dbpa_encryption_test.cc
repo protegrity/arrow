@@ -81,7 +81,7 @@ class ExternalDBPAEncryptorAdapterTest : public ::testing::Test {
                                            connection_config_, std::nullopt);
 
     // Create a simple EncodingProperties for testing using the builder pattern
-    EncodingPropertiesBuilder builder;
+    EncodingProperties::Builder builder;
     builder.ColumnPath("test_column")
         .PhysicalType(data_type)
         .CompressionCodec(compression_type)
@@ -420,7 +420,7 @@ class StubEncryptionResult : public dbps::external::EncryptionResult {
 
 TEST_F(ExternalDBPAEncryptorAdapterTest, UpdateEncryptorMetadataAccumulatesByModuleType) {
   // Build EncodingProperties for dictionary page and data page V2
-  EncodingPropertiesBuilder dict_builder;
+  EncodingProperties::Builder dict_builder;
   dict_builder.ColumnPath("col")
       .PhysicalType(Type::BYTE_ARRAY)
       .CompressionCodec(Compression::UNCOMPRESSED)
@@ -428,7 +428,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, UpdateEncryptorMetadataAccumulatesByMod
       .PageEncoding(Encoding::PLAIN);
   auto dict_props = dict_builder.Build();
 
-  EncodingPropertiesBuilder data_builder;
+  EncodingProperties::Builder data_builder;
   data_builder.ColumnPath("col")
       .PhysicalType(Type::BYTE_ARRAY)
       .CompressionCodec(Compression::UNCOMPRESSED)
@@ -487,7 +487,7 @@ TEST_F(ExternalDBPAEncryptorAdapterTest, DecryptWithWrongKeyIdFails) {
       config, std::nullopt);
 
   // Build encoding properties
-  EncodingPropertiesBuilder builder;
+  EncodingProperties::Builder builder;
   builder.ColumnPath("test_column")
       .PhysicalType(data_type)
       .CompressionCodec(compression_type)

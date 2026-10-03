@@ -27,7 +27,7 @@ using parquet::ColumnDescriptor;
 using parquet::WriterProperties;
 
 // Private constructor for builder
-EncodingProperties::EncodingProperties(const EncodingPropertiesBuilder& builder)
+EncodingProperties::EncodingProperties(const Builder& builder)
     : column_path_(builder.column_path_),
       physical_type_(builder.physical_type_),
       compression_codec_(builder.compression_codec_),
@@ -48,11 +48,6 @@ EncodingProperties::EncodingProperties(const EncodingPropertiesBuilder& builder)
       uncompressed_page_size_(builder.uncompressed_page_size_),
       dict_page_num_values_(builder.dict_page_num_values_),
       dict_page_is_sorted_(builder.dict_page_is_sorted_) {}
-
-// Builder static method
-EncodingPropertiesBuilder EncodingProperties::Builder() {
-  return EncodingPropertiesBuilder();
-}
 
 // private method to validate the properties
 void EncodingProperties::validate() {
@@ -133,7 +128,7 @@ void EncodingProperties::validate() {
 std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
     const ColumnDescriptor* column_descriptor, const WriterProperties* writer_properties,
     const Page& column_page, std::optional<int64_t> dictionary_page_uncompressed_size) {
-  EncodingPropertiesBuilder builder;
+  EncodingProperties::Builder builder;
 
   builder.ColumnPath(column_descriptor->path()->ToDotString());
   builder.PhysicalType(column_descriptor->physical_type());
@@ -238,121 +233,123 @@ std::map<std::string, std::string> EncodingProperties::ToPropertiesMap() const {
 //--------------------------------
 // Builder method implementations
 
-std::unique_ptr<EncodingProperties> EncodingPropertiesBuilder::Build() {
+std::unique_ptr<EncodingProperties> EncodingProperties::Builder::Build() {
   // while we will perform validation upon construction,
   // we know that these properties are required.
   // validating here simplifies our code.
 
   if (!page_type_) {
     throw std::invalid_argument(
-        "EncodingPropertiesBuilder::Build - PageType is required");
+        "EncodingProperties::Builder::Build - PageType is required");
   }
 
   return std::unique_ptr<EncodingProperties>(new EncodingProperties(*this));
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::ColumnPath(
+EncodingProperties::Builder& EncodingProperties::Builder::ColumnPath(
     const std::string& column_path) {
   column_path_ = column_path;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::PhysicalType(
+EncodingProperties::Builder& EncodingProperties::Builder::PhysicalType(
     parquet::Type::type physical_type) {
   physical_type_ = physical_type;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::CompressionCodec(
+EncodingProperties::Builder& EncodingProperties::Builder::CompressionCodec(
     ::arrow::Compression::type compression_codec) {
   compression_codec_ = compression_codec;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::FixedLengthBytes(
+EncodingProperties::Builder& EncodingProperties::Builder::FixedLengthBytes(
     std::int64_t fixed_length_bytes) {
   fixed_length_bytes_ = fixed_length_bytes;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageType(
+EncodingProperties::Builder& EncodingProperties::Builder::PageType(
     parquet::PageType::type page_type) {
   page_type_ = page_type;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageEncoding(
+EncodingProperties::Builder& EncodingProperties::Builder::PageEncoding(
     parquet::Encoding::type page_encoding) {
   page_encoding_ = page_encoding;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::DataPageNumValues(
+EncodingProperties::Builder& EncodingProperties::Builder::DataPageNumValues(
     int64_t data_page_num_values) {
   data_page_num_values_ = data_page_num_values;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV1DefinitionLevelEncoding(
+EncodingProperties::Builder& EncodingProperties::Builder::PageV1DefinitionLevelEncoding(
     parquet::Encoding::type encoding) {
   page_v1_definition_level_encoding_ = encoding;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV1RepetitionLevelEncoding(
+EncodingProperties::Builder& EncodingProperties::Builder::PageV1RepetitionLevelEncoding(
     parquet::Encoding::type encoding) {
   page_v1_repetition_level_encoding_ = encoding;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::DataPageMaxDefinitionLevel(
+EncodingProperties::Builder& EncodingProperties::Builder::DataPageMaxDefinitionLevel(
     int16_t level) {
   data_page_max_definition_level_ = level;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::DataPageMaxRepetitionLevel(
+EncodingProperties::Builder& EncodingProperties::Builder::DataPageMaxRepetitionLevel(
     int16_t level) {
   data_page_max_repetition_level_ = level;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2DefinitionLevelsByteLength(
-    int32_t byte_length) {
+EncodingProperties::Builder&
+EncodingProperties::Builder::PageV2DefinitionLevelsByteLength(int32_t byte_length) {
   page_v2_definition_levels_byte_length_ = byte_length;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2RepetitionLevelsByteLength(
-    int32_t byte_length) {
+EncodingProperties::Builder&
+EncodingProperties::Builder::PageV2RepetitionLevelsByteLength(int32_t byte_length) {
   page_v2_repetition_levels_byte_length_ = byte_length;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2NumNulls(int32_t num_nulls) {
+EncodingProperties::Builder& EncodingProperties::Builder::PageV2NumNulls(
+    int32_t num_nulls) {
   page_v2_num_nulls_ = num_nulls;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::PageV2IsCompressed(
+EncodingProperties::Builder& EncodingProperties::Builder::PageV2IsCompressed(
     bool is_compressed) {
   page_v2_is_compressed_ = is_compressed;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::UncompressedPageSize(
+EncodingProperties::Builder& EncodingProperties::Builder::UncompressedPageSize(
     int64_t uncompressed_page_size) {
   uncompressed_page_size_ = uncompressed_page_size;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::DictPageNumValues(
+EncodingProperties::Builder& EncodingProperties::Builder::DictPageNumValues(
     int32_t num_values) {
   dict_page_num_values_ = num_values;
   return *this;
 }
 
-EncodingPropertiesBuilder& EncodingPropertiesBuilder::DictPageIsSorted(bool is_sorted) {
+EncodingProperties::Builder& EncodingProperties::Builder::DictPageIsSorted(
+    bool is_sorted) {
   dict_page_is_sorted_ = is_sorted;
   return *this;
 }
