@@ -158,15 +158,16 @@ class ARROW_PYTHON_PARQUET_ENCRYPTION_EXPORT PyParquetCryptoProvider
       std::span<const uint8_t> ciphertext, const ::parquet::ParquetCryptoContext& ctx,
       std::span<const uint8_t> module_aad, std::span<const uint8_t> dek = {}) override;
 
-  [[nodiscard]] bool SupportsTypedValues() const override { return false; }
+  [[nodiscard]] bool SupportsTypedValues(
+      const ::parquet::ParquetCryptoContext&) const override {
+    return false;
+  }
 
   arrow::Status EncryptCells(::parquet::CryptoValueBuffer& values,
-                             const ::parquet::ParquetCryptoContext& ctx,
-                             std::span<const uint8_t> dek = {}) override;
+                             const ::parquet::ParquetCryptoContext& ctx) override;
 
   arrow::Status DecryptCells(::parquet::CryptoValueBuffer& values,
-                             const ::parquet::ParquetCryptoContext& ctx,
-                             std::span<const uint8_t> dek = {}) override;
+                             const ::parquet::ParquetCryptoContext& ctx) override;
 
   arrow::Result<std::vector<uint8_t>> SignFooter(
       std::span<const uint8_t> footer_bytes, const ::parquet::ParquetCryptoContext& ctx,

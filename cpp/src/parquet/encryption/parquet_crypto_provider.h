@@ -88,12 +88,13 @@ using CryptoValueBuffer =
 /// opaque string only the implementation interprets; `dek` (below) carries the
 /// actual key bytes Arrow generated for the column or footer.
 ///
-/// Arrow calls exactly one of the two paths below for a given provider
-/// instance, decided once via SupportsTypedValues():
+/// Arrow calls exactly one of the two paths below for a given column, decided
+/// per call via SupportsTypedValues(ctx):
 /// - false (block path): only EncryptBlock()/DecryptBlock() are called.
 /// - true (cell path): only EncryptCells()/DecryptCells() are called.
-/// The inactive path's methods must still be overridden but are never invoked;
-/// implementations may return Status::OK()/an empty buffer for them.
+/// The inactive path's methods must still be overridden but may never be invoked
+/// for a given column; implementations may return Status::OK()/an empty buffer
+/// for them if truly unreachable for every column they serve.
 ///
 /// Thread safety: implementations must be thread-safe. Arrow may call these
 /// methods concurrently for different columns during parallel row-group reads
@@ -128,15 +129,21 @@ class PARQUET_EXPORT ParquetCryptoProvider {
       std::span<const uint8_t> ciphertext, const ParquetCryptoContext& ctx,
       std::span<const uint8_t> module_aad, std::span<const uint8_t> dek = {}) = 0;
 
-  /// Selects the routing path Arrow uses for this provider.
+  /// Selects the routing path Arrow uses for a given column (or footer).
+  ///
+  /// Queried per column via `ctx`, not once per provider instance -- a single
+  /// provider can route some columns through the block path and others through
+  /// the cell path, e.g. by inspecting `ctx.key_metadata` or `ctx.column_path`.
   ///
   /// false: Arrow calls EncryptBlock()/DecryptBlock() with raw module bytes.
   /// true: Arrow decodes the page into typed values first and calls
   /// EncryptCells()/DecryptCells() instead.
-  [[nodiscard]] virtual bool SupportsTypedValues() const = 0;
+  [[nodiscard]] virtual bool SupportsTypedValues(
+      const ParquetCryptoContext& ctx) const = 0;
 
   /// Transform decoded column values in place using an implementation-defined
-  /// protection scheme. Called only when SupportsTypedValues() returns true.
+  /// protection scheme. Called only for a column where SupportsTypedValues(ctx)
+  /// returned true.
   ///
   /// No DEK is passed here (unlike EncryptBlock()): a keyed cell-level cipher
   /// (e.g. FPE) must derive its own key from `ctx.key_metadata`, never from the
@@ -149,8 +156,8 @@ class PARQUET_EXPORT ParquetCryptoProvider {
   virtual ::arrow::Status EncryptCells(CryptoValueBuffer& values,
                                        const ParquetCryptoContext& ctx) = 0;
 
-  /// Reverse the transform applied by EncryptCells(). Called only when
-  /// SupportsTypedValues() returns true.
+  /// Reverse the transform applied by EncryptCells(). Called only for a column
+  /// where SupportsTypedValues(ctx) returned true.
   ///
   /// \param values The page's decoded values, transformed in place.
   /// \param ctx Identifies the column this call applies to.

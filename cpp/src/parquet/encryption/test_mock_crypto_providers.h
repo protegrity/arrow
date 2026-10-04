@@ -19,6 +19,8 @@
 
 #include <atomic>
 #include <mutex>
+#include <set>
+#include <string>
 #include <vector>
 
 #include "parquet/encryption/parquet_crypto_provider.h"
@@ -38,7 +40,9 @@ class XorBlockCryptoProvider : public ParquetCryptoProvider {
       std::span<const uint8_t> ciphertext, const ParquetCryptoContext& ctx,
       std::span<const uint8_t> module_aad, std::span<const uint8_t> dek) override;
 
-  [[nodiscard]] bool SupportsTypedValues() const override { return false; }
+  [[nodiscard]] bool SupportsTypedValues(const ParquetCryptoContext&) const override {
+    return false;
+  }
 
   // Unreachable: SupportsTypedValues() is always false for this provider.
   ::arrow::Status EncryptCells(CryptoValueBuffer& values,
@@ -110,7 +114,9 @@ class XorCellCryptoProvider : public ParquetCryptoProvider {
       std::span<const uint8_t> ciphertext, const ParquetCryptoContext& ctx,
       std::span<const uint8_t> module_aad, std::span<const uint8_t> dek) override;
 
-  [[nodiscard]] bool SupportsTypedValues() const override { return true; }
+  [[nodiscard]] bool SupportsTypedValues(const ParquetCryptoContext&) const override {
+    return true;
+  }
 
   ::arrow::Status EncryptCells(CryptoValueBuffer& values,
                                const ParquetCryptoContext& ctx) override;
@@ -156,7 +162,9 @@ class XorTypedValuesCryptoProvider : public ParquetCryptoProvider {
       std::span<const uint8_t> ciphertext, const ParquetCryptoContext& ctx,
       std::span<const uint8_t> module_aad, std::span<const uint8_t> dek) override;
 
-  [[nodiscard]] bool SupportsTypedValues() const override { return true; }
+  [[nodiscard]] bool SupportsTypedValues(const ParquetCryptoContext&) const override {
+    return true;
+  }
 
   ::arrow::Status EncryptCells(CryptoValueBuffer& values,
                                const ParquetCryptoContext& ctx) override;
@@ -185,6 +193,25 @@ class XorTypedValuesCryptoProvider : public ParquetCryptoProvider {
   std::atomic<int> decrypt_block_calls_{0};
   std::atomic<int> encrypt_cells_calls_{0};
   std::atomic<int> decrypt_cells_calls_{0};
+};
+
+// Routes per column via ctx.column_path membership in `cell_path_columns`, instead
+// of XorTypedValuesCryptoProvider's fixed "always true" -- lets one provider
+// instance serve some columns through the cell path and others through the block
+// path in the same file, exercising SupportsTypedValues(ctx)'s per-column contract.
+// Reuses XorTypedValuesCryptoProvider's EncryptBlock/EncryptCells (etc.) unchanged;
+// only the routing decision differs.
+class XorMixedPathCryptoProvider : public XorTypedValuesCryptoProvider {
+ public:
+  explicit XorMixedPathCryptoProvider(std::set<std::string> cell_path_columns)
+      : cell_path_columns_(std::move(cell_path_columns)) {}
+
+  [[nodiscard]] bool SupportsTypedValues(const ParquetCryptoContext& ctx) const override {
+    return cell_path_columns_.count(ctx.column_path) > 0;
+  }
+
+ private:
+  std::set<std::string> cell_path_columns_;
 };
 
 }  // namespace parquet::encryption::test

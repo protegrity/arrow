@@ -221,6 +221,47 @@ TEST_F(ParquetColumnCryptoProviderTest, FullFileRoundTrip) {
   EXPECT_EQ(provider->decrypt_cells_calls(), 0);
 }
 
+// One provider instance, two columns, two different paths in the same file:
+// SupportsTypedValues(ctx) is queried per column, so ba_field (listed in the
+// provider's cell_path_columns set) routes through EncryptCells()/DecryptCells()
+// while every other data column (plus footer/column-metadata, which always use
+// the block path regardless) routes through EncryptBlock()/DecryptBlock() --
+// exactly the "one provider for both block and cell path" capability
+// SupportsTypedValues(ctx) exists to enable.
+TEST_F(ParquetColumnCryptoProviderTest, SupportsTypedValuesRoutesPerColumn) {
+  auto provider = std::make_shared<XorMixedPathCryptoProvider>(
+      std::set<std::string>{kByteArrayFieldName});
+
+  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
+  enc_config.column_keys = BuildColumnKeyMapping();
+  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
+      kms_config_, enc_config, provider);
+  ASSERT_NE(encryption_props, nullptr);
+
+  const std::string file_path = TempFilePath("mixed_path_round_trip.parquet");
+  FileEncryptor encryptor(/*disable_dictionary_encoding=*/true,
+                          /*compression=*/Compression::UNCOMPRESSED,
+                          /*data_page_version=*/ParquetDataPageVersion::V2);
+  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
+
+  // double/float/boolean/int32/flba data pages + footer + column metadata (block);
+  // ba_field's data page (cell).
+  EXPECT_GT(provider->encrypt_block_calls(), 0);
+  EXPECT_GT(provider->encrypt_cells_calls(), 0);
+
+  ExternalDecryptionConfiguration dec_config;
+  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
+      kms_config_, dec_config, provider);
+  ASSERT_NE(decryption_props, nullptr);
+
+  FileDecryptor decryptor;
+  EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
+
+  EXPECT_GT(provider->decrypt_block_calls(), 0);
+  EXPECT_GT(provider->decrypt_cells_calls(), 0);
+}
+
 // Cell-path full-file coverage: data pages for every physical type route
 // through EncryptCells()/DecryptCells() and round-trip correctly, while the
 // footer and column metadata (never cell-path eligible) still route through
@@ -852,7 +893,9 @@ class FailingBlockCryptoProvider : public ParquetCryptoProvider {
                                                      std::span<const uint8_t>) override {
     return ::arrow::Status::IOError("injected DecryptBlock failure");
   }
-  [[nodiscard]] bool SupportsTypedValues() const override { return false; }
+  [[nodiscard]] bool SupportsTypedValues(const ParquetCryptoContext&) const override {
+    return false;
+  }
   ::arrow::Status EncryptCells(CryptoValueBuffer&, const ParquetCryptoContext&) override {
     return ::arrow::Status::NotImplemented("block-path-only provider");
   }

@@ -70,12 +70,12 @@ class PARQUET_EXPORT ParquetCryptoProviderEncryptorAdapter
   }
 
   /// The real entry point. Routes to the block or cell path based on
-  /// dispatch_module_type_ and provider_->SupportsTypedValues() -- never on
-  /// SupportsTypedValues() alone, since footer/column-metadata/index/bloom-filter
+  /// dispatch_module_type_ and provider_->SupportsTypedValues(ctx_) -- never on
+  /// SupportsTypedValues(ctx_) alone, since footer/column-metadata/index/bloom-filter
   /// modules must always go through the block path regardless of that flag. `aad` is
   /// the module AAD Encryptor::UpdateAad() already computed via CreateModuleAad();
-  /// `dek` is the column's or footer's resolved key. Both are forwarded straight
-  /// through to the block path; the cell path forwards only `dek`.
+  /// `dek` is the column's or footer's resolved key, forwarded to the block path only
+  /// -- the cell path's EncryptCells() never receives `dek`.
   /// `new_uncompressed_size` is set on the cell path only, to Recompress()'s
   /// reported pre-recompression size -- forwarded straight through from
   /// Recompress()'s own out-param. `codec`, when non-null, is the caller's own
@@ -170,12 +170,12 @@ class PARQUET_EXPORT ParquetCryptoProviderDecryptorAdapter
   }
 
   /// The real entry point. Routes to the block or cell path based on
-  /// dispatch_module_type_ and provider_->SupportsTypedValues() (mirrors
+  /// dispatch_module_type_ and provider_->SupportsTypedValues(ctx_) (mirrors
   /// ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer()'s gating rule).
   /// `aad` is the module AAD Decryptor::UpdateAad() already computed; `dek` is the
-  /// column's or footer's resolved key. Both are forwarded straight through to the block
-  /// path; the cell path forwards only `dek`. `new_uncompressed_size` is set on the
-  /// cell path only, to Recompress()'s reported post-decryption size --
+  /// column's or footer's resolved key, forwarded to the block path only -- the cell
+  /// path's DecryptCells() never receives `dek`. `new_uncompressed_size` is
+  /// set on the cell path only, to Recompress()'s reported post-decryption size --
   /// forwarded straight through from Recompress()'s own out-param. `codec`, when
   /// non-null, is the caller's own cached decompressor (e.g.
   /// SerializedPageReader::decompressor_) reused by the cell path instead of

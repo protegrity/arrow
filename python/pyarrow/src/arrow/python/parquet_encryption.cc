@@ -115,8 +115,7 @@ arrow::Result<std::vector<uint8_t>> PyParquetCryptoProvider::DecryptBlock(
 
 // Dead code: SupportsTypedValues() always returns false, so Arrow never calls this.
 arrow::Status PyParquetCryptoProvider::EncryptCells(
-    ::parquet::CryptoValueBuffer& values, const ::parquet::ParquetCryptoContext& ctx,
-    std::span<const uint8_t> dek) {
+    ::parquet::CryptoValueBuffer& values, const ::parquet::ParquetCryptoContext& ctx) {
   return arrow::Status::NotImplemented(
       "PyParquetCryptoProvider only supports the block path (SupportsTypedValues() "
       "returns false); EncryptCells is unreachable.");
@@ -124,8 +123,7 @@ arrow::Status PyParquetCryptoProvider::EncryptCells(
 
 // Dead code for the same reason as EncryptCells().
 arrow::Status PyParquetCryptoProvider::DecryptCells(
-    ::parquet::CryptoValueBuffer& values, const ::parquet::ParquetCryptoContext& ctx,
-    std::span<const uint8_t> dek) {
+    ::parquet::CryptoValueBuffer& values, const ::parquet::ParquetCryptoContext& ctx) {
   return arrow::Status::NotImplemented(
       "PyParquetCryptoProvider only supports the block path (SupportsTypedValues() "
       "returns false); DecryptCells is unreachable.");

@@ -51,7 +51,9 @@ class NoOpParquetCryptoProvider : public ParquetCryptoProvider {
     return std::vector<uint8_t>(ciphertext.begin(), ciphertext.end());
   }
 
-  [[nodiscard]] bool SupportsTypedValues() const override { return false; }
+  [[nodiscard]] bool SupportsTypedValues(const ParquetCryptoContext&) const override {
+    return false;
+  }
 
   ::arrow::Status EncryptCells(CryptoValueBuffer& values,
                                const ParquetCryptoContext& ctx) override {

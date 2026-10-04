@@ -97,7 +97,7 @@ ParquetCryptoProviderEncryptorAdapter::ParquetCryptoProviderEncryptorAdapter(
 
 bool ParquetCryptoProviderEncryptorAdapter::UseCellPath(
     const encryption::EncodingProperties* encoding_properties) const {
-  if (!provider_->SupportsTypedValues() ||
+  if (!provider_->SupportsTypedValues(ctx_) ||
       (dispatch_module_type_ != encryption::kDataPage &&
        dispatch_module_type_ != encryption::kDictionaryPage)) {
     return false;
@@ -181,7 +181,7 @@ ParquetCryptoProviderDecryptorAdapter::ParquetCryptoProviderDecryptorAdapter(
 
 bool ParquetCryptoProviderDecryptorAdapter::UseCellPath(
     const encryption::EncodingProperties* encoding_properties) const {
-  if (!provider_->SupportsTypedValues() ||
+  if (!provider_->SupportsTypedValues(ctx_) ||
       (dispatch_module_type_ != encryption::kDataPage &&
        dispatch_module_type_ != encryption::kDictionaryPage)) {
     return false;
