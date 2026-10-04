@@ -138,23 +138,24 @@ class PARQUET_EXPORT ParquetCryptoProvider {
   /// Transform decoded column values in place using an implementation-defined
   /// protection scheme. Called only when SupportsTypedValues() returns true.
   ///
+  /// No DEK is passed here (unlike EncryptBlock()): a keyed cell-level cipher
+  /// (e.g. FPE) must derive its own key from `ctx.key_metadata`, never from the
+  /// block/footer `dek` -- otherwise a party able to decrypt the page's
+  /// EncryptBlock wrap could also reverse the cell transform, defeating the
+  /// cell path's defense-in-depth goal.
+  ///
   /// \param values The page's decoded values, transformed in place.
   /// \param ctx Identifies the column this call applies to.
-  /// \param dek Same key as EncryptBlock()'s `dek`. The cell path may use it
-  ///     (e.g. a keyed transform) or ignore it (e.g. a static lookup).
   virtual ::arrow::Status EncryptCells(CryptoValueBuffer& values,
-                                       const ParquetCryptoContext& ctx,
-                                       std::span<const uint8_t> dek = {}) = 0;
+                                       const ParquetCryptoContext& ctx) = 0;
 
   /// Reverse the transform applied by EncryptCells(). Called only when
   /// SupportsTypedValues() returns true.
   ///
   /// \param values The page's decoded values, transformed in place.
   /// \param ctx Identifies the column this call applies to.
-  /// \param dek Same value EncryptCells() received for this column.
   virtual ::arrow::Status DecryptCells(CryptoValueBuffer& values,
-                                       const ParquetCryptoContext& ctx,
-                                       std::span<const uint8_t> dek = {}) = 0;
+                                       const ParquetCryptoContext& ctx) = 0;
 
   /// Sign a plaintext (PAR1-mode) footer, or recompute the same signature to verify it.
   /// Not related to EncryptorInterface::SignedFooterEncrypt() (the AES-GCM path's

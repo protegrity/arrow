@@ -56,8 +56,7 @@ constexpr uint8_t kXorKey = 0xAB;
 }
 
 ::arrow::Status XorBlockCryptoProvider::EncryptCells(CryptoValueBuffer& values,
-                                                     const ParquetCryptoContext& ctx,
-                                                     std::span<const uint8_t> dek) {
+                                                     const ParquetCryptoContext& ctx) {
   encrypt_cells_calls_.fetch_add(1);
   return ::arrow::Status::NotImplemented(
       "XorBlockCryptoProvider::EncryptCells is unreachable: SupportsTypedValues() "
@@ -65,8 +64,7 @@ constexpr uint8_t kXorKey = 0xAB;
 }
 
 ::arrow::Status XorBlockCryptoProvider::DecryptCells(CryptoValueBuffer& values,
-                                                     const ParquetCryptoContext& ctx,
-                                                     std::span<const uint8_t> dek) {
+                                                     const ParquetCryptoContext& ctx) {
   decrypt_cells_calls_.fetch_add(1);
   return ::arrow::Status::NotImplemented(
       "XorBlockCryptoProvider::DecryptCells is unreachable: SupportsTypedValues() "
@@ -127,8 +125,7 @@ void XorBlockCryptoProvider::RecordCall(const ParquetCryptoContext& ctx,
 }
 
 ::arrow::Status XorCellCryptoProvider::EncryptCells(CryptoValueBuffer& values,
-                                                    const ParquetCryptoContext& ctx,
-                                                    std::span<const uint8_t> dek) {
+                                                    const ParquetCryptoContext& ctx) {
   encrypt_cells_calls_.fetch_add(1);
   auto* strings = std::get_if<std::vector<std::string>>(&values);
   if (strings == nullptr) {
@@ -144,8 +141,7 @@ void XorBlockCryptoProvider::RecordCall(const ParquetCryptoContext& ctx,
 }
 
 ::arrow::Status XorCellCryptoProvider::DecryptCells(CryptoValueBuffer& values,
-                                                    const ParquetCryptoContext& ctx,
-                                                    std::span<const uint8_t> dek) {
+                                                    const ParquetCryptoContext& ctx) {
   decrypt_cells_calls_.fetch_add(1);
   auto* strings = std::get_if<std::vector<std::string>>(&values);
   if (strings == nullptr) {
@@ -238,16 +234,14 @@ void XorCryptoValueBufferInPlace(CryptoValueBuffer& values) {
 }
 
 ::arrow::Status XorTypedValuesCryptoProvider::EncryptCells(
-    CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
-    std::span<const uint8_t> dek) {
+    CryptoValueBuffer& values, const ParquetCryptoContext& ctx) {
   encrypt_cells_calls_.fetch_add(1);
   XorCryptoValueBufferInPlace(values);
   return ::arrow::Status::OK();
 }
 
 ::arrow::Status XorTypedValuesCryptoProvider::DecryptCells(
-    CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
-    std::span<const uint8_t> dek) {
+    CryptoValueBuffer& values, const ParquetCryptoContext& ctx) {
   decrypt_cells_calls_.fetch_add(1);
   XorCryptoValueBufferInPlace(values);
   return ::arrow::Status::OK();

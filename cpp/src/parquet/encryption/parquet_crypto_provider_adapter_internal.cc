@@ -135,7 +135,7 @@ int32_t ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer(
     }
     TypedColumnValues typed =
         ParquetPageDecoder::Decompress(plaintext, *encoding_properties, codec);
-    PARQUET_THROW_NOT_OK(provider_->EncryptCells(typed.values(), ctx_, dek));
+    PARQUET_THROW_NOT_OK(provider_->EncryptCells(typed.values(), ctx_));
     result_bytes = ParquetPageDecoder::Recompress(typed, *encoding_properties,
                                                   new_uncompressed_size, codec);
   } else {
@@ -226,7 +226,7 @@ int32_t ParquetCryptoProviderDecryptorAdapter::DecryptWithManagedBuffer(
     }
     TypedColumnValues typed =
         ParquetPageDecoder::Decompress(ciphertext, *encoding_properties, codec);
-    PARQUET_THROW_NOT_OK(provider_->DecryptCells(typed.values(), ctx_, dek));
+    PARQUET_THROW_NOT_OK(provider_->DecryptCells(typed.values(), ctx_));
     result_bytes = ParquetPageDecoder::Recompress(typed, *encoding_properties,
                                                   new_uncompressed_size, codec);
   } else {

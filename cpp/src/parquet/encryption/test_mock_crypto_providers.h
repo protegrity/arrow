@@ -41,12 +41,12 @@ class XorBlockCryptoProvider : public ParquetCryptoProvider {
   [[nodiscard]] bool SupportsTypedValues() const override { return false; }
 
   // Unreachable: SupportsTypedValues() is always false for this provider.
-  ::arrow::Status EncryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
-                               std::span<const uint8_t> dek) override;
+  ::arrow::Status EncryptCells(CryptoValueBuffer& values,
+                               const ParquetCryptoContext& ctx) override;
 
   // Unreachable for the same reason as EncryptCells().
-  ::arrow::Status DecryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
-                               std::span<const uint8_t> dek) override;
+  ::arrow::Status DecryptCells(CryptoValueBuffer& values,
+                               const ParquetCryptoContext& ctx) override;
 
   // XORs footer_aad||footer with the same fixed key as EncryptBlock(); no nonce
   // needed since XOR is deterministic (mirrors HMAC's determinism, not GCM's).
@@ -112,11 +112,11 @@ class XorCellCryptoProvider : public ParquetCryptoProvider {
 
   [[nodiscard]] bool SupportsTypedValues() const override { return true; }
 
-  ::arrow::Status EncryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
-                               std::span<const uint8_t> dek) override;
+  ::arrow::Status EncryptCells(CryptoValueBuffer& values,
+                               const ParquetCryptoContext& ctx) override;
 
-  ::arrow::Status DecryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
-                               std::span<const uint8_t> dek) override;
+  ::arrow::Status DecryptCells(CryptoValueBuffer& values,
+                               const ParquetCryptoContext& ctx) override;
 
   // Not exercised by any test today (footer signing is dispatched independently of
   // SupportsTypedValues()); provided only so this class remains instantiable.
@@ -158,11 +158,11 @@ class XorTypedValuesCryptoProvider : public ParquetCryptoProvider {
 
   [[nodiscard]] bool SupportsTypedValues() const override { return true; }
 
-  ::arrow::Status EncryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
-                               std::span<const uint8_t> dek) override;
+  ::arrow::Status EncryptCells(CryptoValueBuffer& values,
+                               const ParquetCryptoContext& ctx) override;
 
-  ::arrow::Status DecryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
-                               std::span<const uint8_t> dek) override;
+  ::arrow::Status DecryptCells(CryptoValueBuffer& values,
+                               const ParquetCryptoContext& ctx) override;
 
   ::arrow::Result<std::vector<uint8_t>> SignFooter(std::span<const uint8_t> footer_bytes,
                                                    const ParquetCryptoContext& ctx,

@@ -53,13 +53,13 @@ class NoOpParquetCryptoProvider : public ParquetCryptoProvider {
 
   [[nodiscard]] bool SupportsTypedValues() const override { return false; }
 
-  ::arrow::Status EncryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
-                               std::span<const uint8_t> dek) override {
+  ::arrow::Status EncryptCells(CryptoValueBuffer& values,
+                               const ParquetCryptoContext& ctx) override {
     return ::arrow::Status::OK();
   }
 
-  ::arrow::Status DecryptCells(CryptoValueBuffer& values, const ParquetCryptoContext& ctx,
-                               std::span<const uint8_t> dek) override {
+  ::arrow::Status DecryptCells(CryptoValueBuffer& values,
+                               const ParquetCryptoContext& ctx) override {
     return ::arrow::Status::OK();
   }
 

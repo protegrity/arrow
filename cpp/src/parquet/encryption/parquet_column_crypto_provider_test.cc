@@ -853,12 +853,10 @@ class FailingBlockCryptoProvider : public ParquetCryptoProvider {
     return ::arrow::Status::IOError("injected DecryptBlock failure");
   }
   [[nodiscard]] bool SupportsTypedValues() const override { return false; }
-  ::arrow::Status EncryptCells(CryptoValueBuffer&, const ParquetCryptoContext&,
-                               std::span<const uint8_t>) override {
+  ::arrow::Status EncryptCells(CryptoValueBuffer&, const ParquetCryptoContext&) override {
     return ::arrow::Status::NotImplemented("block-path-only provider");
   }
-  ::arrow::Status DecryptCells(CryptoValueBuffer&, const ParquetCryptoContext&,
-                               std::span<const uint8_t>) override {
+  ::arrow::Status DecryptCells(CryptoValueBuffer&, const ParquetCryptoContext&) override {
     return ::arrow::Status::NotImplemented("block-path-only provider");
   }
   ::arrow::Result<std::vector<uint8_t>> SignFooter(std::span<const uint8_t>,
