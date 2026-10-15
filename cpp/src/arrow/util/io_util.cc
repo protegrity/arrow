@@ -2264,8 +2264,7 @@ Result<void*> LoadDynamicLibrary(const char* path) {
   return LoadDynamicLibrary(platform_path);
 #else
   constexpr int kFlags =
-      // All undefined symbols in the shared object are resolved before dlopen()
-      // returns.
+      // All undefined symbols in the shared object are resolved before dlopen() returns.
       RTLD_NOW
       // Symbols defined in this shared object are not made available to
       // resolve references in subsequently loaded shared objects.
@@ -2310,27 +2309,6 @@ Result<void*> GetSymbol(void* handle, const char* name) {
   // There is no null-returning non-error condition.
   auto* error = dlerror();
   return Status::IOError("dlsym(", name, ") failed: ", error ? error : "unknown error");
-#endif
-}
-
-Status CloseDynamicLibrary(void* handle) {
-  if (handle == nullptr) {
-    return Status::Invalid("Attempting to close null library handle");
-  }
-#ifdef _WIN32
-  if (FreeLibrary(reinterpret_cast<HMODULE>(handle))) {
-    return Status::OK();
-  }
-  // win32 api doc: "If the function fails, the return value is zero."
-  return IOErrorFromWinError(GetLastError(), "FreeLibrary() failed");
-#else
-  if (dlclose(handle) == 0) {
-    return Status::OK();
-  }
-  // dlclose(3) man page: "On success, dlclose() returns 0; on error, it returns a
-  // nonzero value."
-  auto* error = dlerror();
-  return Status::IOError("dlclose() failed: ", error ? error : "unknown error");
 #endif
 }
 

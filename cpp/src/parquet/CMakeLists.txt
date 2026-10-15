@@ -248,20 +248,6 @@ if(PARQUET_REQUIRE_ENCRYPTION)
   set(PARQUET_SRCS ${PARQUET_SRCS} encryption/encryption_internal.cc
                    encryption/openssl_internal.cc encryption/encryption_utils.cc)
 
-  # When building with the legacy DBPS adapter, include the external adapter sources.
-  # These sources depend on DBPS headers and the dbpa_interface; they are excluded
-  # from default builds and preserved here for reference during DBPS-side migration.
-  option(PARQUET_BUILD_DBPS_LIBS "Build with the DBPS encryption adapter (legacy)" OFF)
-  if(PARQUET_BUILD_DBPS_LIBS)
-    list(APPEND
-         PARQUET_SRCS
-         encryption/external_dbpa_encryption.cc
-         encryption/external/dbpa_library_wrapper.cc
-         encryption/external/dbpa_enum_utils.cc
-         encryption/external/dbpa_executor.cc
-         encryption/external/loadable_encryptor_utils.cc)
-  endif()
-
   # Encryption key management
   set(PARQUET_SRCS
       ${PARQUET_SRCS}
@@ -425,7 +411,6 @@ add_parquet_test(reader-test
 add_parquet_test(writer-test
                  SOURCES
                  column_writer_test.cc
-                 encryption/external/test_utils.cc
                  file_serialize_test.cc
                  stream_writer_test.cc)
 
@@ -454,11 +439,11 @@ if(PARQUET_REQUIRE_ENCRYPTION)
                    encryption/write_configurations_test.cc
                    encryption/read_configurations_test.cc
                    encryption/per_column_encryption_test.cc
-                   encryption/external/test_utils.cc
                    encryption/properties_test.cc
                    encryption/crypto_factory_test.cc
                    encryption/test_encryption_util.cc
-                   encryption/test_in_memory_kms.cc)
+                   encryption/test_in_memory_kms.cc
+                   encryption/test_mock_crypto_providers.cc)
   add_parquet_test(encryption-key-management-test
                    SOURCES
                    encryption/key_management_test.cc
@@ -478,8 +463,7 @@ endif()
 
 # Those tests need to use static linking as they access thrift-generated
 # symbols which are not exported by parquet.dll on Windows (PARQUET-1420).
-add_parquet_test(file_deserialize_test SOURCES file_deserialize_test.cc
-                 encryption/external/test_utils.cc)
+add_parquet_test(file_deserialize_test SOURCES file_deserialize_test.cc)
 add_parquet_test(schema_test)
 
 add_parquet_benchmark(bloom_filter_benchmark SOURCES bloom_filter_benchmark.cc
