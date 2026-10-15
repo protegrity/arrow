@@ -206,7 +206,7 @@ cdef class ExternalEncryptionConfiguration(EncryptionConfiguration):
                  plaintext_footer=None, double_wrapping=None,
                  cache_lifetime=None, internal_key_material=None,
                  data_key_length_bits=None, per_column_encryption=None,
-                 app_context=None, configuration_properties=None):
+                 app_context=None):
 
         # Initialize pointer first so the get/set forwards work.
         self.external_configuration.reset(
@@ -226,8 +226,6 @@ cdef class ExternalEncryptionConfiguration(EncryptionConfiguration):
 
         if app_context is not None:
             self.app_context = app_context
-        if configuration_properties is not None:
-            self.configuration_properties = configuration_properties
         if per_column_encryption is not None:
             self.per_column_encryption = per_column_encryption
 
@@ -319,48 +317,6 @@ cdef class ExternalEncryptionConfiguration(EncryptionConfiguration):
             raise TypeError(f"Failed to serialize app_context: {repr(value)}")
 
     @property
-    def configuration_properties(self):
-        """Get the configuration properties as a Python dictionary."""
-
-        cdef pair[ParquetCipher, unordered_map[c_string, c_string]] outer_pair
-        cdef pair[c_string, c_string] inner_pair
-        result = {}
-
-        for outer_pair in self.external_configuration.get().configuration_properties:
-            cipher_name = cipher_to_name(outer_pair.first)
-            inner_map = {}
-            for inner_pair in outer_pair.second:
-                inner_map[frombytes(inner_pair.first)] = frombytes(inner_pair.second)
-            result[cipher_name] = inner_map
-
-        return result
-
-    @configuration_properties.setter
-    def configuration_properties(self, dict value):
-        """Set the configuration properties from a Python dictionary."""
-        if value is None:
-            raise ValueError("Configuration properties value cannot be None")
-
-        cdef unordered_map[ParquetCipher, unordered_map[c_string, c_string]] cpp_map
-        cdef unordered_map[c_string, c_string] inner_cpp_map
-        cdef ParquetCipher cipher_enum
-
-        for cipher_name, inner_dict in value.items():
-            cipher_enum = cipher_from_name(cipher_name)
-            if not isinstance(inner_dict, dict):
-                raise TypeError(f"Inner value for cipher {cipher_name} must be a dict")
-            # Clear the map from the values of the previous iteration
-            inner_cpp_map.clear()
-
-            for k, v in inner_dict.items():
-                if not isinstance(k, str) or not isinstance(v, str):
-                    raise TypeError("All inner config keys/values must be str")
-                inner_cpp_map[tobytes(k)] = tobytes(v)
-            cpp_map[cipher_enum] = inner_cpp_map
-
-        self.external_configuration.get().configuration_properties = cpp_map
-
-    @property
     def per_column_encryption(self):
         """Get the per_column_encryption as a Python dictionary."""
 
@@ -436,7 +392,7 @@ cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
     # Avoid mistakingly creating attributes
     __slots__ = ()
 
-    def __init__(self, *, cache_lifetime=None, app_context=None, configuration_properties=None):
+    def __init__(self, *, cache_lifetime=None, app_context=None):
         # Initialize the pointer first so the get/set forwards work.
         # Super init will run the setters/getters below so we need the pointer to exist.
         self.external_configuration.reset(new CExternalDecryptionConfiguration())
@@ -447,8 +403,6 @@ cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
 
         if app_context is not None:
             self.app_context = app_context
-        if configuration_properties is not None:
-            self.configuration_properties = configuration_properties
 
     @property
     def cache_lifetime(self):
@@ -481,46 +435,6 @@ cdef class ExternalDecryptionConfiguration(DecryptionConfiguration):
             self.external_configuration.get().app_context = tobytes(serialized)
         except Exception:
             raise TypeError(f"Failed to serialize app_context: {repr(value)}")
-
-    @property
-    def configuration_properties(self):
-        """Get the configuration properties as a Python dictionary."""
-
-        cdef pair[ParquetCipher, unordered_map[c_string, c_string]] outer_pair
-        cdef pair[c_string, c_string] inner_pair
-        result = {}
-
-        for outer_pair in self.external_configuration.get().configuration_properties:
-            cipher_name = cipher_to_name(outer_pair.first)
-            inner_map = {}
-            for inner_pair in outer_pair.second:
-                inner_map[frombytes(inner_pair.first)] = frombytes(inner_pair.second)
-            result[cipher_name] = inner_map
-
-        return result
-
-    @configuration_properties.setter
-    def configuration_properties(self, dict value):
-        """Set the configuration properties from a Python dictionary."""
-        if value is None:
-            raise ValueError("Configuration properties value cannot be None")
-
-        cdef unordered_map[ParquetCipher, unordered_map[c_string, c_string]] cpp_map
-        cdef unordered_map[c_string, c_string] inner_cpp_map
-        cdef ParquetCipher cipher_enum
-
-        for cipher_name, inner_dict in value.items():
-            cipher_enum = cipher_from_name(cipher_name)
-            if not isinstance(inner_dict, dict):
-                raise TypeError(f"Inner value for cipher {cipher_name} must be a dict")
-            inner_cpp_map.clear()
-            for k, v in inner_dict.items():
-                if not isinstance(k, str) or not isinstance(v, str):
-                    raise TypeError("All inner config keys/values must be str")
-                inner_cpp_map[tobytes(k)] = tobytes(v)
-            cpp_map[cipher_enum] = inner_cpp_map
-
-        self.external_configuration.get().configuration_properties = cpp_map
 
     cdef inline shared_ptr[CExternalDecryptionConfiguration] unwrap_external(self) nogil:
         return self.external_configuration
@@ -670,9 +584,6 @@ cdef class ParquetCryptoProvider(_Weakrefable):
     (sign_footer/verify_footer_signature) are currently exposed; typed-value
     (cell) callbacks are not yet bound to Python.
     """
-    cdef:
-        shared_ptr[CParquetCryptoProvider] provider
-
     def __init__(self):
         self.init()
 
@@ -878,6 +789,10 @@ cdef class CryptoFactory(_Weakrefable):
             c_string c_parquet_file_path
             shared_ptr[CFileSystem] c_filesystem
 
+        if isinstance(encryption_config, ExternalEncryptionConfiguration):
+            raise TypeError("use external_file_encryption_properties() with an "
+                            "ExternalEncryptionConfiguration")
+
         filesystem, parquet_file_path = _resolve_filesystem_and_path(
             parquet_file_path, filesystem)
         if parquet_file_path is not None:
@@ -999,6 +914,10 @@ cdef class CryptoFactory(_Weakrefable):
                 c_file_decryption_properties
             c_string c_parquet_file_path
             shared_ptr[CFileSystem] c_filesystem
+
+        if isinstance(decryption_config, ExternalDecryptionConfiguration):
+            raise TypeError("use external_file_decryption_properties() with an "
+                            "ExternalDecryptionConfiguration")
 
         filesystem, parquet_file_path = _resolve_filesystem_and_path(
             parquet_file_path, filesystem)

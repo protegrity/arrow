@@ -18,8 +18,6 @@
 import base64
 from contextlib import contextmanager
 from datetime import timedelta
-import os
-import platform
 import random
 import pyarrow.fs as fs
 import pyarrow as pa
@@ -37,6 +35,7 @@ except ImportError:
 
 try:
     from pyarrow.tests.parquet.encryption import InMemoryKmsClient
+    from pyarrow.tests.parquet.crypto_provider_utils import XorParquetCryptoProvider
     import pyarrow.parquet.encryption as pe
 except ImportError:
     encryption_unavailable = True
@@ -103,16 +102,14 @@ def kms_factory(kms_connection_configuration):
     return InMemoryKmsClient(kms_connection_configuration)
 
 
-def get_agent_library_path():
-    default = (
-        "libDBPATestAgent.so"
-        if platform.system() == "Linux"
-        else "libDBPATestAgent.dylib"
-    )
-    return os.environ.get("DBPA_LIBRARY_PATH", default)
-
-
-def create_external_encryption_config():
+def create_external_encryption_config(extra_per_column=None):
+    per_column_encryption = {
+        "animal": {
+            "encryption_algorithm": "EXTERNAL_PROTECT_V1",
+            "encryption_key": COL_KEY_NAME,
+        }
+    }
+    per_column_encryption.update(extra_per_column or {})
     return pe.ExternalEncryptionConfiguration(
         footer_key=FOOTER_KEY_NAME,
         plaintext_footer=False,
@@ -121,20 +118,8 @@ def create_external_encryption_config():
         encryption_algorithm="AES_GCM_V1",
         cache_lifetime=timedelta(minutes=5.0),
         data_key_length_bits=256,
-        per_column_encryption={
-            "animal": {
-                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
-                "encryption_key": COL_KEY_NAME,
-            }
-        },
+        per_column_encryption=per_column_encryption,
         app_context={"user_id": "dataset-test"},
-        configuration_properties={
-            "EXTERNAL_PROTECT_V1": {
-                "config_file": "path/to/config/file",
-                "config_file_decryption_key": "some_key",
-                "agent_library_path": get_agent_library_path(),
-            }
-        },
     )
 
 
@@ -142,13 +127,6 @@ def create_external_decryption_config():
     return pe.ExternalDecryptionConfiguration(
         cache_lifetime=300,
         app_context={"user_id": "dataset-test"},
-        configuration_properties={
-            "EXTERNAL_PROTECT_V1": {
-                "config_file": "path/to/config/file",
-                "config_file_decryption_key": "some_key",
-                "agent_library_path": get_agent_library_path(),
-            }
-        },
     )
 
 
@@ -476,58 +454,68 @@ def test_large_row_encryption_decryption():
     assert table == new_table
 
 
+def write_external_dataset(table, mockfs, provider, base_dir="sample_dataset_external",
+                           external_encryption_config=None, **write_kwargs):
+    crypto_factory = pe.CryptoFactory(kms_factory)
+    parquet_encryption_cfg = ds.ParquetEncryptionConfig(
+        crypto_factory,
+        create_kms_connection_config(),
+        external_encryption_config=(
+            external_encryption_config or create_external_encryption_config()),
+        parquet_crypto_provider=provider,
+    )
+    pformat = pa.dataset.ParquetFileFormat()
+    write_options = pformat.make_write_options(encryption_config=parquet_encryption_cfg)
+
+    mockfs.create_dir("/")
+    ds.write_dataset(
+        data=table,
+        base_dir=base_dir,
+        format=pformat,
+        file_options=write_options,
+        filesystem=mockfs,
+        **write_kwargs,
+    )
+
+
+def read_external_dataset(mockfs, provider, base_dir="sample_dataset_external",
+                          use_threads=True):
+    crypto_factory = pe.CryptoFactory(kms_factory)
+    parquet_decryption_cfg = ds.ParquetDecryptionConfig(
+        crypto_factory,
+        create_kms_connection_config(),
+        external_decryption_config=create_external_decryption_config(),
+        parquet_crypto_provider=provider,
+    )
+    pq_scan_opts = ds.ParquetFragmentScanOptions(
+        decryption_config=parquet_decryption_cfg)
+    pformat = pa.dataset.ParquetFileFormat(default_fragment_scan_options=pq_scan_opts)
+    dataset = ds.dataset(base_dir, format=pformat, filesystem=mockfs)
+    return dataset.to_table(use_threads=use_threads)
+
+
 @pytest.mark.skipif(
     encryption_unavailable, reason="Parquet Encryption is not currently enabled"
 )
 def test_dataset_external_encryption_decryption():
-    agent_path = get_agent_library_path()
-    if not os.path.exists(agent_path):
-        pytest.skip(
-            f"External DBPA agent library not found in path [{agent_path}]"
-        )
-
     table = create_sample_table()
-
-    external_encryption_config = create_external_encryption_config()
-    external_decryption_config = create_external_decryption_config()
-    kms_connection_config = create_kms_connection_config()
-
-    crypto_factory = pe.CryptoFactory(kms_factory)
-    parquet_encryption_cfg = ds.ParquetEncryptionConfig(
-        crypto_factory,
-        kms_connection_config,
-        external_encryption_config=external_encryption_config,
-    )
-    parquet_decryption_cfg = ds.ParquetDecryptionConfig(
-        crypto_factory,
-        kms_connection_config,
-        external_decryption_config=external_decryption_config,
-    )
-
-    pformat = pa.dataset.ParquetFileFormat()
-    write_options = pformat.make_write_options(encryption_config=parquet_encryption_cfg)
-
+    provider = XorParquetCryptoProvider()
     mockfs = fs._MockFileSystem()
-    mockfs.create_dir("/")
 
-    ds.write_dataset(
-        data=table,
-        base_dir="sample_dataset_external",
-        format=pformat,
-        file_options=write_options,
-        filesystem=mockfs,
-    )
+    write_external_dataset(table, mockfs, provider)
+    assert provider.encrypt_block_calls > 0
+    assert provider.column_paths == {"animal"}
 
     # Read path using parquet_decryption_config
-    pq_scan_opts = ds.ParquetFragmentScanOptions(
-        decryption_config=parquet_decryption_cfg)
-    pformat = pa.dataset.ParquetFileFormat(default_fragment_scan_options=pq_scan_opts)
-    dataset = ds.dataset("sample_dataset_external", format=pformat, filesystem=mockfs)
-    assert table.equals(dataset.to_table())
+    provider.reset()
+    assert table.equals(read_external_dataset(mockfs, provider))
+    assert provider.decrypt_block_calls > 0
+    assert provider.column_paths == {"animal"}
 
     # Read path using ExternalFileDecryptionProperties directly
+    crypto_factory = pe.CryptoFactory(kms_factory)
     external_decryption_properties = crypto_factory.external_file_decryption_properties(
-        kms_connection_config, external_decryption_config
+        create_kms_connection_config(), create_external_decryption_config(), provider
     )
     pq_scan_opts = ds.ParquetFragmentScanOptions(
         decryption_properties=external_decryption_properties
@@ -535,6 +523,146 @@ def test_dataset_external_encryption_decryption():
     pformat = pa.dataset.ParquetFileFormat(default_fragment_scan_options=pq_scan_opts)
     dataset = ds.dataset("sample_dataset_external", format=pformat, filesystem=mockfs)
     assert table.equals(dataset.to_table())
+
+
+@pytest.mark.skipif(
+    encryption_unavailable, reason="Parquet Encryption is not currently enabled"
+)
+@pytest.mark.parametrize("use_threads", [True, False])
+def test_dataset_external_encryption_multiple_files(use_threads):
+    table = create_sample_table()
+    provider = XorParquetCryptoProvider()
+    mockfs = fs._MockFileSystem()
+
+    write_external_dataset(table, mockfs, provider, max_rows_per_file=2,
+                           max_rows_per_group=2)
+    assert len(mockfs.get_file_info(
+        fs.FileSelector("sample_dataset_external"))) == 3
+
+    result = read_external_dataset(mockfs, provider, use_threads=use_threads)
+    assert result.sort_by("year").equals(table.sort_by("year"))
+
+
+@pytest.mark.skipif(
+    encryption_unavailable, reason="Parquet Encryption is not currently enabled"
+)
+def test_dataset_external_encryption_without_external_columns_needs_no_provider():
+    """The provider is only needed by columns using EXTERNAL_PROTECT_V1."""
+    table = create_sample_table()
+    mockfs = fs._MockFileSystem()
+    external_encryption_config = pe.ExternalEncryptionConfiguration(
+        footer_key=FOOTER_KEY_NAME,
+        plaintext_footer=False,
+        column_keys={COL_KEY_NAME: ["n_legs"]},
+        encryption_algorithm="AES_GCM_V1",
+        cache_lifetime=timedelta(minutes=5.0),
+        data_key_length_bits=256,
+        per_column_encryption={
+            "animal": {
+                "encryption_algorithm": "AES_GCM_CTR_V1",
+                "encryption_key": COL_KEY_NAME,
+            }
+        },
+    )
+
+    write_external_dataset(table, mockfs, None,
+                           external_encryption_config=external_encryption_config)
+    assert table.equals(read_external_dataset(mockfs, None))
+
+
+@pytest.mark.skipif(
+    encryption_unavailable, reason="Parquet Encryption is not currently enabled"
+)
+def test_dataset_external_encryption_requires_provider_for_external_columns():
+    table = create_sample_table()
+    mockfs = fs._MockFileSystem()
+
+    with pytest.raises(OSError, match="parquet_crypto_provider must be set"):
+        write_external_dataset(table, mockfs, None)
+
+
+@pytest.mark.skipif(
+    encryption_unavailable, reason="Parquet Encryption is not currently enabled"
+)
+def test_dataset_external_decryption_requires_provider_for_external_columns():
+    table = create_sample_table()
+    provider = XorParquetCryptoProvider()
+    mockfs = fs._MockFileSystem()
+    write_external_dataset(table, mockfs, provider)
+
+    with pytest.raises(OSError, match="parquet_crypto_provider must be set"):
+        read_external_dataset(mockfs, None)
+
+
+@pytest.mark.skipif(
+    encryption_unavailable, reason="Parquet Encryption is not currently enabled"
+)
+def test_dataset_provider_requires_external_config():
+    provider = XorParquetCryptoProvider()
+    crypto_factory = pe.CryptoFactory(kms_factory)
+    kms_connection_config = create_kms_connection_config()
+
+    with pytest.raises(
+        ValueError,
+        match="parquet_crypto_provider requires external_encryption_config",
+    ):
+        ds.ParquetEncryptionConfig(
+            crypto_factory,
+            kms_connection_config,
+            encryption_config=create_encryption_config(),
+            parquet_crypto_provider=provider,
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="parquet_crypto_provider requires external_decryption_config",
+    ):
+        ds.ParquetDecryptionConfig(
+            crypto_factory,
+            kms_connection_config,
+            decryption_config=create_decryption_config(),
+            parquet_crypto_provider=provider,
+        )
+
+
+@pytest.mark.skipif(
+    encryption_unavailable, reason="Parquet Encryption is not currently enabled"
+)
+def test_dataset_encryption_config_requires_a_config():
+    crypto_factory = pe.CryptoFactory(kms_factory)
+    kms_connection_config = create_kms_connection_config()
+
+    with pytest.raises(
+        ValueError,
+        match="both encryption_config and external_encryption_config cannot be None",
+    ):
+        ds.ParquetEncryptionConfig(crypto_factory, kms_connection_config)
+
+    with pytest.raises(
+        ValueError,
+        match="both decryption_config and external_decryption_config cannot be None",
+    ):
+        ds.ParquetDecryptionConfig(crypto_factory, kms_connection_config)
+
+
+@pytest.mark.skipif(
+    encryption_unavailable, reason="Parquet Encryption is not currently enabled"
+)
+def test_dataset_config_rejects_external_config_in_standard_argument():
+    """An external configuration passed as the standard one would silently lose
+    its per-column algorithms and application context."""
+    crypto_factory = pe.CryptoFactory(kms_factory)
+    kms_connection_config = create_kms_connection_config()
+
+    with pytest.raises(TypeError, match="as external_encryption_config"):
+        ds.ParquetEncryptionConfig(
+            crypto_factory, kms_connection_config,
+            encryption_config=create_external_encryption_config())
+
+    with pytest.raises(TypeError, match="as external_decryption_config"):
+        ds.ParquetDecryptionConfig(
+            crypto_factory, kms_connection_config,
+            decryption_config=create_external_decryption_config())
 
 
 @pytest.mark.skipif(

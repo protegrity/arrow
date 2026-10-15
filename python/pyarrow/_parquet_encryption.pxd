@@ -67,6 +67,12 @@ cdef class KeyMaterial(_Weakrefable):
 
 cdef class FileSystemKeyMaterialStore(_Weakrefable):
     cdef shared_ptr[CFileSystemKeyMaterialStore] store
+
+cdef class ParquetCryptoProvider(_Weakrefable):
+    cdef shared_ptr[CParquetCryptoProvider] provider
+    cdef init(self)
+    cdef inline shared_ptr[CParquetCryptoProvider] unwrap(self) nogil
+
 cdef class ExternalEncryptionConfiguration(EncryptionConfiguration):
     cdef shared_ptr[CExternalEncryptionConfiguration] external_configuration
     cdef inline shared_ptr[CExternalEncryptionConfiguration] unwrap_external(self) nogil

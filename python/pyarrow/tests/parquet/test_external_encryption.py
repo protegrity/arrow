@@ -15,14 +15,18 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import base64
+"""Tests for the external encryption configuration and for files that mix
+AES columns with columns encrypted by a ParquetCryptoProvider
+(EXTERNAL_PROTECT_V1)."""
+
 import datetime
-import os
-import platform
+import json
 import re
+
 import pytest
 import pyarrow
 import pyarrow.parquet as pp
+
 # Skip the entire module at collection time if the encryption extension was not
 # compiled (i.e. PARQUET_REQUIRE_ENCRYPTION=OFF).
 ppe = pytest.importorskip(
@@ -31,58 +35,26 @@ ppe = pytest.importorskip(
            "(built without PARQUET_REQUIRE_ENCRYPTION=ON)",
 )
 
+from pyarrow.tests.parquet.crypto_provider_utils import (  # noqa: E402
+    XorParquetCryptoProvider, xor_kms_client_factory)
 
-def get_agent_library_path():
-    # TODO: move this code to a common library
-    # See https://github.com/protegrity/arrow/issues/191
-    return os.environ.get(
-        'DBPA_LIBRARY_PATH',
-        'libDBPATestAgent.so'
-        if platform.system() == 'Linux' else 'libDBPATestAgent.dylib')
+kms_client_factory = xor_kms_client_factory
 
+APP_CONTEXT = {"user_id": "Picard1701", "location": "Presidio"}
 
-@pytest.fixture(scope="module", autouse=True)
-def _skip_if_external_dbpa_agent_missing():
-    path = get_agent_library_path()
-    if not os.path.exists(path):
-        pytest.skip(f"External DBPA agent library not found in path [{path}]")
+# Columns that reach the provider; every other column is AES encrypted or plain.
+EXTERNAL_COLUMNS = {"price", "customer_name"}
 
 
-class FooKmsClient(ppe.KmsClient):
-
-    def __init__(self, kms_connection_config):
-        ppe.KmsClient.__init__(self)
-        self.master_keys_map = kms_connection_config.custom_kms_conf
-
-    def wrap_key(self, key_bytes, master_key_identifier):
-        master_key_bytes = self.master_keys_map[master_key_identifier].encode(
-            'utf-8')
-        joint_key = b"".join([master_key_bytes, key_bytes])
-        return base64.b64encode(joint_key)
-
-    def unwrap_key(self, wrapped_key, master_key_identifier):
-        expected_master = self.master_keys_map[master_key_identifier]
-        decoded_key = base64.b64decode(wrapped_key)
-        master_key_bytes = decoded_key[:16]
-        decrypted_key = decoded_key[16:]
-        if (expected_master == master_key_bytes.decode('utf-8')):
-            return decrypted_key
-        raise ValueError(
-            f"Bad master key used [{master_key_bytes}] - [{decrypted_key}]")
-
-
-def get_data_table():
-    sample_data = {
-        "orderId": [1001, 1002, 1003],
-        "productId": [152, 268, 6548],
-        "price": [3.25, 6.48, 2.12],
-        "vat": [0.0, 0.2, 0.05]
-    }
-    return pyarrow.Table.from_pydict(sample_data)
-
-
-def kms_client_factory(kms_connection_config):
-    return FooKmsClient(kms_connection_config)
+def get_data_table(num_rows=1000):
+    return pyarrow.Table.from_pydict({
+        "orderId": list(range(1024, 1024 + num_rows)),
+        "productId": [(i * 7) % 6548 for i in range(num_rows)],
+        "price": [i * 0.25 for i in range(num_rows)],
+        "vat": [None if i % 9 == 0 else i * 0.05 for i in range(num_rows)],
+        "customer_name": [None if i % 7 == 0 else f"customer_{i}"
+                          for i in range(num_rows)],
+    })
 
 
 def get_kms_connection_config():
@@ -92,7 +64,8 @@ def get_kms_connection_config():
             "orderid_key": "column_secret001",
             "productid_key": "column_secret002",
             "price_key": "column_secret003",
-            "vat_key": "column_secret004"
+            "customer_key": "column_secret004",
+            "vat_key": "column_secret005",
         }
     )
 
@@ -112,103 +85,91 @@ def get_encryption_config():
 
 
 def get_encryption_properties():
-    encryption_config = get_encryption_config()
     crypto_factory = ppe.CryptoFactory(kms_client_factory)
     return crypto_factory.file_encryption_properties(
-        get_kms_connection_config(), encryption_config)
-
-
-def get_external_encryption_config(plaintext_footer=True):
-    return ppe.ExternalEncryptionConfiguration(
-        footer_key="footer_key",
-        column_keys={
-            "productid_key": ["productId"]
-        },
-        encryption_algorithm="AES_GCM_V1",
-        cache_lifetime=datetime.timedelta(minutes=2.0),
-        data_key_length_bits=128,
-        plaintext_footer=plaintext_footer,
-        per_column_encryption={
-            "orderId": {
-                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
-                "encryption_key": "orderid_key"
-            },
-        },
-        app_context={
-            "user_id": "Picard1701",
-            "location": "Presidio"
-        },
-        configuration_properties={
-            "EXTERNAL_PROTECT_V1": {
-                "config_file": "path/to/config/file",
-                "config_file_decryption_key": "some_key",
-                "agent_library_path": get_agent_library_path()
-            }
-        }
-    )
-
-
-def get_external_encryption_properties():
-    encryption_config = get_external_encryption_config()
-    crypto_factory = ppe.CryptoFactory(kms_client_factory)
-    return crypto_factory.external_file_encryption_properties(
-        get_kms_connection_config(), encryption_config)
-
-
-def get_decryption_config():
-    return ppe.DecryptionConfiguration(
-        cache_lifetime=datetime.timedelta(minutes=10.0))
+        get_kms_connection_config(), get_encryption_config())
 
 
 def get_decryption_properties():
-    decryption_config = get_decryption_config()
     crypto_factory = ppe.CryptoFactory(kms_client_factory)
     return crypto_factory.file_decryption_properties(
-        get_kms_connection_config(), decryption_config)
+        get_kms_connection_config(),
+        ppe.DecryptionConfiguration(cache_lifetime=datetime.timedelta(minutes=10.0)))
+
+
+def mixed_per_column_encryption():
+    """orderId uses AES_GCM_CTR_V1, price and customer_name use the provider.
+    productId is encrypted through column_keys, vat is not encrypted."""
+    return {
+        "orderId": {
+            "encryption_algorithm": "AES_GCM_CTR_V1",
+            "encryption_key": "orderid_key"
+        },
+        "price": {
+            "encryption_algorithm": "EXTERNAL_PROTECT_V1",
+            "encryption_key": "price_key"
+        },
+        "customer_name": {
+            "encryption_algorithm": "EXTERNAL_PROTECT_V1",
+            "encryption_key": "customer_key"
+        },
+    }
+
+
+def get_external_encryption_config(
+        encryption_algorithm="AES_GCM_V1", plaintext_footer=True,
+        per_column_encryption=None, column_keys=None):
+    if per_column_encryption is None:
+        per_column_encryption = mixed_per_column_encryption()
+    if column_keys is None:
+        column_keys = {"productid_key": ["productId"]}
+    return ppe.ExternalEncryptionConfiguration(
+        footer_key="footer_key",
+        column_keys=column_keys,
+        encryption_algorithm=encryption_algorithm,
+        cache_lifetime=datetime.timedelta(minutes=2.0),
+        data_key_length_bits=128,
+        plaintext_footer=plaintext_footer,
+        per_column_encryption=per_column_encryption,
+        app_context=APP_CONTEXT,
+    )
+
+
+def get_external_encryption_properties(provider, **kwargs):
+    crypto_factory = ppe.CryptoFactory(kms_client_factory)
+    return crypto_factory.external_file_encryption_properties(
+        get_kms_connection_config(), get_external_encryption_config(**kwargs),
+        provider)
 
 
 def get_external_decryption_config():
     return ppe.ExternalDecryptionConfiguration(
         cache_lifetime=datetime.timedelta(minutes=10.0),
-        app_context={
-            "user_id": "Picard1701",
-            "location": "Presidio"
-        },
-        configuration_properties={
-            "EXTERNAL_PROTECT_V1": {
-                "config_file": "path/to/config/file",
-                "config_file_decryption_key": "some_key",
-                "agent_library_path": get_agent_library_path(),
-            }
-        }
+        app_context=APP_CONTEXT,
     )
 
 
-def get_external_decryption_properties():
-    decryption_config = get_external_decryption_config()
+def get_external_decryption_properties(provider):
     crypto_factory = ppe.CryptoFactory(kms_client_factory)
     return crypto_factory.external_file_decryption_properties(
-        get_kms_connection_config(), decryption_config)
+        get_kms_connection_config(), get_external_decryption_config(), provider)
 
 
-def write_parquet(table, location, encryption_properties):
-    writer = pp.ParquetWriter(
-        location,
-        table.schema,
-        encryption_properties=encryption_properties)
-    writer.write_table(table)
+def write_parquet(table, location, encryption_properties, **write_kwargs):
+    pp.write_table(table, location, encryption_properties=encryption_properties,
+                   **write_kwargs)
 
 
-def read_parquet(location, decryption_properties):
+def read_parquet(location, decryption_properties, **read_kwargs):
     reader = pp.ParquetFile(location, decryption_properties=decryption_properties)
-    return reader.read()
+    return reader.read(**read_kwargs)
 
 
 def round_trip_encryption_and_decryption(
-        tmp_path, encryption_properties, decryption_properties):
+        tmp_path, encryption_properties, decryption_properties, **write_kwargs):
     data_table = get_data_table()
     parquet_path = tmp_path / "test.parquet"
-    write_parquet(data_table, parquet_path, encryption_properties)
+    write_parquet(data_table, parquet_path, encryption_properties, **write_kwargs)
 
     read_data_table = read_parquet(parquet_path, decryption_properties)
     assert read_data_table.equals(data_table)
@@ -216,6 +177,10 @@ def round_trip_encryption_and_decryption(
     assert read_data_table.num_columns == data_table.num_columns
     assert read_data_table.schema.equals(data_table.schema)
     assert read_data_table.column_names == data_table.column_names
+    return parquet_path
+
+
+# Configuration objects
 
 
 def test_encryption_configuration_properties():
@@ -266,26 +231,15 @@ def test_external_encryption_configuration_properties():
         minutes=2.0)
     assert external_encryption_config.internal_key_material is True
     assert external_encryption_config.data_key_length_bits == 128
+    assert external_encryption_config.app_context == APP_CONTEXT
+    assert external_encryption_config.per_column_encryption == \
+        mixed_per_column_encryption()
 
-    assert external_encryption_config.app_context == {
-        "user_id": "Picard1701",
-        "location": "Presidio"
-    }
 
-    assert external_encryption_config.configuration_properties == {
-        "EXTERNAL_PROTECT_V1": {
-            "config_file": "path/to/config/file",
-            "config_file_decryption_key": "some_key",
-            "agent_library_path": get_agent_library_path()
-        }
-    }
-
-    assert external_encryption_config.per_column_encryption == {
-        "orderId": {
-            "encryption_algorithm": "EXTERNAL_PROTECT_V1",
-            "encryption_key": "orderid_key"
-        },
-    }
+def test_external_encryption_app_context_default_is_empty():
+    config = ppe.ExternalEncryptionConfiguration(footer_key="key")
+    assert config.app_context == {}
+    assert config.per_column_encryption == {}
 
 
 def test_external_encryption_app_context_invalid_json():
@@ -318,7 +272,7 @@ def test_external_encryption_per_column_encryption_invalid_algorithm():
 def test_external_encryption_per_column_encryption_new_algorithm():
     """Ensure new encryption_algorithm is accepted."""
 
-    ppe.ExternalEncryptionConfiguration(
+    config = ppe.ExternalEncryptionConfiguration(
         footer_key="key",
         per_column_encryption={
             "a": {
@@ -327,53 +281,83 @@ def test_external_encryption_per_column_encryption_new_algorithm():
             }
         }
     )
+    assert config.per_column_encryption["a"]["encryption_algorithm"] == \
+        "EXTERNAL_PROTECT_V1"
 
 
-def test_external_encryption_configuration_properties_invalid_types():
-    """Ensure configuration_properties rejects non-string keys or values."""
+def test_external_encryption_per_column_encryption_missing_key():
     with pytest.raises(
-            TypeError,
-            match="All inner config keys/values must be str"):
-        config = ppe.ExternalEncryptionConfiguration(
-            footer_key="key"
-        )
-        config.configuration_properties = {
-            "EXTERNAL_PROTECT_V1": {
-                "config_file": "path/to/file",
-                123: "should-fail"  # Invalid: key is not a string
+            ValueError, match="Each column must have 'encryption_key' \\(string\\)."):
+        ppe.ExternalEncryptionConfiguration(
+            footer_key="key",
+            per_column_encryption={
+                "a": {"encryption_algorithm": "AES_GCM_V1"}
             }
-        }
-
-    with pytest.raises(
-            TypeError,
-            match="All inner config keys/values must be str"):
-        config = ppe.ExternalEncryptionConfiguration(
-            footer_key="key"
         )
-        config.configuration_properties = {
-            "EXTERNAL_PROTECT_V1": {
-                # Invalid: value is not a string
-                "config_file": ["not", "a", "string"]
-            }
-        }
 
 
 def test_external_encryption_rejects_none_values():
     """Ensure None values are rejected."""
     config = ppe.ExternalEncryptionConfiguration(footer_key="key")
 
-    # per_column_encryption: expect ValueError
     with pytest.raises(TypeError, match="per_column_encryption cannot be None"):
         config.per_column_encryption = None
 
-    # app_context: expect ValueError due to None not being JSON-serializable
+    # None is not JSON-serializable
     with pytest.raises(ValueError, match="app_context must be JSON-serializable"):
         config.app_context = None
 
-    # configuration_properties: expect ValueError due to None not being iterable
-    with pytest.raises(
-            ValueError, match="Configuration properties value cannot be None"):
-        config.configuration_properties = None
+
+def test_external_configurations_have_no_configuration_properties():
+    """The external configurations take no configuration_properties."""
+    with pytest.raises(TypeError):
+        ppe.ExternalEncryptionConfiguration(
+            footer_key="key", configuration_properties={})
+    with pytest.raises(TypeError):
+        ppe.ExternalDecryptionConfiguration(configuration_properties={})
+    assert not hasattr(ppe.ExternalEncryptionConfiguration(footer_key="key"),
+                       "configuration_properties")
+    assert not hasattr(ppe.ExternalDecryptionConfiguration(),
+                       "configuration_properties")
+
+
+def test_decryption_configuration_properties():
+    """Test the standard DecryptionConfiguration properties to avoid regressions."""
+
+    config = ppe.DecryptionConfiguration()
+    config.cache_lifetime = datetime.timedelta(minutes=5.0)
+
+    assert isinstance(config, ppe.DecryptionConfiguration)
+    assert config.cache_lifetime == datetime.timedelta(minutes=5.0)
+
+
+def test_external_decryption_configuration_properties():
+    """Test the ExternalDecryptionConfiguration properties
+      including external-specific fields."""
+
+    external_decryption_config = get_external_decryption_config()
+    assert isinstance(
+        external_decryption_config, ppe.ExternalDecryptionConfiguration)
+    assert external_decryption_config.cache_lifetime == datetime.timedelta(
+        minutes=10.0)
+    assert external_decryption_config.app_context == APP_CONTEXT
+
+
+def test_external_decryption_configuration_app_context():
+    config = ppe.ExternalDecryptionConfiguration()
+    assert config.app_context == {}
+
+    config.app_context = {"a": 1}
+    assert config.app_context == {"a": 1}
+
+    with pytest.raises(ValueError, match="app_context must be JSON-serializable"):
+        config.app_context = None
+
+    with pytest.raises(TypeError, match="Failed to serialize app_context"):
+        config.app_context = {"invalid": set([1, 2, 3])}
+
+
+# Creating file encryption and decryption properties
 
 
 def test_external_file_encryption_properties_rejects_column_in_two_places():
@@ -396,103 +380,76 @@ def test_external_file_encryption_properties_rejects_column_in_two_places():
             get_kms_connection_config(), config)
 
 
-def test_external_file_encryption_properties_valid():
-    """Check class name and module because
-    ExternalFileEncryptionProperties is not visible."""
-    external_encryption_properties = get_external_encryption_properties()
-
-    assert (
-        external_encryption_properties.__class__.__name__
-        == "ExternalFileEncryptionProperties"
-    )
-    assert external_encryption_properties.__class__.__module__ == "pyarrow._parquet"
+def _decryption_properties_without_provider():
+    crypto_factory = ppe.CryptoFactory(kms_client_factory)
+    return crypto_factory.external_file_decryption_properties(
+        get_kms_connection_config(), get_external_decryption_config())
 
 
-def test_decryption_configuration_properties():
-    """Test the standard DecryptionConfiguration properties to avoid regressions."""
-
-    config = ppe.DecryptionConfiguration()
-    config.cache_lifetime = datetime.timedelta(minutes=5.0)
-
-    assert isinstance(config, ppe.DecryptionConfiguration)
-    assert config.cache_lifetime == datetime.timedelta(minutes=5.0)
-
-
-def test_external_decryption_configuration_properties():
-    """Test the ExternalDecryptionConfiguration properties
-      including external-specific fields."""
-
-    external_decryption_config = get_external_decryption_config()
-    assert isinstance(
-        external_decryption_config, ppe.ExternalDecryptionConfiguration)
-    assert external_decryption_config.cache_lifetime == datetime.timedelta(
-        minutes=10.0)
-    assert external_decryption_config.app_context == {
-        "user_id": "Picard1701",
-        "location": "Presidio"
-    }
-    assert external_decryption_config.configuration_properties == {
-        "EXTERNAL_PROTECT_V1": {
-            "config_file": "path/to/config/file",
-            "config_file_decryption_key": "some_key",
-            "agent_library_path": get_agent_library_path()
-        }
-    }
+def _encryption_properties_without_external_columns():
+    # No provider is needed when no column uses EXTERNAL_PROTECT_V1.
+    return get_external_encryption_properties(
+        None, per_column_encryption={
+            "orderId": {
+                "encryption_algorithm": "AES_GCM_CTR_V1",
+                "encryption_key": "orderid_key"
+            }})
 
 
-def test_external_decryption_configuration_properties_invalid_types():
-    """Ensure configuration_properties rejects non-string keys or values."""
+@pytest.mark.parametrize("make_properties, class_name", [
+    (lambda: get_external_encryption_properties(XorParquetCryptoProvider()),
+     "ExternalFileEncryptionProperties"),
+    (_encryption_properties_without_external_columns,
+     "ExternalFileEncryptionProperties"),
+    (lambda: get_external_decryption_properties(XorParquetCryptoProvider()),
+     "ExternalFileDecryptionProperties"),
+    (_decryption_properties_without_provider,
+     "ExternalFileDecryptionProperties"),
+], ids=["encryption", "encryption_without_external_columns",
+        "decryption", "decryption_without_provider"])
+def test_external_file_properties_type(make_properties, class_name):
+    """The classes are not exported from the public modules (they live in
+    pyarrow._parquet), so check the name of the returned object."""
+    assert make_properties().__class__.__name__ == class_name
 
-    # Outer key is not a string (int instead of cipher name string)
-    with pytest.raises(AttributeError, match="object has no attribute 'upper'"):
-        config = ppe.ExternalDecryptionConfiguration()
-        config.configuration_properties = {
-            123: {  # invalid outer key
-                "config_file": "should-fail"
-            }
-        }
 
-    # Outer value is not a dict
+def test_standard_properties_reject_external_configurations():
+    """An external configuration passed to the standard methods would silently lose
+    its per-column algorithms and application context."""
+    crypto_factory = ppe.CryptoFactory(kms_client_factory)
+
+    with pytest.raises(TypeError, match="external_file_encryption_properties"):
+        crypto_factory.file_encryption_properties(
+            get_kms_connection_config(), get_external_encryption_config())
+
+    with pytest.raises(TypeError, match="external_file_decryption_properties"):
+        crypto_factory.file_decryption_properties(
+            get_kms_connection_config(), get_external_decryption_config())
+
+
+def test_external_file_encryption_properties_requires_provider_for_external_column():
+    with pytest.raises(OSError, match="parquet_crypto_provider must be set"):
+        get_external_encryption_properties(None)
+
+
+def test_external_file_level_algorithm_requires_provider():
+    """With EXTERNAL_PROTECT_V1 as the file-level algorithm, the footer and every
+    column in column_keys go through the provider."""
     with pytest.raises(
-        TypeError,
-        match="Inner value for cipher AES_GCM_V1 must be a dict"
-    ):
-        config = ppe.ExternalDecryptionConfiguration()
-        config.configuration_properties = {
-            # invalid outer value (should be dict)
-            "AES_GCM_V1": ["not", "a", "dict"]
-        }
-
-    # Inner key is not a string
-    with pytest.raises(TypeError, match="All inner config keys/values must be str"):
-        config = ppe.ExternalDecryptionConfiguration()
-        config.configuration_properties = {
-            "AES_GCM_V1": {
-                123: "should-fail"  # invalid inner key
-            }
-        }
-
-    # Inner value is not a string
-    with pytest.raises(TypeError, match="All inner config keys/values must be str"):
-        config = ppe.ExternalDecryptionConfiguration()
-        config.configuration_properties = {
-            "AES_GCM_V1": {
-                "config_file": ["not", "a", "string"]  # invalid inner value
-            }
-        }
+            OSError,
+            match="parquet_crypto_provider must be set when using the "
+                  "EXTERNAL_PROTECT_V1 algorithm"):
+        get_external_encryption_properties(
+            None, encryption_algorithm="EXTERNAL_PROTECT_V1",
+            per_column_encryption={
+                "orderId": {
+                    "encryption_algorithm": "AES_GCM_CTR_V1",
+                    "encryption_key": "orderid_key"
+                },
+            })
 
 
-def test_external_file_decryption_properties_valid():
-    """Check class name and module because
-    ExternalFileDecryptionProperties is not visible."""
-
-    external_decryption_properties = get_external_decryption_properties()
-
-    assert (
-        external_decryption_properties.__class__.__name__
-        == "ExternalFileDecryptionProperties"
-    )
-    assert external_decryption_properties.__class__.__module__ == "pyarrow._parquet"
+# Round trips
 
 
 def test_read_and_write_standard_encryption(tmp_path):
@@ -501,145 +458,170 @@ def test_read_and_write_standard_encryption(tmp_path):
                                          get_decryption_properties())
 
 
-def test_read_and_write_external_encryption(tmp_path):
-    # Test a roundtrip encryption and decryption using external encryption.
+# The write scenarios of the original external encryption example: the defaults
+# (SNAPPY + dictionary encoding), plain encoding without compression, and data page
+# version 2.0.
+WRITE_SCENARIOS = {
+    "defaults": {},
+    "plain_uncompressed": {"use_dictionary": False, "compression": "NONE"},
+    "data_page_v2": {"data_page_version": "2.0"},
+    "gzip_data_page_v2": {"data_page_version": "2.0", "compression": "GZIP"},
+    "byte_stream_split": {"use_dictionary": False, "compression": "NONE",
+                          "use_byte_stream_split": ["price"]},
+}
+
+
+@pytest.mark.parametrize("plaintext_footer", [True, False])
+@pytest.mark.parametrize("encryption_algorithm", ["AES_GCM_V1", "AES_GCM_CTR_V1"])
+@pytest.mark.parametrize("write_kwargs", WRITE_SCENARIOS.values(),
+                         ids=WRITE_SCENARIOS.keys())
+def test_read_and_write_external_encryption(
+        tmp_path, write_kwargs, encryption_algorithm, plaintext_footer):
+    """Mixed file: AES columns, columns encrypted by the provider and a plain
+    column. Only the provider columns may reach the provider."""
+    provider = XorParquetCryptoProvider()
+    encryption_properties = get_external_encryption_properties(
+        provider, encryption_algorithm=encryption_algorithm,
+        plaintext_footer=plaintext_footer)
+
     round_trip_encryption_and_decryption(
-        tmp_path, get_external_encryption_properties(),
-        get_external_decryption_properties())
+        tmp_path, encryption_properties, get_external_decryption_properties(provider),
+        **write_kwargs)
+
+    assert provider.encrypt_block_calls > 0
+    assert provider.decrypt_block_calls > 0
+    assert provider.column_paths == EXTERNAL_COLUMNS
+    assert [json.loads(context) for context in provider.app_contexts] == [APP_CONTEXT]
 
 
-def get_custom_external_encryption_properties(
-        encryption_algorithm, per_column_encryption, plaintext_footer):
-    encryption_config = ppe.ExternalEncryptionConfiguration(
-        footer_key="footer_key",
-        column_keys={
-            "productid_key": ["productId"]
-        },
-        encryption_algorithm=encryption_algorithm,
-        cache_lifetime=datetime.timedelta(minutes=2.0),
-        data_key_length_bits=128,
+@pytest.mark.parametrize("plaintext_footer", [True, False])
+def test_external_file_level_algorithm_round_trip(tmp_path, plaintext_footer):
+    """productId uses the file-level algorithm, which is EXTERNAL_PROTECT_V1. The
+    footer is signed (plaintext footer) or encrypted (encrypted footer) by the
+    provider."""
+    provider = XorParquetCryptoProvider()
+    encryption_properties = get_external_encryption_properties(
+        provider, encryption_algorithm="EXTERNAL_PROTECT_V1",
         plaintext_footer=plaintext_footer,
-        per_column_encryption=per_column_encryption,
-        app_context={
-            "user_id": "Picard1701",
-            "location": "Presidio"
-        },
-        configuration_properties={
-            "EXTERNAL_PROTECT_V1": {
-                "config_file": "path/to/config/file",
-                "config_file_decryption_key": "some_key",
-                "agent_library_path": get_agent_library_path()
-            }
-        }
-    )
-    crypto_factory = ppe.CryptoFactory(kms_client_factory)
-    return crypto_factory.external_file_encryption_properties(
-        get_kms_connection_config(), encryption_config)
-
-
-def test_encrypt_aes_gcm_file_all_algorithms_in_columns_plaintext_footer(tmp_path):
-    encryption_properties = get_custom_external_encryption_properties(
-        "AES_GCM_V1",  # encryption_algorithm
-        {
+        per_column_encryption={
             "orderId": {
                 "encryption_algorithm": "AES_GCM_CTR_V1",
                 "encryption_key": "orderid_key"
             },
-            "price": {
-                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
-                "encryption_key": "price_key"
-            },
-            "vat": {
-                "encryption_algorithm": "AES_GCM_V1",
-                "encryption_key": "vat_key"
-            },
-        },  # per_column_encryption
-        True  # plaintext_footer
-    )
-    round_trip_encryption_and_decryption(tmp_path, encryption_properties,
-                                         get_external_decryption_properties())
+        })
+
+    round_trip_encryption_and_decryption(
+        tmp_path, encryption_properties, get_external_decryption_properties(provider))
+
+    # The footer ("") and the column metadata of every column follow the file-level
+    # algorithm, so the provider also sees orderId even though its pages use AES.
+    assert provider.column_paths == {"", "productId", "orderId"}
+    if plaintext_footer:
+        assert provider.sign_footer_calls > 0
+        assert provider.verify_footer_signature_calls > 0
 
 
-def test_encrypt_aes_gcm_file_all_algorithms_in_columns_encrypted_footer(tmp_path):
-    encryption_properties = get_custom_external_encryption_properties(
-        "AES_GCM_V1",  # encryption_algorithm
-        {
-            "orderId": {
-                "encryption_algorithm": "AES_GCM_CTR_V1",
-                "encryption_key": "orderid_key"
-            },
-            "price": {
-                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
-                "encryption_key": "price_key"
-            },
-            "vat": {
-                "encryption_algorithm": "AES_GCM_V1",
-                "encryption_key": "vat_key"
-            },
-        },  # per_column_encryption
-        False  # plaintext_footer
-    )
-    round_trip_encryption_and_decryption(tmp_path, encryption_properties,
-                                         get_external_decryption_properties())
+def test_external_encryption_all_columns_external(tmp_path):
+    provider = XorParquetCryptoProvider()
+    table = get_data_table()
+    per_column_encryption = {
+        name: {"encryption_algorithm": "EXTERNAL_PROTECT_V1",
+               "encryption_key": key}
+        for name, key in [("orderId", "orderid_key"), ("productId", "productid_key"),
+                          ("price", "price_key"), ("vat", "vat_key"),
+                          ("customer_name", "customer_key")]
+    }
+    encryption_properties = get_external_encryption_properties(
+        provider, per_column_encryption=per_column_encryption, column_keys={})
+
+    path = round_trip_encryption_and_decryption(
+        tmp_path, encryption_properties, get_external_decryption_properties(provider))
+
+    assert provider.column_paths == set(table.column_names)
+    # The plaintext values must not be readable on disk.
+    assert b"customer_1" not in path.read_bytes()
 
 
-def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_plaintext_footer(
-        tmp_path):
-    encryption_properties = get_custom_external_encryption_properties(
-        "AES_GCM_CTR_V1",  # encryption_algorithm
-        {
-            "orderId": {
-                "encryption_algorithm": "AES_GCM_CTR_V1",
-                "encryption_key": "orderid_key"
-            },
-            "price": {
-                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
-                "encryption_key": "price_key"
-            },
-            "vat": {
-                "encryption_algorithm": "AES_GCM_V1",
-                "encryption_key": "vat_key"
-            },
-        },  # per_column_encryption
-        True  # plaintext_footer
-    )
-    round_trip_encryption_and_decryption(tmp_path, encryption_properties,
-                                         get_external_decryption_properties())
+def test_external_encrypted_columns_are_not_plaintext_on_disk(tmp_path):
+    provider = XorParquetCryptoProvider()
+    path = round_trip_encryption_and_decryption(
+        tmp_path, get_external_encryption_properties(provider),
+        get_external_decryption_properties(provider),
+        use_dictionary=False, compression="NONE")
+    assert b"customer_1" not in path.read_bytes()
 
 
-def test_encrypt_aes_gcm_ctr_file_all_algorithms_in_columns_encrypted_footer(
-        tmp_path):
-    encryption_properties = get_custom_external_encryption_properties(
-        "AES_GCM_CTR_V1",  # encryption_algorithm
-        {
-            "orderId": {
-                "encryption_algorithm": "AES_GCM_CTR_V1",
-                "encryption_key": "orderid_key"
-            },
-            "price": {
-                "encryption_algorithm": "EXTERNAL_PROTECT_V1",
-                "encryption_key": "price_key"
-            },
-            "vat": {
-                "encryption_algorithm": "AES_GCM_V1",
-                "encryption_key": "vat_key"
-            },
-        },  # per_column_encryption
-        False  # plaintext_footer
-    )
-    round_trip_encryption_and_decryption(tmp_path, encryption_properties,
-                                         get_external_decryption_properties())
+def test_plaintext_footer_metadata_readable_without_decryption_properties(tmp_path):
+    provider = XorParquetCryptoProvider()
+    table = get_data_table()
+    path = tmp_path / "plaintext_footer.parquet"
+    write_parquet(table, path, get_external_encryption_properties(
+        provider, plaintext_footer=True))
+
+    metadata = pp.read_metadata(path)
+    assert metadata.num_rows == table.num_rows
+    assert metadata.num_columns == table.num_columns
+    assert metadata.schema.to_arrow_schema().names == table.column_names
 
 
-def test_encrypt_external_dbpa_file_raises_error():
-    with pytest.raises(OSError, match="not supported for file level encryption"):
-        get_custom_external_encryption_properties(
-            "EXTERNAL_PROTECT_V1",  # encryption_algorithm
-            {
-                "orderId": {
-                    "encryption_algorithm": "AES_GCM_CTR_V1",
-                    "encryption_key": "orderid_key"
-                },
-            },  # per_column_encryption
-            True  # plaintext_footer
-        )
+def test_encrypted_footer_requires_decryption_properties(tmp_path):
+    provider = XorParquetCryptoProvider()
+    path = tmp_path / "encrypted_footer.parquet"
+    write_parquet(get_data_table(), path, get_external_encryption_properties(
+        provider, plaintext_footer=False))
+
+    with pytest.raises(OSError):
+        pp.read_metadata(path)
+
+
+def test_reading_aes_columns_does_not_require_provider(tmp_path):
+    provider = XorParquetCryptoProvider()
+    table = get_data_table()
+    path = tmp_path / "mixed.parquet"
+    write_parquet(table, path, get_external_encryption_properties(provider))
+
+    decryption_properties = _decryption_properties_without_provider()
+
+    provider.reset()
+    columns = ["orderId", "productId", "vat"]
+    read_table = read_parquet(path, decryption_properties, columns=columns)
+    assert read_table.equals(table.select(columns))
+    assert provider.decrypt_block_calls == 0
+
+    with pytest.raises(OSError, match="parquet_crypto_provider must be set"):
+        read_parquet(path, decryption_properties)
+
+
+def test_provider_is_only_called_for_selected_external_columns(tmp_path):
+    provider = XorParquetCryptoProvider()
+    table = get_data_table()
+    path = tmp_path / "mixed.parquet"
+    write_parquet(table, path, get_external_encryption_properties(provider))
+    decryption_properties = get_external_decryption_properties(provider)
+
+    provider.reset()
+    read_table = read_parquet(path, decryption_properties, columns=["price"])
+    assert read_table.equals(table.select(["price"]))
+    assert provider.column_paths == {"price"}
+
+    provider.reset()
+    read_table = read_parquet(path, decryption_properties, columns=["orderId", "vat"])
+    assert read_table.equals(table.select(["orderId", "vat"]))
+    assert provider.decrypt_block_calls == 0
+
+
+def test_decrypting_with_standard_properties_fails(tmp_path):
+    provider = XorParquetCryptoProvider()
+    path = tmp_path / "mixed.parquet"
+    write_parquet(get_data_table(), path, get_external_encryption_properties(provider))
+
+    with pytest.raises(OSError):
+        read_parquet(path, get_decryption_properties())
+
+
+def test_external_encryption_with_multiple_row_groups(tmp_path):
+    provider = XorParquetCryptoProvider()
+    round_trip_encryption_and_decryption(
+        tmp_path, get_external_encryption_properties(provider),
+        get_external_decryption_properties(provider), row_group_size=128)
+    assert provider.column_paths == EXTERNAL_COLUMNS

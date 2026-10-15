@@ -146,7 +146,7 @@ arrow::Result<std::vector<uint8_t>> PyParquetCryptoProvider::SignFooter(
   return std::vector<uint8_t>(out.begin(), out.end());
 }
 
-// Unreachable for the same reason SignFooter() can't be dismissed as dead code.
+// Called whenever a plaintext-footer file is read.
 arrow::Result<bool> PyParquetCryptoProvider::VerifyFooterSignature(
     std::span<const uint8_t> footer_bytes, std::span<const uint8_t> stored_signature,
     const ::parquet::ParquetCryptoContext& ctx, std::span<const uint8_t> footer_aad,

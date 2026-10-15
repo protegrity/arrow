@@ -50,11 +50,17 @@ cdef class ParquetEncryptionConfig(_Weakrefable):
         Shared pointer to an `ExternalEncryptionConfiguration` object. This object defines
         specific encryption settings for Parquet data, which allows for per-column
         encryption algorithms. If this is set, the encryption_config cannot be set.
+    parquet_crypto_provider : pyarrow.parquet.encryption.ParquetCryptoProvider, optional
+        Provider that encrypts the columns using the EXTERNAL_PROTECT_V1 algorithm.
+        Required when external_encryption_config uses that algorithm, and can only be
+        set together with external_encryption_config.
 
     Raises
     ------
     ValueError
-        Raised if `encryption_config` is None.
+        Raised if neither `encryption_config` nor `external_encryption_config` is
+        set, if both are set, or if `parquet_crypto_provider` is set without
+        `external_encryption_config`.
     """
     cdef:
         shared_ptr[CParquetEncryptionConfig] c_config
@@ -64,7 +70,8 @@ cdef class ParquetEncryptionConfig(_Weakrefable):
 
     def __cinit__(self, CryptoFactory crypto_factory, KmsConnectionConfig kms_connection_config,
                   EncryptionConfiguration encryption_config=None,
-                  ExternalEncryptionConfiguration external_encryption_config=None):
+                  ExternalEncryptionConfiguration external_encryption_config=None,
+                  ParquetCryptoProvider parquet_crypto_provider=None):
 
         if crypto_factory is None:
             raise ValueError("crypto_factory cannot be None")
@@ -80,6 +87,14 @@ cdef class ParquetEncryptionConfig(_Weakrefable):
             raise ValueError(
                 "cannot set both encryption_config and external_encryption_config")
 
+        if isinstance(encryption_config, ExternalEncryptionConfiguration):
+            raise TypeError(
+                "pass an ExternalEncryptionConfiguration as external_encryption_config")
+
+        if parquet_crypto_provider is not None and external_encryption_config is None:
+            raise ValueError(
+                "parquet_crypto_provider requires external_encryption_config")
+
         self.c_config.reset(new CParquetEncryptionConfig())
 
         self.c_config.get().crypto_factory = pyarrow_unwrap_cryptofactory(crypto_factory)
@@ -91,6 +106,8 @@ cdef class ParquetEncryptionConfig(_Weakrefable):
         else:
             self.c_config.get().external_encryption_config = pyarrow_unwrap_external_encryptionconfig(
                 external_encryption_config)
+            if parquet_crypto_provider is not None:
+                self.c_config.get().parquet_crypto_provider = parquet_crypto_provider.unwrap()
 
     @staticmethod
     cdef wrap(shared_ptr[CParquetEncryptionConfig] c_config):
@@ -128,11 +145,17 @@ cdef class ParquetDecryptionConfig(_Weakrefable):
         Shared pointer to an `ExternalDecryptionConfiguration` object, defining specific
         decryption settings for reading Parquet data which was encrypted with an
         ExternalEncryptionConfiguration. If this is set, decryption_config cannot be set.
+    parquet_crypto_provider : pyarrow.parquet.encryption.ParquetCryptoProvider, optional
+        Provider that decrypts the columns encrypted with the EXTERNAL_PROTECT_V1
+        algorithm. Required to read such columns, and can only be set together with
+        external_decryption_config.
 
     Raises
     ------
     ValueError
-        Raised if `decryption_config` is None.
+        Raised if neither `decryption_config` nor `external_decryption_config` is
+        set, if both are set, or if `parquet_crypto_provider` is set without
+        `external_decryption_config`.
     """
 
     cdef:
@@ -143,7 +166,8 @@ cdef class ParquetDecryptionConfig(_Weakrefable):
 
     def __cinit__(self, CryptoFactory crypto_factory, KmsConnectionConfig kms_connection_config,
                   DecryptionConfiguration decryption_config=None,
-                  ExternalDecryptionConfiguration external_decryption_config=None):
+                  ExternalDecryptionConfiguration external_decryption_config=None,
+                  ParquetCryptoProvider parquet_crypto_provider=None):
 
         if decryption_config is None and external_decryption_config is None:
             raise ValueError(
@@ -152,6 +176,14 @@ cdef class ParquetDecryptionConfig(_Weakrefable):
         if decryption_config is not None and external_decryption_config is not None:
             raise ValueError(
                 "cannot set both decryption_config and external_decryption_config")
+
+        if isinstance(decryption_config, ExternalDecryptionConfiguration):
+            raise TypeError(
+                "pass an ExternalDecryptionConfiguration as external_decryption_config")
+
+        if parquet_crypto_provider is not None and external_decryption_config is None:
+            raise ValueError(
+                "parquet_crypto_provider requires external_decryption_config")
 
         self.c_config.reset(new CParquetDecryptionConfig())
 
@@ -165,6 +197,8 @@ cdef class ParquetDecryptionConfig(_Weakrefable):
         else:
             self.c_config.get().external_decryption_config = pyarrow_unwrap_external_decryptionconfig(
                 external_decryption_config)
+            if parquet_crypto_provider is not None:
+                self.c_config.get().parquet_crypto_provider = parquet_crypto_provider.unwrap()
 
     @staticmethod
     cdef wrap(shared_ptr[CParquetDecryptionConfig] c_config):

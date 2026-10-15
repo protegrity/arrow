@@ -16,11 +16,8 @@
 # under the License.
 
 """Tests for the Python ParquetCryptoProvider bindings (block path and
-footer signing). Unlike test_external_encryption.py, these tests do not
-depend on the external DBPA agent library.
-"""
+footer signing)."""
 
-import base64
 import datetime
 
 import pytest
@@ -33,64 +30,8 @@ ppe = pytest.importorskip(
            "(built without PARQUET_REQUIRE_ENCRYPTION=ON)",
 )
 
-
-def _xor_bytes(data, key):
-    return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
-
-
-class XorKmsClient(ppe.KmsClient):
-    """Trivial KmsClient: "wraps" a key by XOR-ing it with the master key.
-
-    key_metadata is stored on disk and threaded through Cython's frombytes()
-    (UTF-8 decode) elsewhere in the stack, so the wrapped key must be encoded
-    as ASCII-safe text -- base64, matching FooKmsClient in
-    test_external_encryption.py -- not raw XOR bytes.
-    """
-
-    def __init__(self, kms_connection_config):
-        ppe.KmsClient.__init__(self)
-        self.master_keys_map = kms_connection_config.custom_kms_conf
-
-    def wrap_key(self, key_bytes, master_key_identifier):
-        master_key = self.master_keys_map[master_key_identifier].encode("utf-8")
-        return base64.b64encode(_xor_bytes(key_bytes, master_key))
-
-    def unwrap_key(self, wrapped_key, master_key_identifier):
-        master_key = self.master_keys_map[master_key_identifier].encode("utf-8")
-        return _xor_bytes(base64.b64decode(wrapped_key), master_key)
-
-
-class XorParquetCryptoProvider(ppe.ParquetCryptoProvider):
-    """Block path + footer signing via XOR -- deterministic and reversible,
-    good enough to prove the Python callback plumbing actually runs, not a
-    real cipher."""
-
-    def __init__(self):
-        ppe.ParquetCryptoProvider.__init__(self)
-        self.encrypt_block_calls = 0
-        self.decrypt_block_calls = 0
-        self.sign_footer_calls = 0
-        self.verify_footer_signature_calls = 0
-
-    def encrypt_block(self, plaintext, key_metadata, column_path,
-                      app_context, module_aad, dek):
-        self.encrypt_block_calls += 1
-        return _xor_bytes(plaintext, dek)
-
-    def decrypt_block(self, ciphertext, key_metadata, column_path,
-                      app_context, module_aad, dek):
-        self.decrypt_block_calls += 1
-        return _xor_bytes(ciphertext, dek)
-
-    def sign_footer(self, footer_bytes, key_metadata, column_path,
-                    app_context, footer_aad, dek):
-        self.sign_footer_calls += 1
-        return _xor_bytes(footer_aad + footer_bytes, dek)
-
-    def verify_footer_signature(self, footer_bytes, stored_signature, key_metadata,
-                                column_path, app_context, footer_aad, dek):
-        self.verify_footer_signature_calls += 1
-        return _xor_bytes(footer_aad + footer_bytes, dek) == stored_signature
+from pyarrow.tests.parquet.crypto_provider_utils import (  # noqa: E402
+    XorKmsClient, XorParquetCryptoProvider)
 
 
 def _get_table():
@@ -109,18 +50,8 @@ def _get_kms_connection_config():
     )
 
 
-def test_plaintext_footer_signing_round_trip(tmp_path):
-    """Real E2E: write and read a Parquet file with plaintext_footer=True and
-    EXTERNAL_PROTECT_V1, using a real Python ParquetCryptoProvider (not a mock
-    on the C++ side) -- proves sign_footer()/verify_footer_signature() are
-    actually invoked through the real dispatch chain."""
-    table = _get_table()
-    path = tmp_path / "plaintext_footer_python_provider.parquet"
-
-    provider = XorParquetCryptoProvider()
+def _write_with_provider(provider, path):
     crypto_factory = ppe.CryptoFactory(lambda cfg: XorKmsClient(cfg))
-    kms_config = _get_kms_connection_config()
-
     encryption_config = ppe.ExternalEncryptionConfiguration(
         footer_key="Footer_DE",
         column_keys={"ColumnMD_DE": ["id", "name"]},
@@ -130,47 +61,30 @@ def test_plaintext_footer_signing_round_trip(tmp_path):
         plaintext_footer=True,
     )
     encryption_properties = crypto_factory.external_file_encryption_properties(
-        kms_config, encryption_config, provider)
-
-    pq.write_table(table, path, encryption_properties=encryption_properties,
+        _get_kms_connection_config(), encryption_config, provider)
+    pq.write_table(_get_table(), path, encryption_properties=encryption_properties,
                    compression="none")
 
-    assert provider.sign_footer_calls > 0
-    assert provider.encrypt_block_calls > 0
 
-    decryption_config = ppe.ExternalDecryptionConfiguration()
-    decryption_properties = crypto_factory.external_file_decryption_properties(
-        kms_config, decryption_config, provider)
+def _decryption_properties(provider):
+    crypto_factory = ppe.CryptoFactory(lambda cfg: XorKmsClient(cfg))
+    return crypto_factory.external_file_decryption_properties(
+        _get_kms_connection_config(), ppe.ExternalDecryptionConfiguration(),
+        provider)
 
-    read_table = pq.read_table(path, decryption_properties=decryption_properties)
-    assert read_table.equals(table)
-    assert provider.verify_footer_signature_calls > 0
-    assert provider.decrypt_block_calls > 0
+
+# The round trip with a signed plaintext footer (sign_footer() and
+# verify_footer_signature() called through the real dispatch chain) is covered by
+# test_external_encryption.py::test_external_file_level_algorithm_round_trip.
 
 
 def test_plaintext_footer_tampered_signature_rejected(tmp_path):
     """A corrupted on-disk footer signature must be rejected, not silently
     accepted -- proves verify_footer_signature() is actually enforced, not
     just called."""
-    table = _get_table()
     path = tmp_path / "plaintext_footer_tampered.parquet"
-
     provider = XorParquetCryptoProvider()
-    crypto_factory = ppe.CryptoFactory(lambda cfg: XorKmsClient(cfg))
-    kms_config = _get_kms_connection_config()
-
-    encryption_config = ppe.ExternalEncryptionConfiguration(
-        footer_key="Footer_DE",
-        column_keys={"ColumnMD_DE": ["id", "name"]},
-        encryption_algorithm="EXTERNAL_PROTECT_V1",
-        cache_lifetime=datetime.timedelta(minutes=2.0),
-        data_key_length_bits=128,
-        plaintext_footer=True,
-    )
-    encryption_properties = crypto_factory.external_file_encryption_properties(
-        kms_config, encryption_config, provider)
-    pq.write_table(table, path, encryption_properties=encryption_properties,
-                   compression="none")
+    _write_with_provider(provider, path)
 
     # Flip a byte inside the footer signature blob -- the last 8 bytes of any
     # Parquet file are the 4-byte footer length + "PAR1" magic, not part of
@@ -180,9 +94,41 @@ def test_plaintext_footer_tampered_signature_rejected(tmp_path):
     data[-9] ^= 0xFF
     path.write_bytes(bytes(data))
 
-    decryption_config = ppe.ExternalDecryptionConfiguration()
-    decryption_properties = crypto_factory.external_file_decryption_properties(
-        kms_config, decryption_config, provider)
-
     with pytest.raises(Exception):
+        pq.read_table(path, decryption_properties=_decryption_properties(provider))
+
+
+def test_abstract_provider_methods_raise_not_implemented(tmp_path):
+    """A provider that does not override the callbacks must fail the write."""
+    provider = ppe.ParquetCryptoProvider()
+    with pytest.raises(NotImplementedError):
+        _write_with_provider(provider, tmp_path / "abstract_provider.parquet")
+
+
+def test_provider_must_return_bytes(tmp_path):
+    class StringProvider(XorParquetCryptoProvider):
+        def encrypt_block(self, plaintext, key_metadata, column_path,
+                          app_context, module_aad, dek):
+            return "not bytes"
+
+        def sign_footer(self, footer_bytes, key_metadata, column_path,
+                        app_context, footer_aad, dek):
+            return "not bytes"
+
+    with pytest.raises(Exception, match="must return bytes"):
+        _write_with_provider(StringProvider(), tmp_path / "string_provider.parquet")
+
+
+def test_provider_exception_fails_read(tmp_path):
+    path = tmp_path / "failing_decrypt.parquet"
+    _write_with_provider(XorParquetCryptoProvider(), path)
+
+    class FailingProvider(XorParquetCryptoProvider):
+        def decrypt_block(self, ciphertext, key_metadata, column_path,
+                          app_context, module_aad, dek):
+            raise RuntimeError("provider decrypt failed")
+
+    decryption_properties = _decryption_properties(FailingProvider())
+
+    with pytest.raises(Exception, match="provider decrypt failed"):
         pq.read_table(path, decryption_properties=decryption_properties)
