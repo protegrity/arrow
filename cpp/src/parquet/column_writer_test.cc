@@ -35,9 +35,9 @@
 #include "parquet/column_page.h"
 #include "parquet/column_reader.h"
 #include "parquet/column_writer.h"
-#ifdef PARQUET_BUILD_DBPS_LIBS
-#  include "parquet/encryption/external/test_utils.h"
-#endif
+#include "parquet/encryption/encoding_properties.h"
+#include "parquet/encryption/encryptor_interface.h"
+#include "parquet/encryption/internal_file_encryptor.h"
 #include "parquet/file_reader.h"
 #include "parquet/file_writer.h"
 #include "parquet/geospatial/statistics.h"
@@ -47,6 +47,7 @@
 #include "parquet/properties.h"
 #include "parquet/statistics.h"
 #include "parquet/test_util.h"
+#include "parquet/thrift_internal.h"
 #include "parquet/types.h"
 
 namespace bit_util = arrow::bit_util;
@@ -2058,15 +2059,6 @@ class TestColumnWriterEncryption : public ::testing::Test {
     kColumnEncryptionKey_ = ::arrow::util::SecureString(std::string("0123456789012345"));
     kFooterEncryptionKey_ = ::arrow::util::SecureString(std::string("1234567890123456"));
     values_ = {1, 2, 3, 4, 5};
-
-#ifdef PARQUET_BUILD_DBPS_LIBS
-    library_path_ = parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
-    app_context_ =
-        "{\"user_id\": \"test_user\", \"location\": {\"lat\": 0.0, \"lon\": 0.0}}";
-    connection_config_ = {{"config_path", "test/path"},
-                          { "agent_library_path",
-                            library_path_ }};
-#endif
   }
 
   std::shared_ptr<::arrow::io::BufferOutputStream> sink_;
@@ -2076,12 +2068,6 @@ class TestColumnWriterEncryption : public ::testing::Test {
   ::arrow::util::SecureString kColumnEncryptionKey_;
   ::arrow::util::SecureString kFooterEncryptionKey_;
   std::vector<int32_t> values_;
-
-#ifdef PARQUET_BUILD_DBPS_LIBS
-  std::string library_path_;
-  std::string app_context_;
-  std::map<std::string, std::string> connection_config_;
-#endif
 };
 
 TEST_F(TestColumnWriterEncryption, AESEncryption) {
@@ -2149,199 +2135,358 @@ TEST_F(TestColumnWriterEncryption, AESEncryption) {
   ASSERT_EQ(values_, read_values);
 }
 
-// The tests below exercise the legacy external adapter encryption path. They are compiled
-// only when the external encryption adapter is present (PARQUET_BUILD_DBPS_LIBS=ON).
-// Before removing the adapter sources, port these tests to the external encryption
-// service repository and validate them against the ExternalEncryptorProvider /
-// ExternalDecryptorProvider interface.
-#ifdef PARQUET_BUILD_DBPS_LIBS
-TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption) {
-  ::arrow::util::SecureString kColumnKeyId(std::string("test_column_key1"));
+// Builds a writer whose data pages go through a test encryptor. Kept separate from
+// TestPrimitiveWriter, whose fixture stays unchanged.
+template <typename TestType>
+class TestPrimitiveWriterWithEncryptor : public TestPrimitiveWriter<TestType> {
+ public:
+  std::shared_ptr<TypedColumnWriter<TestType>> BuildWriterWithDataEncryptor(
+      std::shared_ptr<Encryptor> data_encryptor,
+      const ColumnProperties& column_properties, ParquetVersion::type version,
+      ParquetDataPageVersion data_page_version) {
+    this->sink_ = CreateOutputStream();
+    WriterProperties::Builder wp_builder;
+    wp_builder.version(version)->data_page_version(data_page_version);
+    if (column_properties.encoding() == Encoding::PLAIN_DICTIONARY ||
+        column_properties.encoding() == Encoding::RLE_DICTIONARY) {
+      wp_builder.enable_dictionary();
+      wp_builder.dictionary_pagesize_limit(DICTIONARY_PAGE_SIZE);
+    } else {
+      wp_builder.disable_dictionary();
+      wp_builder.encoding(column_properties.encoding());
+    }
+    // EncodingProperties::MakeFromMetadata() reads the codec from the writer properties.
+    wp_builder.compression(column_properties.compression());
+    this->writer_properties_ = wp_builder.build();
 
-  auto column_properties_builder =
-      ColumnEncryptionProperties::Builder("encrypted_column");
-  column_properties_builder.key(kColumnKeyId)
-      ->key_id(std::string(kColumnKeyId.as_view()))
-      ->parquet_cipher(ParquetCipher::EXTERNAL_PROTECT_V1);
-  auto column_properties = column_properties_builder.build();
+    this->metadata_ =
+        ColumnChunkMetaDataBuilder::Make(this->writer_properties_, this->descr_);
+    std::unique_ptr<PageWriter> pager = PageWriter::Open(
+        this->sink_, column_properties.compression(), this->metadata_.get(),
+        /* row_group_ordinal */ -1, /* column_chunk_ordinal*/ -1,
+        ::arrow::default_memory_pool(), /* buffered_row_group */ false,
+        /* header_encryptor */ NULLPTR, std::move(data_encryptor),
+        /* enable_checksum */ false);
+    std::shared_ptr<ColumnWriter> writer = ColumnWriter::Make(
+        this->metadata_.get(), std::move(pager), this->writer_properties_.get());
+    return std::dynamic_pointer_cast<TypedColumnWriter<TestType>>(writer);
+  }
+};
 
-  std::map<std::string, std::shared_ptr<ColumnEncryptionProperties>> encryption_columns;
-  encryption_columns["encrypted_column"] = column_properties;
+using TestInt32WriterWithEncryptor = TestPrimitiveWriterWithEncryptor<Int32Type>;
+using TestFLBAWriterWithEncryptor = TestPrimitiveWriterWithEncryptor<FLBAType>;
 
-  auto fep_builder = ExternalFileEncryptionProperties::Builder(kFooterEncryptionKey_);
-  fep_builder.encrypted_columns(encryption_columns)
-      ->footer_key_metadata(std::string(kFooterEncryptionKey_.as_view()))
-      ->set_plaintext_footer()
-      ->algorithm(ParquetCipher::AES_GCM_V1)
-      ->app_context(app_context_)
-      ->configuration_properties(
-          {{ParquetCipher::EXTERNAL_PROTECT_V1, connection_config_}});
-  auto file_encryption_properties = fep_builder.build_external();
+namespace {
 
-  auto writer_properties_builder = WriterProperties::Builder();
-  writer_properties_builder.encryption(file_encryption_properties);
-  auto writer_properties = writer_properties_builder.build();
+struct CapturedPage {
+  std::map<std::string, std::string> properties;
+  int64_t uncompressed_page_size;
+  int64_t plaintext_size;
+};
 
-  auto file_writer = ParquetFileWriter::Open(sink_, node_, writer_properties);
-  auto rg_writer = file_writer->AppendRowGroup();
-  auto col_writer = static_cast<Int32Writer*>(rg_writer->NextColumn());
+// Records the EncodingProperties that the column writer passes alongside each page and
+// otherwise copies the page through unchanged. A non-zero `reported_size_growth`
+// emulates an encryptor that changes the page content length (for example a
+// tokenizer producing longer values) by reporting a larger uncompressed size, and
+// `ciphertext_extra_bytes` appends bytes to every page, as a cipher with a tag or
+// nonce would.
+class CapturingTestEncryptor : public encryption::EncryptorInterface {
+ public:
+  explicit CapturingTestEncryptor(int64_t reported_size_growth = 0,
+                                  int64_t ciphertext_extra_bytes = 0)
+      : reported_size_growth_(reported_size_growth),
+        ciphertext_extra_bytes_(ciphertext_extra_bytes) {}
 
-  col_writer->WriteBatch(values_.size(), nullptr, nullptr, values_.data());
-  col_writer->Close();
-  file_writer->Close();
+  [[nodiscard]] bool CanCalculateCiphertextLength() const override { return false; }
 
-  ASSERT_OK_AND_ASSIGN(auto buffer, sink_->Finish());
-  ASSERT_GT(buffer->size(), 0);
-
-  std::map<std::string, std::shared_ptr<ColumnDecryptionProperties>> decryption_columns;
-  auto decryption_column_builder =
-      ColumnDecryptionProperties::Builder("encrypted_column");
-  decryption_column_builder.parquet_cipher(ParquetCipher::EXTERNAL_PROTECT_V1);
-  decryption_columns["encrypted_column"] =
-      decryption_column_builder.key(kColumnKeyId)->build();
-
-  auto reader_properties = ReaderProperties();
-  auto decryption_properties_builder = ExternalFileDecryptionProperties::Builder();
-  decryption_properties_builder.footer_key(kFooterEncryptionKey_)
-      ->column_keys(decryption_columns)
-      ->app_context(app_context_)
-      ->configuration_properties(
-          {{ParquetCipher::EXTERNAL_PROTECT_V1, connection_config_}});
-  reader_properties.file_decryption_properties(
-      decryption_properties_builder.build_external());
-
-  auto file_reader = ParquetFileReader::Open(
-      std::make_shared<::arrow::io::BufferReader>(buffer), reader_properties);
-  ASSERT_NE(file_reader, nullptr);
-
-  auto rg_reader = file_reader->RowGroup(0);
-  auto col_reader =
-      std::static_pointer_cast<TypedColumnReader<Int32Type>>(rg_reader->Column(0));
-
-  auto key_value_metadata = rg_reader->metadata()->ColumnChunk(0)->key_value_metadata();
-  ASSERT_THAT(key_value_metadata, NotNull());
-  ASSERT_EQ(2, key_value_metadata->size());
-  ASSERT_OK_AND_ASSIGN(auto test_v1, key_value_metadata->Get("test_key1"));
-  ASSERT_EQ("test_value1", test_v1);
-  ASSERT_OK_AND_ASSIGN(auto test_v2, key_value_metadata->Get("test_key2"));
-  ASSERT_EQ("test_value2", test_v2);
-
-  std::vector<int32_t> read_values(values_.size());
-  int64_t values_read;
-  col_reader->ReadBatch(values_.size(), nullptr, nullptr, read_values.data(),
-                        &values_read);
-
-  ASSERT_EQ(values_read, static_cast<int64_t>(values_.size()));
-  ASSERT_EQ(values_, read_values);
-}
-
-TEST_F(TestColumnWriterEncryption,
-       ExternalDBPAEncryption_MultiplePagesNoConflictingOverrides) {
-  ::arrow::util::SecureString kColumnKeyId(std::string("test_column_key1"));
-
-  // Set up EXTERNAL_DBPA encryption on a single column so that the encryptor
-  // returns key/value metadata on dictionary and data pages.
-  auto column_properties_builder =
-      ColumnEncryptionProperties::Builder("encrypted_column");
-  column_properties_builder.key(kColumnKeyId)
-      ->key_id(std::string(kColumnKeyId.as_view()))
-      ->parquet_cipher(ParquetCipher::EXTERNAL_PROTECT_V1);
-  auto column_properties = column_properties_builder.build();
-
-  std::map<std::string, std::shared_ptr<ColumnEncryptionProperties>> encryption_columns;
-  encryption_columns["encrypted_column"] = column_properties;
-
-  auto fep_builder = ExternalFileEncryptionProperties::Builder(kFooterEncryptionKey_);
-  fep_builder.encrypted_columns(encryption_columns)
-      ->footer_key_metadata(std::string(kFooterEncryptionKey_.as_view()))
-      ->set_plaintext_footer()
-      ->algorithm(ParquetCipher::AES_GCM_V1)
-      ->app_context(app_context_)
-      ->configuration_properties(
-          {{ParquetCipher::EXTERNAL_PROTECT_V1, connection_config_}});
-  auto file_encryption_properties = fep_builder.build_external();
-
-  auto writer_properties_builder = WriterProperties::Builder();
-
-  // Force many very small pages so the writer will obtain encryptor metadata
-  // multiple times (dictionary page + several data pages). Disable dictionary
-  // so we always produce multiple data pages.
-  writer_properties_builder.disable_dictionary()->data_pagesize(100)->encryption(
-      file_encryption_properties);
-  auto writer_properties = writer_properties_builder.build();
-
-  auto file_writer = ParquetFileWriter::Open(sink_, node_, writer_properties);
-  auto rg_writer = file_writer->AppendRowGroup();
-  auto col_writer = static_cast<Int32Writer*>(rg_writer->NextColumn());
-
-  // Write enough values to guarantee multiple data pages are emitted.
-  // (we're setting page size to 100 above)
-  std::vector<int32_t> many_values;
-  many_values.reserve(1000);
-  for (int i = 0; i < 1000; ++i) {
-    many_values.push_back(values_[i % values_.size()]);
+  [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const override {
+    return static_cast<int32_t>(plaintext_len);
   }
 
-  col_writer->WriteBatch(many_values.size(), nullptr, nullptr, many_values.data());
-  col_writer->Close();
-
-  // Closing should not throw even across many pages with repeated encryptor metadata,
-  // as long as the encryptor does not change values for the same keys.
-  ASSERT_NO_THROW(file_writer->Close());
-}
-
-TEST_F(TestColumnWriterEncryption, ExternalDBPAEncryption_ConflictingMetadataThrows) {
-  ::arrow::util::SecureString kColumnKeyId(std::string("test_column_key1"));
-
-  // Set up EXTERNAL_DBPA with a test-agent flag that forces a conflicting metadata value
-  auto column_properties_builder =
-      ColumnEncryptionProperties::Builder("encrypted_column");
-  column_properties_builder.key(kColumnKeyId)
-      ->key_id(std::string(kColumnKeyId.as_view()))
-      ->parquet_cipher(ParquetCipher::EXTERNAL_PROTECT_V1);
-  auto column_properties = column_properties_builder.build();
-
-  std::map<std::string, std::shared_ptr<ColumnEncryptionProperties>> encryption_columns;
-  encryption_columns["encrypted_column"] = column_properties;
-
-  auto fep_builder = ExternalFileEncryptionProperties::Builder(kFooterEncryptionKey_);
-  fep_builder.encrypted_columns(encryption_columns)
-      ->footer_key_metadata(std::string(kFooterEncryptionKey_.as_view()))
-      ->set_plaintext_footer()
-      ->algorithm(ParquetCipher::AES_GCM_V1)
-      ->app_context(app_context_)
-      ->configuration_properties({{ParquetCipher::EXTERNAL_PROTECT_V1,
-                                   {{"dbpa_test_force_conflicting_metadata", "1"},
-                                    {"agent_library_path", library_path_}}}});
-
-  auto file_encryption_properties = fep_builder.build_external();
-
-  auto writer_properties_builder = WriterProperties::Builder();
-  // Force tiny pages and small write batches so multiple Encrypt() calls occur
-  writer_properties_builder.disable_dictionary()
-      ->data_pagesize(1)
-      ->write_batch_size(1)
-      ->encryption(file_encryption_properties);
-  auto writer_properties = writer_properties_builder.build();
-
-  auto file_writer = ParquetFileWriter::Open(sink_, node_, writer_properties);
-  auto rg_writer = file_writer->AppendRowGroup();
-  auto col_writer = static_cast<Int32Writer*>(rg_writer->NextColumn());
-
-  // Write enough values to guarantee multiple Encrypt() invocations.
-  // (we're setting page size to 1 above)
-  std::vector<int32_t> many_values;
-  many_values.reserve(1000);
-  for (int i = 0; i < 1000; ++i) {
-    many_values.push_back(values_[i % values_.size()]);
+  int32_t Encrypt(std::span<const uint8_t> /*plaintext*/,
+                  std::span<const uint8_t> /*key*/, std::span<const uint8_t> /*aad*/,
+                  std::span<uint8_t> /*ciphertext*/,
+                  std::unique_ptr<encryption::EncodingProperties> /*props*/) override {
+    throw ParquetException("Encrypt not supported");
   }
 
-  // Expect that a conflicting encryptor metadata value triggers an exception
-  EXPECT_THROW(
-      col_writer->WriteBatch(many_values.size(), nullptr, nullptr, many_values.data()),
-      ParquetException);
+  int32_t EncryptWithManagedBuffer(
+      std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
+      std::span<const uint8_t> /*aad*/, std::span<const uint8_t> /*dek*/,
+      std::unique_ptr<encryption::EncodingProperties> encoding_properties,
+      int64_t* new_uncompressed_size, ::arrow::util::Codec* /*codec*/) override {
+    if (encoding_properties == nullptr) {
+      throw ParquetException("EncodingProperties missing");
+    }
+    // validate() throws if the writer left any property required for the page type
+    // unset.
+    encoding_properties->validate();
+    pages_.push_back({encoding_properties->ToPropertiesMap(),
+                      encoding_properties->GetUncompressedPageSize(),
+                      static_cast<int64_t>(plaintext.size())});
+
+    const int64_t ciphertext_size =
+        static_cast<int64_t>(plaintext.size()) + ciphertext_extra_bytes_;
+    PARQUET_THROW_NOT_OK(ciphertext->Resize(ciphertext_size, false));
+    std::copy(plaintext.begin(), plaintext.end(), ciphertext->mutable_data());
+    std::fill(ciphertext->mutable_data() + plaintext.size(),
+              ciphertext->mutable_data() + ciphertext_size, 0xEE);
+    if (reported_size_growth_ != 0 && new_uncompressed_size != nullptr) {
+      *new_uncompressed_size += reported_size_growth_;
+    }
+    return static_cast<int32_t>(ciphertext_size);
+  }
+
+  int32_t SignedFooterEncrypt(std::span<const uint8_t> /*footer*/,
+                              std::span<const uint8_t> /*key*/,
+                              std::span<const uint8_t> /*aad*/,
+                              std::span<const uint8_t> /*nonce*/,
+                              std::span<uint8_t> /*encrypted_footer*/) override {
+    throw ParquetException("SignedFooterEncrypt not supported");
+  }
+
+  const std::vector<CapturedPage>& pages() const { return pages_; }
+
+ private:
+  int64_t reported_size_growth_;
+  int64_t ciphertext_extra_bytes_;
+  std::vector<CapturedPage> pages_;
+};
+
+std::shared_ptr<Encryptor> MakeTestDataEncryptor(
+    encryption::EncryptorInterface* encryptor) {
+  return std::make_shared<Encryptor>(encryptor, ::arrow::util::SecureString(), "file_aad",
+                                     "aad", ::arrow::default_memory_pool());
 }
-#endif  // PARQUET_BUILD_DBPS_LIBS
+
+std::string PageTypeName(PageType::type type) { return encryption::EnumToString(type); }
+
+}  // namespace
+
+// The tests below drive a real TypedColumnWriter with an encryptor that cannot
+// calculate its ciphertext length, so the writer takes the EncryptWithManagedBuffer()
+// path and builds EncodingProperties itself (EncodingProperties::MakeFromMetadata()).
+// encoding_properties_test.cc covers that factory with hand-built pages, and
+// parquet_column_crypto_provider_test.cc covers the adapters with hand-built
+// properties; neither shows what the writer actually hands to an encryptor.
+TEST_F(TestInt32WriterWithEncryptor, EncryptorReceivesDataPageV1EncodingProperties) {
+  CapturingTestEncryptor capture;
+  ColumnProperties column_properties;
+  column_properties.set_encoding(Encoding::PLAIN);
+  auto writer = this->BuildWriterWithDataEncryptor(
+      MakeTestDataEncryptor(&capture), column_properties, ParquetVersion::PARQUET_1_0,
+      ParquetDataPageVersion::V1);
+  this->GenerateData(SMALL_SIZE);
+  writer->WriteBatch(SMALL_SIZE, nullptr, nullptr, this->values_ptr_);
+  writer->Close();
+
+  ASSERT_EQ(1, capture.pages().size());
+  const auto& props = capture.pages()[0].properties;
+  EXPECT_EQ(PageTypeName(PageType::DATA_PAGE), props.at("page_type"));
+  EXPECT_EQ(this->descr_->path()->ToDotString(), props.at("column_path"));
+  EXPECT_EQ(TypeToString(Type::INT32), props.at("physical_type"));
+  EXPECT_EQ(::arrow::util::Codec::GetCodecAsString(Compression::UNCOMPRESSED),
+            props.at("compression_codec"));
+  EXPECT_EQ(EncodingToString(Encoding::PLAIN), props.at("page_encoding"));
+  EXPECT_EQ(std::to_string(SMALL_SIZE), props.at("data_page_num_values"));
+  EXPECT_EQ("0", props.at("data_page_max_definition_level"));
+  EXPECT_EQ("0", props.at("data_page_max_repetition_level"));
+  EXPECT_EQ(EncodingToString(Encoding::RLE),
+            props.at("page_v1_definition_level_encoding"));
+  EXPECT_EQ(EncodingToString(Encoding::RLE),
+            props.at("page_v1_repetition_level_encoding"));
+  EXPECT_EQ(SMALL_SIZE * static_cast<int64_t>(sizeof(int32_t)),
+            capture.pages()[0].uncompressed_page_size);
+}
+
+TEST_F(TestInt32WriterWithEncryptor, EncryptorReceivesDataPageV2EncodingProperties) {
+  // OPTIONAL column with some nulls, so that the definition-level properties are
+  // non-trivial. Constant values keep every codec's output smaller than its input,
+  // which DataPageV2 needs to mark the page as compressed.
+  constexpr int kNumNulls = 10;
+  this->SetUpSchema(Repetition::OPTIONAL);
+  this->GenerateData(SMALL_SIZE);
+  std::fill(this->values_.begin(), this->values_.end(), 7);
+  std::fill(this->def_levels_.begin(), this->def_levels_.end(), 1);
+  std::fill_n(this->def_levels_.begin(), kNumNulls, 0);
+
+  for (auto compression : {Compression::UNCOMPRESSED, Compression::SNAPPY,
+                           Compression::GZIP, Compression::ZSTD, Compression::LZ4}) {
+    if (!Codec::IsAvailable(compression)) {
+      continue;
+    }
+    ARROW_SCOPED_TRACE("compression = ", Codec::GetCodecAsString(compression));
+    CapturingTestEncryptor capture;
+    ColumnProperties column_properties;
+    column_properties.set_encoding(Encoding::PLAIN);
+    column_properties.set_compression(compression);
+    auto writer = this->BuildWriterWithDataEncryptor(
+        MakeTestDataEncryptor(&capture), column_properties,
+        ParquetVersion::PARQUET_2_LATEST, ParquetDataPageVersion::V2);
+    writer->WriteBatch(SMALL_SIZE, this->def_levels_.data(), nullptr, this->values_ptr_);
+    writer->Close();
+
+    ASSERT_EQ(1, capture.pages().size());
+    const auto& props = capture.pages()[0].properties;
+    EXPECT_EQ(PageTypeName(PageType::DATA_PAGE_V2), props.at("page_type"));
+    EXPECT_EQ(::arrow::util::Codec::GetCodecAsString(compression),
+              props.at("compression_codec"));
+    EXPECT_EQ(compression != Compression::UNCOMPRESSED ? "true" : "false",
+              props.at("page_v2_is_compressed"));
+    EXPECT_EQ(std::to_string(SMALL_SIZE), props.at("data_page_num_values"));
+    EXPECT_EQ(std::to_string(kNumNulls), props.at("page_v2_num_nulls"));
+    EXPECT_EQ("1", props.at("data_page_max_definition_level"));
+    EXPECT_EQ("0", props.at("data_page_max_repetition_level"));
+    EXPECT_GT(std::stoi(props.at("page_v2_definition_levels_byte_length")), 0);
+    EXPECT_EQ("0", props.at("page_v2_repetition_levels_byte_length"));
+  }
+}
+
+TEST_F(TestInt32WriterWithEncryptor, EncryptorReceivesDictionaryThenDataPageProperties) {
+  constexpr int kDistinctValues = 10;
+  this->GenerateData(SMALL_SIZE);
+  for (int i = 0; i < SMALL_SIZE; ++i) {
+    this->values_[i] = i % kDistinctValues;
+  }
+
+  CapturingTestEncryptor capture;
+  ColumnProperties column_properties;
+  column_properties.set_encoding(Encoding::RLE_DICTIONARY);
+  auto writer = this->BuildWriterWithDataEncryptor(
+      MakeTestDataEncryptor(&capture), column_properties,
+      ParquetVersion::PARQUET_2_LATEST, ParquetDataPageVersion::V1);
+  writer->WriteBatch(SMALL_SIZE, nullptr, nullptr, this->values_ptr_);
+  writer->Close();
+
+  // The dictionary page is written (and encrypted) after the data pages are
+  // buffered, but still precedes them in the chunk.
+  ASSERT_EQ(2, capture.pages().size());
+  const auto& dict_props = capture.pages()[0].properties;
+  EXPECT_EQ(PageTypeName(PageType::DICTIONARY_PAGE), dict_props.at("page_type"));
+  EXPECT_EQ(std::to_string(kDistinctValues), dict_props.at("dict_page_num_values"));
+  EXPECT_EQ(EncodingToString(this->writer_properties_->dictionary_page_encoding()),
+            dict_props.at("page_encoding"));
+  EXPECT_EQ(kDistinctValues * static_cast<int64_t>(sizeof(int32_t)),
+            capture.pages()[0].uncompressed_page_size);
+
+  const auto& data_props = capture.pages()[1].properties;
+  EXPECT_EQ(PageTypeName(PageType::DATA_PAGE), data_props.at("page_type"));
+  EXPECT_EQ(EncodingToString(Encoding::RLE_DICTIONARY), data_props.at("page_encoding"));
+}
+
+TEST_F(TestFLBAWriterWithEncryptor,
+       EncryptorReceivesFixedLengthBytesInEncodingProperties) {
+  CapturingTestEncryptor capture;
+  ColumnProperties column_properties;
+  column_properties.set_encoding(Encoding::PLAIN);
+  auto writer = this->BuildWriterWithDataEncryptor(
+      MakeTestDataEncryptor(&capture), column_properties, ParquetVersion::PARQUET_1_0,
+      ParquetDataPageVersion::V1);
+  this->GenerateData(SMALL_SIZE);
+  writer->WriteBatch(SMALL_SIZE, nullptr, nullptr, this->values_ptr_);
+  writer->Close();
+
+  ASSERT_EQ(1, capture.pages().size());
+  const auto& props = capture.pages()[0].properties;
+  EXPECT_EQ(TypeToString(Type::FIXED_LEN_BYTE_ARRAY), props.at("physical_type"));
+  EXPECT_EQ(std::to_string(FLBA_LENGTH), props.at("fixed_length_bytes"));
+}
+
+// An encryptor that changes the page content length reports the new pre-compression
+// size through `new_uncompressed_size`; the page header must carry that size, or the
+// reader's decompressed-size check rejects the page. Dictionary pages are covered by
+// PageHeadersDescribeEncryptedOutput below, because PageReader does not expose the
+// dictionary page header's size.
+TEST_F(TestInt32WriterWithEncryptor, PageHeaderUsesUncompressedSizeReportedByEncryptor) {
+  constexpr int64_t kSizeGrowth = 7;
+  this->GenerateData(SMALL_SIZE);
+
+  for (auto data_page_version :
+       {ParquetDataPageVersion::V1, ParquetDataPageVersion::V2}) {
+    for (int64_t growth : {int64_t{0}, kSizeGrowth}) {
+      ARROW_SCOPED_TRACE(
+          data_page_version == ParquetDataPageVersion::V2 ? "DataPageV2 " : "DataPageV1 ",
+          "growth = ", growth);
+      CapturingTestEncryptor capture(growth);
+      ColumnProperties column_properties;
+      column_properties.set_encoding(Encoding::PLAIN);
+      auto writer = this->BuildWriterWithDataEncryptor(
+          MakeTestDataEncryptor(&capture), column_properties,
+          ParquetVersion::PARQUET_2_LATEST, data_page_version);
+      writer->WriteBatch(SMALL_SIZE, nullptr, nullptr, this->values_ptr_);
+      writer->Close();
+      ASSERT_EQ(1, capture.pages().size());
+
+      // The encryptor's output is a plain copy, so PageReader can read the page back
+      // without a decryptor and expose the header's uncompressed size.
+      ASSERT_OK_AND_ASSIGN(auto buffer, this->sink_->Finish());
+      std::unique_ptr<PageReader> page_reader = PageReader::Open(
+          std::make_shared<::arrow::io::BufferReader>(buffer), SMALL_SIZE,
+          Compression::UNCOMPRESSED, ReaderProperties(), *this->descr_);
+      auto page = std::dynamic_pointer_cast<DataPage>(page_reader->NextPage());
+      ASSERT_NE(nullptr, page);
+      EXPECT_EQ(capture.pages()[0].uncompressed_page_size + growth,
+                page->uncompressed_size());
+    }
+  }
+}
+
+// The header has to describe the bytes actually written: compressed_page_size is the
+// length of the encryptor's output (the compressed page plus whatever the cipher adds),
+// uncompressed_page_size is the size the encryptor reported. The headers are parsed from
+// the raw bytes so that the dictionary page is covered as well.
+TEST_F(TestInt32WriterWithEncryptor, PageHeadersDescribeEncryptedOutput) {
+  constexpr int64_t kSizeGrowth = 7;
+  constexpr int64_t kExtraBytes = 11;
+  constexpr int kDistinctValues = 10;
+  this->GenerateData(SMALL_SIZE);
+  for (int i = 0; i < SMALL_SIZE; ++i) {
+    this->values_[i] = i % kDistinctValues;
+  }
+
+  for (auto compression : {Compression::UNCOMPRESSED, Compression::GZIP}) {
+    if (!Codec::IsAvailable(compression)) {
+      continue;
+    }
+    for (auto data_page_version :
+         {ParquetDataPageVersion::V1, ParquetDataPageVersion::V2}) {
+      ARROW_SCOPED_TRACE("compression = ", Codec::GetCodecAsString(compression),
+                         data_page_version == ParquetDataPageVersion::V2
+                             ? ", DataPageV2"
+                             : ", DataPageV1");
+      CapturingTestEncryptor capture(kSizeGrowth, kExtraBytes);
+      ColumnProperties column_properties;
+      column_properties.set_encoding(Encoding::RLE_DICTIONARY);
+      column_properties.set_compression(compression);
+      auto writer = this->BuildWriterWithDataEncryptor(
+          MakeTestDataEncryptor(&capture), column_properties,
+          ParquetVersion::PARQUET_2_LATEST, data_page_version);
+      writer->WriteBatch(SMALL_SIZE, nullptr, nullptr, this->values_ptr_);
+      writer->Close();
+      ASSERT_EQ(2, capture.pages().size());
+
+      ASSERT_OK_AND_ASSIGN(auto buffer, this->sink_->Finish());
+      ThriftDeserializer deserializer{ReaderProperties()};
+      int64_t offset = 0;
+      const std::vector<format::PageType::type> expected_types = {
+          format::PageType::DICTIONARY_PAGE,
+          data_page_version == ParquetDataPageVersion::V2 ? format::PageType::DATA_PAGE_V2
+                                                          : format::PageType::DATA_PAGE};
+      for (size_t i = 0; i < capture.pages().size(); ++i) {
+        const auto& page = capture.pages()[i];
+        format::PageHeader header;
+        offset += deserializer.DeserializeMessage(buffer->data() + offset,
+                                                  buffer->size() - offset, &header);
+        EXPECT_EQ(expected_types[i], header.type);
+        EXPECT_EQ(page.plaintext_size + kExtraBytes, header.compressed_page_size);
+        EXPECT_EQ(page.uncompressed_page_size + kSizeGrowth,
+                  header.uncompressed_page_size);
+        offset += header.compressed_page_size;
+      }
+      EXPECT_EQ(buffer->size(), offset);
+    }
+  }
+}
 
 #ifdef ARROW_WITH_ZSTD
 TEST_F(TestValuesWriterInt32Type, AvoidCompressedInDataPageV2) {

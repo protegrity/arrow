@@ -17,7 +17,10 @@
 
 #pragma once
 
+#include <cstdint>
+#include <memory>
 #include <span>
+#include <vector>
 
 #include "parquet/encryption/encoding_properties.h"
 #include "parquet/exception.h"

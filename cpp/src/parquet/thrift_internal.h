@@ -578,9 +578,11 @@ static inline format::EncryptionAlgorithm ToThrift(EncryptionAlgorithm encryptio
     encryption_algorithm.__set_AES_GCM_V1(ToAesGcmV1Thrift(encryption.aad));
   } else if (encryption.algorithm == ParquetCipher::AES_GCM_CTR_V1) {
     encryption_algorithm.__set_AES_GCM_CTR_V1(ToAesGcmCtrV1Thrift(encryption.aad));
-  } else {
+  } else if (encryption.algorithm == ParquetCipher::EXTERNAL_PROTECT_V1) {
     encryption_algorithm.__set_EXTERNAL_PROTECT_V1(
         ToExternalProtectV1Thrift(encryption.aad));
+  } else {
+    throw ParquetException("Unsupported algorithm");
   }
   return encryption_algorithm;
 }
@@ -637,6 +639,9 @@ class ThriftDeserializer {
       // prefix (this adapter's on-disk format) get just the real payload's extent.
       std::span<const uint8_t> cipher_buf(buf, len);
       int64_t read_bytes = decryptor->GetCiphertextLength(cipher_buf);
+      if (read_bytes < 0 || read_bytes > static_cast<int64_t>(len)) {
+        throw ParquetException("Decryptor reported an invalid ciphertext length");
+      }
       auto decrypted_buffer = AllocateBuffer(decryptor->pool());
       int32_t decrypted_buffer_len = decryptor->DecryptWithManagedBuffer(
           cipher_buf.subspan(0, read_bytes), decrypted_buffer.get());

@@ -64,19 +64,18 @@ struct PARQUET_EXPORT ParquetCryptoContext {
 /// `vector<string>`, since its per-value length is not schema-fixed and an
 /// implementation's transform may change it.
 ///
-/// BOOLEAN and FIXED_LEN_BYTE_ARRAY share the `span<uint8_t>` alternative: both are
-/// packed, fixed-stride byte data (stride 1 for BOOLEAN, `ctx.datatype_length` for
-/// FIXED_LEN_BYTE_ARRAY — the width Parquet's schema guarantees for every value in
-/// that column, so a zero-copy view is always valid). BOOLEAN specifically matches
-/// `BooleanDecoder::Decode(uint8_t*, ...)` — `vector<bool>` is bit-packed and cannot
-/// be viewed as a span.
+/// BOOLEAN and FIXED_LEN_BYTE_ARRAY share the `span<uint8_t>` alternative. BOOLEAN
+/// values are bit-packed, least significant bit first, 8 values per byte, exactly as
+/// PLAIN stores them. FIXED_LEN_BYTE_ARRAY values are `ctx.datatype_length` bytes each,
+/// the width Parquet's schema guarantees for every value in the column, so a zero-copy
+/// view is always valid.
 using CryptoValueBuffer =
-    std::variant<std::span<uint8_t>,         // BOOLEAN (stride 1) or FIXED_LEN_BYTE_ARRAY
-                 std::span<int32_t>,         // INT32
-                 std::span<int64_t>,         // INT64
-                 std::span<Int96>,           // INT96 (deprecated)
-                 std::span<float>,           // FLOAT
-                 std::span<double>,          // DOUBLE
+    std::variant<std::span<uint8_t>,  // BOOLEAN (bit-packed) or FIXED_LEN_BYTE_ARRAY
+                 std::span<int32_t>,  // INT32
+                 std::span<int64_t>,  // INT64
+                 std::span<Int96>,    // INT96 (deprecated)
+                 std::span<float>,    // FLOAT
+                 std::span<double>,   // DOUBLE
                  std::vector<std::string>>;  // BYTE_ARRAY
 
 /// Pure-virtual interface for an external Parquet crypto provider.
@@ -148,8 +147,7 @@ class PARQUET_EXPORT ParquetCryptoProvider {
   /// No DEK is passed here (unlike EncryptBlock()): a keyed cell-level cipher
   /// (e.g. FPE) must derive its own key from `ctx.key_metadata`, never from the
   /// block/footer `dek` -- otherwise a party able to decrypt the page's
-  /// EncryptBlock wrap could also reverse the cell transform, defeating the
-  /// cell path's defense-in-depth goal.
+  /// EncryptBlock wrap could also reverse the cell transform.
   ///
   /// \param values The page's decoded values, transformed in place.
   /// \param ctx Identifies the column this call applies to.

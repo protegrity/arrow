@@ -46,7 +46,7 @@ namespace parquet {
 /// mirroring column_writer.cc's `compressor_`/column_reader.cc's `decompressor_`,
 /// each built once and reused across every page in the chunk, instead of paying
 /// per-page codec-construction overhead. When null (the default), a fresh Codec is
-/// constructed internally for that one call, same as before this parameter existed.
+/// constructed internally for that one call.
 class PARQUET_EXPORT ParquetPageDecoder {
  public:
   /// Decompresses and decodes `compressed_page` (DataPageV1, DataPageV2, or

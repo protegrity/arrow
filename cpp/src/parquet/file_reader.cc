@@ -282,11 +282,10 @@ class SerializedRowGroup : public RowGroupReader::Contents {
       throw ParquetException("Encrypted files cannot contain more than 32767 columns");
     }
 
-    descr = file_metadata_->schema()->Column(i);
     CryptoContext ctx{
         col->has_dictionary_page(),        static_cast<int16_t>(row_group_ordinal_),
-        static_cast<int16_t>(i),           descr,
-        std::move(meta_decryptor_factory), std::move(data_decryptor_factory)};
+        static_cast<int16_t>(i),           std::move(meta_decryptor_factory),
+        std::move(data_decryptor_factory), descr};
     return PageReader::Open(stream, col->num_values(), col->compression(), properties_,
                             *descr, always_compressed, &ctx);
   }

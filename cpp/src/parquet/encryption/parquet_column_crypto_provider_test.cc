@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -32,6 +33,7 @@
 #include <vector>
 
 #include "arrow/buffer.h"
+#include "arrow/io/file.h"
 #include "arrow/testing/gtest_util.h"
 #include "arrow/util/secure_string.h"
 
@@ -42,6 +44,8 @@
 #include "parquet/encryption/test_encryption_util.h"
 #include "parquet/encryption/test_in_memory_kms.h"
 #include "parquet/encryption/test_mock_crypto_providers.h"
+#include "parquet/file_reader.h"
+#include "parquet/metadata.h"
 
 using ::testing::HasSubstr;
 
@@ -59,6 +63,28 @@ class ParquetColumnCryptoProviderTest : public ::testing::Test {
 
   std::string TempFilePath(const std::string& name) {
     return temp_dir_->path().ToString() + name;
+  }
+
+  // Properties for a file whose footer and columns all go through `provider`.
+  // `customize` may adjust the configuration first.
+  std::shared_ptr<ExternalFileEncryptionProperties> MakeEncryptionProperties(
+      std::shared_ptr<ParquetCryptoProvider> provider,
+      const std::function<void(ExternalEncryptionConfiguration&)>& customize = nullptr) {
+    ExternalEncryptionConfiguration config(kFooterMasterKeyId);
+    config.column_keys = BuildColumnKeyMapping();
+    config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+    if (customize) customize(config);
+    return crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config,
+                                                               std::move(provider));
+  }
+
+  std::shared_ptr<ExternalFileDecryptionProperties> MakeDecryptionProperties(
+      std::shared_ptr<ParquetCryptoProvider> provider,
+      const std::function<void(ExternalDecryptionConfiguration&)>& customize = nullptr) {
+    ExternalDecryptionConfiguration config;
+    if (customize) customize(config);
+    return crypto_factory_.GetExternalFileDecryptionProperties(kms_config_, config,
+                                                               std::move(provider));
   }
 
   std::unique_ptr<TemporaryDir> temp_dir_;
@@ -82,59 +108,8 @@ TEST(XorBlockCryptoProviderMockTest, EncryptDecryptRoundTripIsSelfInverse) {
   EXPECT_EQ(round_trip, plaintext);
 }
 
-// Basic block-path mechanics: EncryptBlock()/DecryptBlock() are called and
-// round-trip correctly.
-
-// EncryptBlock is called on write when the file's algorithm is
-// EXTERNAL_PROTECT_V1.
-TEST_F(ParquetColumnCryptoProviderTest, EncryptBlockCalledOnWrite) {
-  auto provider = std::make_shared<XorBlockCryptoProvider>();
-
-  ExternalEncryptionConfiguration config(kFooterMasterKeyId);
-  // column_keys gives each column its own key_metadata. uniform_encryption
-  // would encrypt every column with the footer key instead, which is an
-  // invalid combination for EXTERNAL_PROTECT_V1.
-  config.column_keys = BuildColumnKeyMapping();
-  config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props =
-      crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, provider);
-  ASSERT_NE(encryption_props, nullptr);
-
-  FileEncryptor encryptor;
-  ASSERT_NO_THROW(encryptor.EncryptFile(
-      TempFilePath("encrypt_block_called_on_write.parquet"), encryption_props));
-
-  EXPECT_GT(provider->encrypt_block_calls(), 0);
-}
-
-// A file encrypted through the block path decrypts back to the original data.
-TEST_F(ParquetColumnCryptoProviderTest, BlockPathRoundTrip) {
-  auto provider = std::make_shared<XorBlockCryptoProvider>();
-
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
-  ASSERT_NE(encryption_props, nullptr);
-
-  const std::string file_path = TempFilePath("block_path_round_trip.parquet");
-  FileEncryptor encryptor;
-  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
-
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
-  ASSERT_NE(decryption_props, nullptr);
-
-  // FileDecryptor::DecryptFile() asserts the read-back values match what
-  // FileEncryptor wrote, so a successful call here is a real correctness check,
-  // not just "no exception thrown".
-  FileDecryptor decryptor;
-  EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
-
-  EXPECT_GT(provider->decrypt_block_calls(), 0);
-}
+// Basic block-path mechanics (EncryptBlock()/DecryptBlock() called and round-tripping)
+// are covered by FullFileRoundTrip below.
 
 // A file with no ParquetCryptoProvider (plain AES_GCM_V1) is unaffected by the
 // EXTERNAL_PROTECT_V1 dispatch code added alongside it.
@@ -166,8 +141,10 @@ TEST_F(ParquetColumnCryptoProviderTest, NullProviderKeepsAesPathWorking) {
 // surface as a use-after-free under ASAN if the adapter only held a raw pointer.
 TEST_F(ParquetColumnCryptoProviderTest, ProviderLifetimeOutlivesLocalReference) {
   std::shared_ptr<parquet::FileEncryptionProperties> encryption_props;
+  std::weak_ptr<XorBlockCryptoProvider> weak_provider;
   {
     auto provider = std::make_shared<XorBlockCryptoProvider>();
+    weak_provider = provider;
     ExternalEncryptionConfiguration config(kFooterMasterKeyId);
     config.column_keys = BuildColumnKeyMapping();
     config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
@@ -177,10 +154,17 @@ TEST_F(ParquetColumnCryptoProviderTest, ProviderLifetimeOutlivesLocalReference) 
     // shared_ptr to keep the object alive for the encrypt below.
   }
   ASSERT_NE(encryption_props, nullptr);
+  ASSERT_FALSE(weak_provider.expired());
 
   FileEncryptor encryptor;
-  EXPECT_NO_THROW(
+  ASSERT_NO_THROW(
       encryptor.EncryptFile(TempFilePath("provider_lifetime.parquet"), encryption_props));
+  // The provider that outlived the caller's reference is the one that did the work.
+  EXPECT_GT(weak_provider.lock()->encrypt_block_calls(), 0);
+
+  // Nothing else keeps it alive once the properties are gone.
+  encryption_props.reset();
+  EXPECT_TRUE(weak_provider.expired());
 }
 
 // Full-file coverage: footer, column metadata, and data pages all route
@@ -194,11 +178,7 @@ TEST_F(ParquetColumnCryptoProviderTest, ProviderLifetimeOutlivesLocalReference) 
 TEST_F(ParquetColumnCryptoProviderTest, FullFileRoundTrip) {
   auto provider = std::make_shared<XorBlockCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
+  auto encryption_props = MakeEncryptionProperties(provider);
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path = TempFilePath("full_file_round_trip.parquet");
@@ -206,15 +186,23 @@ TEST_F(ParquetColumnCryptoProviderTest, FullFileRoundTrip) {
   ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
 
   EXPECT_GT(provider->encrypt_block_calls(), 0);
-  EXPECT_GT(provider->calls_with_dek(), 0);
+  // Every write call carries the resolved DEK.
+  EXPECT_EQ(provider->encrypt_block_calls(), provider->calls_with_dek());
   EXPECT_EQ(provider->encrypt_cells_calls(), 0);
+  EXPECT_FALSE(provider->seen_contexts().empty());
 
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
+  // The file is really encrypted: encrypted-footer magic, unreadable without keys.
+  PARQUET_ASSIGN_OR_THROW(auto source, ::arrow::io::ReadableFile::Open(file_path));
+  PARQUET_ASSIGN_OR_THROW(auto magic, source->ReadAt(0, 4));
+  EXPECT_EQ("PARE", magic->ToString());
+  FileDecryptor decryptor;
+  EXPECT_ANY_THROW(decryptor.DecryptFile(file_path, nullptr));
+
+  auto decryption_props = MakeDecryptionProperties(provider);
   ASSERT_NE(decryption_props, nullptr);
 
-  FileDecryptor decryptor;
+  // FileDecryptor::DecryptFile() asserts the read-back values match what
+  // FileEncryptor wrote, so a successful call is a real correctness check.
   EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
 
   EXPECT_GT(provider->decrypt_block_calls(), 0);
@@ -232,11 +220,7 @@ TEST_F(ParquetColumnCryptoProviderTest, SupportsTypedValuesRoutesPerColumn) {
   auto provider = std::make_shared<XorMixedPathCryptoProvider>(
       std::set<std::string>{kByteArrayFieldName});
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
+  auto encryption_props = MakeEncryptionProperties(provider);
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path = TempFilePath("mixed_path_round_trip.parquet");
@@ -250,9 +234,7 @@ TEST_F(ParquetColumnCryptoProviderTest, SupportsTypedValuesRoutesPerColumn) {
   EXPECT_GT(provider->encrypt_block_calls(), 0);
   EXPECT_GT(provider->encrypt_cells_calls(), 0);
 
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
+  auto decryption_props = MakeDecryptionProperties(provider);
   ASSERT_NE(decryption_props, nullptr);
 
   FileDecryptor decryptor;
@@ -267,144 +249,75 @@ TEST_F(ParquetColumnCryptoProviderTest, SupportsTypedValuesRoutesPerColumn) {
 // footer and column metadata (never cell-path eligible) still route through
 // EncryptBlock()/DecryptBlock() on the same provider instance.
 //
-// data_page_version=V2 and disable_dictionary_encoding=true are both required:
-// ParquetPageDecoder only supports DataPageV2 + PLAIN value encoding today, so a
-// DataPageV1 or dictionary-encoded page (the defaults for this low-cardinality
-// test data) always falls back to the block path instead -- see
+// Run for DataPageV2, for DataPageV1 (proves ParquetPageDecoder's V1 framing --
+// levels+values compressed as one blob, self-delimiting RLE level sections --
+// round-trips through a real file, not just the hand-built buffers of
+// parquet_page_decoder_test.cc) and for DataPageV2 with GZIP (proves
+// Decompress()/Recompress() reverse the values-portion codec independently of
+// the always-uncompressed level bytes).
+//
+// disable_dictionary_encoding=true is required: ParquetPageDecoder only supports
+// PLAIN value encoding today, so a dictionary-encoded page (the default for this
+// low-cardinality test data) always falls back to the block path instead -- see
 // DictionaryColumnRoutesIndicesToBlockAndDictionaryToCells below, which covers
 // that case (and the real DictionaryPage's own cell-path routing).
 TEST_F(ParquetColumnCryptoProviderTest, CellPathFullFileRoundTrip) {
-  auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
+  struct Scenario {
+    const char* name;
+    ParquetDataPageVersion data_page_version;
+    Compression::type compression;
+  };
+  for (const Scenario& scenario :
+       {Scenario{"DataPageV2", ParquetDataPageVersion::V2, Compression::UNCOMPRESSED},
+        Scenario{"DataPageV1", ParquetDataPageVersion::V1, Compression::UNCOMPRESSED},
+        Scenario{"DataPageV2Gzip", ParquetDataPageVersion::V2, Compression::GZIP}}) {
+    SCOPED_TRACE(scenario.name);
+    auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  // BuildColumnKeyMapping() covers 6 of the 8 columns; add the repeated int64
-  // and the int96 column too, so every physical type -- and the repetition-
-  // level round trip -- is exercised through the cell path.
-  ColumnEncryptionAttributes int64_attrs;
-  int64_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
-  int64_attrs.key_id = kColumnMasterKeyIds[0];
-  enc_config.per_column_encryption[kInt64FieldName] = int64_attrs;
-  ColumnEncryptionAttributes int96_attrs;
-  int96_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
-  int96_attrs.key_id = kColumnMasterKeyIds[1];
-  enc_config.per_column_encryption[kInt96FieldName] = int96_attrs;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
-  ASSERT_NE(encryption_props, nullptr);
+    ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
+    enc_config.column_keys = BuildColumnKeyMapping();
+    enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
+    // BuildColumnKeyMapping() covers 6 of the 8 columns; add the repeated int64
+    // and the int96 column too, so every physical type -- and the repetition-
+    // level round trip -- is exercised through the cell path.
+    ColumnEncryptionAttributes int64_attrs;
+    int64_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
+    int64_attrs.key_id = kColumnMasterKeyIds[0];
+    enc_config.per_column_encryption[kInt64FieldName] = int64_attrs;
+    ColumnEncryptionAttributes int96_attrs;
+    int96_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
+    int96_attrs.key_id = kColumnMasterKeyIds[1];
+    enc_config.per_column_encryption[kInt96FieldName] = int96_attrs;
+    auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
+        kms_config_, enc_config, provider);
+    ASSERT_NE(encryption_props, nullptr);
 
-  const std::string file_path = TempFilePath("cell_path_full_file_round_trip.parquet");
-  FileEncryptor encryptor(/*disable_dictionary_encoding=*/true,
-                          /*compression=*/Compression::UNCOMPRESSED,
-                          /*data_page_version=*/ParquetDataPageVersion::V2);
-  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
+    const std::string file_path = TempFilePath(
+        std::string("cell_path_full_file_round_trip_") + scenario.name + ".parquet");
+    FileEncryptor encryptor(/*disable_dictionary_encoding=*/true, scenario.compression,
+                            scenario.data_page_version);
+    ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
 
-  // Footer + column metadata always use the block path; every column's data
-  // (and, for the repeated int64 column, its levels) uses the cell path.
-  EXPECT_GT(provider->encrypt_block_calls(), 0);
-  EXPECT_GT(provider->encrypt_cells_calls(), 0);
+    // Footer + column metadata always use the block path; every column's data
+    // (and, for the repeated int64 column, its levels) uses the cell path.
+    EXPECT_GT(provider->encrypt_block_calls(), 0);
+    EXPECT_GT(provider->encrypt_cells_calls(), 0);
 
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
-  ASSERT_NE(decryption_props, nullptr);
+    ExternalDecryptionConfiguration dec_config;
+    auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
+        kms_config_, dec_config, provider);
+    ASSERT_NE(decryption_props, nullptr);
 
-  // FileDecryptor::DecryptFile() asserts every column's read-back values match
-  // what FileEncryptor wrote -- a real per-physical-type correctness check for
-  // the cell path's Decompress()/EncryptCells()/Recompress() round trip, not
-  // just "no exception thrown".
-  FileDecryptor decryptor;
-  EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
+    // FileDecryptor::DecryptFile() asserts every column's read-back values match
+    // what FileEncryptor wrote -- a real per-physical-type correctness check for
+    // the cell path's Decompress()/EncryptCells()/Recompress() round trip, not
+    // just "no exception thrown".
+    FileDecryptor decryptor;
+    EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
 
-  EXPECT_GT(provider->decrypt_block_calls(), 0);
-  EXPECT_GT(provider->decrypt_cells_calls(), 0);
-}
-
-// Same cell-path coverage as CellPathFullFileRoundTrip, but with
-// ParquetDataPageVersion::V1 -- proves ParquetPageDecoder's DataPageV1 buffer
-// framing (levels+values compressed as one blob, self-delimiting RLE level
-// sections) round-trips correctly through a real file, not just the synthetic
-// buffers parquet_page_decoder_test.cc constructs by hand.
-TEST_F(ParquetColumnCryptoProviderTest, CellPathFullFileRoundTripDataPageV1) {
-  auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
-
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  ColumnEncryptionAttributes int64_attrs;
-  int64_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
-  int64_attrs.key_id = kColumnMasterKeyIds[0];
-  enc_config.per_column_encryption[kInt64FieldName] = int64_attrs;
-  ColumnEncryptionAttributes int96_attrs;
-  int96_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
-  int96_attrs.key_id = kColumnMasterKeyIds[1];
-  enc_config.per_column_encryption[kInt96FieldName] = int96_attrs;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
-  ASSERT_NE(encryption_props, nullptr);
-
-  const std::string file_path = TempFilePath("cell_path_full_file_round_trip_v1.parquet");
-  FileEncryptor encryptor(/*disable_dictionary_encoding=*/true,
-                          /*compression=*/Compression::UNCOMPRESSED,
-                          /*data_page_version=*/ParquetDataPageVersion::V1);
-  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
-
-  EXPECT_GT(provider->encrypt_block_calls(), 0);
-  EXPECT_GT(provider->encrypt_cells_calls(), 0);
-
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
-  ASSERT_NE(decryption_props, nullptr);
-
-  FileDecryptor decryptor;
-  EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
-
-  EXPECT_GT(provider->decrypt_block_calls(), 0);
-  EXPECT_GT(provider->decrypt_cells_calls(), 0);
-}
-
-// Same cell-path coverage as CellPathFullFileRoundTrip, but with a real
-// compression codec instead of UNCOMPRESSED -- proves Decompress()/
-// Recompress() correctly reverse the values-portion codec independently of
-// the (always-uncompressed) level bytes.
-TEST_F(ParquetColumnCryptoProviderTest, CellPathFullFileRoundTripWithCompressionCodec) {
-  auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
-
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  ColumnEncryptionAttributes int64_attrs;
-  int64_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
-  int64_attrs.key_id = kColumnMasterKeyIds[0];
-  enc_config.per_column_encryption[kInt64FieldName] = int64_attrs;
-  ColumnEncryptionAttributes int96_attrs;
-  int96_attrs.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
-  int96_attrs.key_id = kColumnMasterKeyIds[1];
-  enc_config.per_column_encryption[kInt96FieldName] = int96_attrs;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
-  ASSERT_NE(encryption_props, nullptr);
-
-  const std::string file_path =
-      TempFilePath("cell_path_full_file_round_trip_gzip.parquet");
-  FileEncryptor encryptor(/*disable_dictionary_encoding=*/true,
-                          /*compression=*/Compression::GZIP,
-                          /*data_page_version=*/ParquetDataPageVersion::V2);
-  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
-
-  EXPECT_GT(provider->encrypt_cells_calls(), 0);
-
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
-  ASSERT_NE(decryption_props, nullptr);
-
-  FileDecryptor decryptor;
-  EXPECT_NO_THROW(decryptor.DecryptFile(file_path, decryption_props));
-
-  EXPECT_GT(provider->decrypt_cells_calls(), 0);
+    EXPECT_GT(provider->decrypt_block_calls(), 0);
+    EXPECT_GT(provider->decrypt_cells_calls(), 0);
+  }
 }
 
 // Pins the encoding-aware cell-path gate's behavior for a real dictionary-encoded
@@ -418,11 +331,7 @@ TEST_F(ParquetColumnCryptoProviderTest,
        DictionaryColumnRoutesIndicesToBlockAndDictionaryToCells) {
   auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
+  auto encryption_props = MakeEncryptionProperties(provider);
   ASSERT_NE(encryption_props, nullptr);
 
   // disable_dictionary_encoding defaults to false: this column data is low
@@ -440,9 +349,7 @@ TEST_F(ParquetColumnCryptoProviderTest,
   EXPECT_GT(provider->encrypt_block_calls(), 0);
   EXPECT_GT(provider->encrypt_cells_calls(), 0);
 
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
+  auto decryption_props = MakeDecryptionProperties(provider);
   ASSERT_NE(decryption_props, nullptr);
 
   FileDecryptor decryptor;
@@ -458,11 +365,7 @@ TEST_F(ParquetColumnCryptoProviderTest,
        DictionaryColumnRoutesIndicesToBlockAndDictionaryToCellsV1) {
   auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
+  auto encryption_props = MakeEncryptionProperties(provider);
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path = TempFilePath("cell_path_dictionary_fallback_v1.parquet");
@@ -474,9 +377,7 @@ TEST_F(ParquetColumnCryptoProviderTest,
   EXPECT_GT(provider->encrypt_block_calls(), 0);
   EXPECT_GT(provider->encrypt_cells_calls(), 0);
 
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
+  auto decryption_props = MakeDecryptionProperties(provider);
   ASSERT_NE(decryption_props, nullptr);
 
   FileDecryptor decryptor;
@@ -507,12 +408,10 @@ TEST_F(ParquetColumnCryptoProviderTest, AppContextReachesProvider) {
   const std::string kDecAppContext = R"({"user_id": "reader-1"})";
 
   auto enc_provider = std::make_shared<XorBlockCryptoProvider>();
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  enc_config.app_context = kEncAppContext;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, enc_provider);
+  auto encryption_props = MakeEncryptionProperties(
+      enc_provider, [&](ExternalEncryptionConfiguration& config) {
+        config.app_context = kEncAppContext;
+      });
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path = TempFilePath("app_context.parquet");
@@ -526,10 +425,10 @@ TEST_F(ParquetColumnCryptoProviderTest, AppContextReachesProvider) {
   }
 
   auto dec_provider = std::make_shared<XorBlockCryptoProvider>();
-  ExternalDecryptionConfiguration dec_config;
-  dec_config.app_context = kDecAppContext;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, dec_provider);
+  auto decryption_props = MakeDecryptionProperties(
+      dec_provider, [&](ExternalDecryptionConfiguration& config) {
+        config.app_context = kDecAppContext;
+      });
   ASSERT_NE(decryption_props, nullptr);
 
   FileDecryptor decryptor;
@@ -547,11 +446,7 @@ TEST_F(ParquetColumnCryptoProviderTest, AppContextReachesProvider) {
 TEST_F(ParquetColumnCryptoProviderTest, FixedLenByteArrayContextPopulated) {
   auto provider = std::make_shared<XorBlockCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
+  auto encryption_props = MakeEncryptionProperties(provider);
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path = TempFilePath("flba_context.parquet");
@@ -580,11 +475,7 @@ TEST_F(ParquetColumnCryptoProviderTest, FixedLenByteArrayContextPopulated) {
 TEST_F(ParquetColumnCryptoProviderTest, FixedLenByteArrayContextPopulatedOnDecrypt) {
   auto enc_provider = std::make_shared<XorBlockCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, enc_provider);
+  auto encryption_props = MakeEncryptionProperties(enc_provider);
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path = TempFilePath("flba_context_decrypt.parquet");
@@ -592,9 +483,7 @@ TEST_F(ParquetColumnCryptoProviderTest, FixedLenByteArrayContextPopulatedOnDecry
   ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
 
   auto dec_provider = std::make_shared<XorBlockCryptoProvider>();
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, dec_provider);
+  auto decryption_props = MakeDecryptionProperties(dec_provider);
   ASSERT_NE(decryption_props, nullptr);
 
   FileDecryptor decryptor;
@@ -620,11 +509,7 @@ TEST_F(ParquetColumnCryptoProviderTest, FixedLenByteArrayContextPopulatedOnDecry
 TEST_F(ParquetColumnCryptoProviderTest, ModuleAadReachesProviderAndVariesPerCall) {
   auto provider = std::make_shared<XorBlockCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
+  auto encryption_props = MakeEncryptionProperties(provider);
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path = TempFilePath("module_aad.parquet");
@@ -675,9 +560,7 @@ TEST_F(ParquetColumnCryptoProviderTest, PerColumnCipherOverrideRoutesDataToAes) 
   EXPECT_TRUE(AnyContext(contexts, kInt64FieldName));
   EXPECT_TRUE(AnyContext(contexts, kDoubleFieldName));
 
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
+  auto decryption_props = MakeDecryptionProperties(provider);
   ASSERT_NE(decryption_props, nullptr);
 
   FileDecryptor decryptor;
@@ -710,9 +593,7 @@ TEST_F(ParquetColumnCryptoProviderTest, PerColumnEncryptionAddsExternalColumn) {
   auto contexts = provider->seen_contexts();
   EXPECT_TRUE(AnyContext(contexts, kInt96FieldName));
 
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
+  auto decryption_props = MakeDecryptionProperties(provider);
   ASSERT_NE(decryption_props, nullptr);
 
   FileDecryptor decryptor;
@@ -726,21 +607,16 @@ TEST_F(ParquetColumnCryptoProviderTest, PerColumnEncryptionAddsExternalColumn) {
 TEST_F(ParquetColumnCryptoProviderTest, PlaintextFooterSigningRoundTrip) {
   auto provider = std::make_shared<XorBlockCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  enc_config.plaintext_footer = true;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
+  auto encryption_props = MakeEncryptionProperties(
+      provider,
+      [&](ExternalEncryptionConfiguration& config) { config.plaintext_footer = true; });
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path = TempFilePath("plaintext_footer.parquet");
   FileEncryptor encryptor;
   ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
 
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
+  auto decryption_props = MakeDecryptionProperties(provider);
   ASSERT_NE(decryption_props, nullptr);
 
   // A real signature computed by the provider verifies successfully.
@@ -753,12 +629,9 @@ TEST_F(ParquetColumnCryptoProviderTest, PlaintextFooterSigningRoundTrip) {
 TEST_F(ParquetColumnCryptoProviderTest, PlaintextFooterTamperedSignatureThrows) {
   auto provider = std::make_shared<XorBlockCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  enc_config.plaintext_footer = true;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
+  auto encryption_props = MakeEncryptionProperties(
+      provider,
+      [&](ExternalEncryptionConfiguration& config) { config.plaintext_footer = true; });
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path = TempFilePath("plaintext_footer_tampered.parquet");
@@ -778,13 +651,46 @@ TEST_F(ParquetColumnCryptoProviderTest, PlaintextFooterTamperedSignatureThrows) 
     f.write(&byte, 1);
   }
 
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
+  auto decryption_props = MakeDecryptionProperties(provider);
   ASSERT_NE(decryption_props, nullptr);
 
   FileDecryptor decryptor;
   EXPECT_THROW(decryptor.DecryptFile(file_path, decryption_props), ParquetException);
+}
+
+// The legacy FileMetaData::VerifySignature(const void*) has no length parameter, so it
+// cannot verify a provider-defined signature blob. It must fail with a clear error
+// instead of reading an assumed AES-GCM nonce+tag layout from the pointer.
+TEST_F(ParquetColumnCryptoProviderTest, LegacyVerifySignatureRejectsExternalProtectV1) {
+  auto provider = std::make_shared<XorBlockCryptoProvider>();
+
+  auto encryption_props = MakeEncryptionProperties(
+      provider,
+      [&](ExternalEncryptionConfiguration& config) { config.plaintext_footer = true; });
+  ASSERT_NE(encryption_props, nullptr);
+
+  const std::string file_path = TempFilePath("plaintext_footer_legacy_verify.parquet");
+  FileEncryptor encryptor;
+  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
+
+  auto decryption_props = MakeDecryptionProperties(provider);
+  ASSERT_NE(decryption_props, nullptr);
+
+  PARQUET_ASSIGN_OR_THROW(auto source, ::arrow::io::ReadableFile::Open(file_path));
+  auto reader_properties = default_reader_properties();
+  reader_properties.file_decryption_properties(decryption_props);
+  auto file_reader = ParquetFileReader::Open(source, reader_properties);
+  auto file_md = file_reader->metadata();
+  ASSERT_TRUE(file_md->is_encryption_algorithm_set());
+  ASSERT_EQ(ParquetCipher::EXTERNAL_PROTECT_V1,
+            file_md->encryption_algorithm().algorithm);
+
+  // The pointer is never dereferenced: the algorithm check fails first.
+  const uint8_t unused_signature[1] = {0};
+  EXPECT_THAT([&] { file_md->VerifySignature(unused_signature); },
+              ::testing::ThrowsMessage<ParquetException>(
+                  ::testing::HasSubstr("EXTERNAL_PROTECT_V1")));
+  file_reader->Close();
 }
 
 // Validation and error handling: invalid configurations and provider errors
@@ -856,20 +762,14 @@ TEST_F(ParquetColumnCryptoProviderTest, EncryptorProviderNotSetThrows) {
 TEST_F(ParquetColumnCryptoProviderTest, DecryptorProviderNotSetThrows) {
   auto provider = std::make_shared<XorBlockCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
+  auto encryption_props = MakeEncryptionProperties(provider);
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path = TempFilePath("decryptor_provider_not_set.parquet");
   FileEncryptor encryptor;
   ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
 
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, /*parquet_crypto_provider=*/nullptr);
+  auto decryption_props = MakeDecryptionProperties(nullptr);
   ASSERT_NE(decryption_props, nullptr);
 
   FileDecryptor decryptor;
@@ -924,17 +824,17 @@ class FailingBlockCryptoProvider : public ParquetCryptoProvider {
 TEST_F(ParquetColumnCryptoProviderTest, ProviderEncryptErrorPropagates) {
   auto provider = std::make_shared<FailingBlockCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
+  auto encryption_props = MakeEncryptionProperties(provider);
   ASSERT_NE(encryption_props, nullptr);
 
   FileEncryptor encryptor;
-  EXPECT_THROW(encryptor.EncryptFile(TempFilePath("provider_encrypt_error.parquet"),
-                                     encryption_props),
-               ParquetException);
+  EXPECT_THAT(
+      [&] {
+        encryptor.EncryptFile(TempFilePath("provider_encrypt_error.parquet"),
+                              encryption_props);
+      },
+      ::testing::ThrowsMessage<ParquetException>(
+          HasSubstr("injected EncryptBlock failure")));
 }
 
 // Symmetric to ProviderEncryptErrorPropagates above: an error Status returned
@@ -942,11 +842,7 @@ TEST_F(ParquetColumnCryptoProviderTest, ProviderEncryptErrorPropagates) {
 TEST_F(ParquetColumnCryptoProviderTest, ProviderDecryptErrorPropagates) {
   auto enc_provider = std::make_shared<XorBlockCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, enc_provider);
+  auto encryption_props = MakeEncryptionProperties(enc_provider);
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path = TempFilePath("provider_decrypt_error.parquet");
@@ -954,13 +850,81 @@ TEST_F(ParquetColumnCryptoProviderTest, ProviderDecryptErrorPropagates) {
   ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
 
   auto dec_provider = std::make_shared<FailingBlockCryptoProvider>();
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, dec_provider);
+  auto decryption_props = MakeDecryptionProperties(dec_provider);
   ASSERT_NE(decryption_props, nullptr);
 
   FileDecryptor decryptor;
-  EXPECT_THROW(decryptor.DecryptFile(file_path, decryption_props), ParquetException);
+  EXPECT_THAT([&] { decryptor.DecryptFile(file_path, decryption_props); },
+              ::testing::ThrowsMessage<ParquetException>(
+                  HasSubstr("injected DecryptBlock failure")));
+}
+
+namespace {
+// Block path works; only footer signing or verification fails.
+class FailingFooterSignProvider : public XorBlockCryptoProvider {
+ public:
+  ::arrow::Result<std::vector<uint8_t>> SignFooter(std::span<const uint8_t>,
+                                                   const ParquetCryptoContext&,
+                                                   std::span<const uint8_t>,
+                                                   std::span<const uint8_t>) override {
+    return ::arrow::Status::IOError("injected SignFooter failure");
+  }
+};
+
+class FailingFooterVerifyProvider : public XorBlockCryptoProvider {
+ public:
+  ::arrow::Result<bool> VerifyFooterSignature(std::span<const uint8_t>,
+                                              std::span<const uint8_t>,
+                                              const ParquetCryptoContext&,
+                                              std::span<const uint8_t>,
+                                              std::span<const uint8_t>) override {
+    return ::arrow::Status::IOError("injected VerifyFooterSignature failure");
+  }
+};
+}  // namespace
+
+// An error Status from SignFooter() fails the write of a plaintext-footer file; the
+// message reaches the caller instead of the footer being written unsigned.
+TEST_F(ParquetColumnCryptoProviderTest, ProviderSignFooterErrorPropagates) {
+  auto provider = std::make_shared<FailingFooterSignProvider>();
+
+  auto encryption_props = MakeEncryptionProperties(
+      provider,
+      [&](ExternalEncryptionConfiguration& config) { config.plaintext_footer = true; });
+  ASSERT_NE(encryption_props, nullptr);
+
+  FileEncryptor encryptor;
+  EXPECT_THAT(
+      [&] {
+        encryptor.EncryptFile(TempFilePath("provider_sign_footer_error.parquet"),
+                              encryption_props);
+      },
+      ::testing::ThrowsMessage<ParquetException>(
+          HasSubstr("injected SignFooter failure")));
+}
+
+// An error Status from VerifyFooterSignature() (as opposed to returning false, which
+// PlaintextFooterTamperedSignatureThrows covers) fails the read with that message.
+TEST_F(ParquetColumnCryptoProviderTest, ProviderVerifyFooterSignatureErrorPropagates) {
+  auto enc_provider = std::make_shared<XorBlockCryptoProvider>();
+
+  auto encryption_props = MakeEncryptionProperties(
+      enc_provider,
+      [&](ExternalEncryptionConfiguration& config) { config.plaintext_footer = true; });
+  ASSERT_NE(encryption_props, nullptr);
+
+  const std::string file_path = TempFilePath("provider_verify_footer_error.parquet");
+  FileEncryptor encryptor;
+  ASSERT_NO_THROW(encryptor.EncryptFile(file_path, encryption_props));
+
+  auto dec_provider = std::make_shared<FailingFooterVerifyProvider>();
+  auto decryption_props = MakeDecryptionProperties(dec_provider);
+  ASSERT_NE(decryption_props, nullptr);
+
+  FileDecryptor decryptor;
+  EXPECT_THAT([&] { decryptor.DecryptFile(file_path, decryption_props); },
+              ::testing::ThrowsMessage<ParquetException>(
+                  HasSubstr("injected VerifyFooterSignature failure")));
 }
 
 // Coverage: a column that isn't configured for encryption is never routed to
@@ -997,11 +961,7 @@ TEST_F(ParquetColumnCryptoProviderTest, UnencryptedColumnNeverReachesProvider) {
 TEST_F(ParquetColumnCryptoProviderTest, ConcurrentWritesShareProviderSafely) {
   auto provider = std::make_shared<XorBlockCryptoProvider>();
 
-  ExternalEncryptionConfiguration enc_config(kFooterMasterKeyId);
-  enc_config.column_keys = BuildColumnKeyMapping();
-  enc_config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
-  auto encryption_props = crypto_factory_.GetExternalFileEncryptionProperties(
-      kms_config_, enc_config, provider);
+  auto encryption_props = MakeEncryptionProperties(provider);
   ASSERT_NE(encryption_props, nullptr);
 
   const std::string file_path_1 = TempFilePath("concurrent_writes_1.parquet");
@@ -1018,9 +978,7 @@ TEST_F(ParquetColumnCryptoProviderTest, ConcurrentWritesShareProviderSafely) {
   writer_1.join();
   writer_2.join();
 
-  ExternalDecryptionConfiguration dec_config;
-  auto decryption_props = crypto_factory_.GetExternalFileDecryptionProperties(
-      kms_config_, dec_config, provider);
+  auto decryption_props = MakeDecryptionProperties(provider);
   ASSERT_NE(decryption_props, nullptr);
 
   FileDecryptor decryptor;
@@ -1129,6 +1087,32 @@ TEST(ParquetCryptoProviderAdapterLengthPrefixTest, PrefixExceedingBufferThrows) 
   ASSERT_OK_AND_ASSIGN(auto plaintext_buf, ::arrow::AllocateResizableBuffer(0));
   EXPECT_THROW(decryptor.DecryptWithManagedBuffer(corrupted, plaintext_buf.get()),
                ParquetException);
+}
+
+// A prefix large enough that adding the prefix size overflows the int32_t returned by
+// GetCiphertextLength() is rejected before the buffer-size check; one byte below that
+// limit still gets as far as the buffer-size check.
+TEST(ParquetCryptoProviderAdapterLengthPrefixTest, PrefixOverflowingInt32Throws) {
+  auto provider = std::make_shared<XorBlockCryptoProvider>();
+  ParquetCryptoContext ctx;
+  ParquetCryptoProviderDecryptorAdapter decryptor(provider, ctx,
+                                                  /*dispatch_module_type=*/kDataPage);
+  auto* base_decryptor = static_cast<encryption::DecryptorInterface*>(&decryptor);
+
+  const std::vector<uint8_t> uint32_max = {0xFF, 0xFF, 0xFF, 0xFF, 0xAA, 0xBB};
+  EXPECT_THAT([&] { (void)base_decryptor->GetCiphertextLength(uint32_max); },
+              ::testing::ThrowsMessage<ParquetException>(HasSubstr("overflows int32")));
+
+  // INT32_MAX - 3: the first value whose length plus the 4-byte prefix overflows.
+  const std::vector<uint8_t> first_overflow = {0xFC, 0xFF, 0xFF, 0x7F, 0xAA, 0xBB};
+  EXPECT_THAT([&] { (void)base_decryptor->GetCiphertextLength(first_overflow); },
+              ::testing::ThrowsMessage<ParquetException>(HasSubstr("overflows int32")));
+
+  // INT32_MAX - 4 fits in an int32_t, so it fails the buffer-size check instead.
+  const std::vector<uint8_t> last_fitting = {0xFB, 0xFF, 0xFF, 0x7F, 0xAA, 0xBB};
+  EXPECT_THAT([&] { (void)base_decryptor->GetCiphertextLength(last_fitting); },
+              ::testing::ThrowsMessage<ParquetException>(
+                  HasSubstr("exceeds the available buffer")));
 }
 
 // Adapter stubs documented as unreachable: direct construction and invocation
@@ -1438,6 +1422,49 @@ TEST(ParquetCryptoProviderAdapterCellPathGatingTest, DictionaryPageUsesCellPath)
   EXPECT_EQ(std::vector<uint8_t>(plaintext_buf->data(),
                                  plaintext_buf->data() + plaintext_buf->size()),
             plaintext);
+}
+
+// A DictionaryPage always takes the cell path, whatever its encoding. The reader maps
+// an out-of-range encoding to UNDEFINED, so such a page must be rejected before the
+// provider sees any values.
+TEST(ParquetCryptoProviderAdapterCellPathGatingTest,
+     DictionaryPageWithUndefinedEncodingIsRejectedBeforeProvider) {
+  auto provider = std::make_shared<XorTypedValuesCryptoProvider>();
+  ParquetCryptoContext ctx;
+  const std::vector<uint8_t> page = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+  auto make_props = [] {
+    return EncodingProperties::Builder()
+        .PageType(PageType::DICTIONARY_PAGE)
+        .PhysicalType(Type::INT32)
+        .PageEncoding(Encoding::UNDEFINED)
+        .CompressionCodec(::arrow::Compression::UNCOMPRESSED)
+        .DictPageNumValues(3)
+        .Build();
+  };
+  ASSERT_OK_AND_ASSIGN(auto out_buf, ::arrow::AllocateResizableBuffer(0));
+
+  ParquetCryptoProviderEncryptorAdapter encryptor(provider, ctx,
+                                                  /*dispatch_module_type=*/kDataPage);
+  EXPECT_THAT(
+      [&] {
+        encryptor.EncryptWithManagedBuffer(page, out_buf.get(), {}, {}, make_props());
+      },
+      ::testing::ThrowsMessage<ParquetException>(
+          HasSubstr("only PLAIN value encoding is currently supported")));
+
+  ParquetCryptoProviderDecryptorAdapter decryptor(provider, ctx,
+                                                  /*dispatch_module_type=*/kDataPage);
+  EXPECT_THAT(
+      [&] {
+        decryptor.DecryptWithManagedBuffer(page, out_buf.get(), {}, {}, make_props());
+      },
+      ::testing::ThrowsMessage<ParquetException>(
+          HasSubstr("only PLAIN value encoding is currently supported")));
+
+  EXPECT_EQ(provider->encrypt_block_calls(), 0);
+  EXPECT_EQ(provider->encrypt_cells_calls(), 0);
+  EXPECT_EQ(provider->decrypt_block_calls(), 0);
+  EXPECT_EQ(provider->decrypt_cells_calls(), 0);
 }
 
 // EncryptWithManagedBuffer() on the cell path requires EncodingProperties to

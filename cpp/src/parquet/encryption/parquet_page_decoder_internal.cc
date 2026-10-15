@@ -27,6 +27,7 @@
 #include "arrow/util/bit_util.h"
 #include "arrow/util/compression.h"
 #include "arrow/util/int_util_overflow.h"
+#include "arrow/util/ubsan.h"
 #include "parquet/column_reader.h"
 #include "parquet/column_writer.h"
 #include "parquet/encoding.h"
@@ -193,9 +194,16 @@ void DecodeValuesPortion(std::span<const uint8_t> values_bytes, int64_t num_non_
   }
 }
 
+// A dictionary page holds PLAIN values. Parquet 1.0 files label it PLAIN_DICTIONARY.
+bool HasPlainValues(const encryption::EncodingProperties& props) {
+  const Encoding::type encoding = props.GetPageEncoding();
+  return encoding == Encoding::PLAIN ||
+         (props.GetPageType() == PageType::DICTIONARY_PAGE &&
+          encoding == Encoding::PLAIN_DICTIONARY);
+}
+
 // RLE-encodes `levels` the same way column_writer.cc's LevelEncoder does for
-// DataPageV2 -- mirrors the test suite's EncodeLevelsRLE() helper, reused here
-// since Recompress() needs genuine on-wire level bytes, not a hand-rolled stand-in.
+// DataPageV2, so Recompress() produces genuine on-wire level bytes.
 std::vector<uint8_t> EncodeLevelsRLE(const std::vector<int16_t>& levels,
                                      int16_t max_level) {
   std::vector<uint8_t> buffer(LevelEncoder::MaxBufferSize(
@@ -231,7 +239,8 @@ std::vector<uint8_t> EncodeLevelsRLEWithLengthPrefix(const std::vector<int16_t>&
   if (num_encoded != static_cast<int>(levels.size())) {
     throw ParquetException("ParquetPageDecoder: failed to encode all levels");
   }
-  reinterpret_cast<int32_t*>(buffer.data())[0] = encoder.len();
+  ::arrow::util::SafeStore(buffer.data(),
+                           ::arrow::bit_util::ToLittleEndian(encoder.len()));
   buffer.resize(kPrefixSize + static_cast<size_t>(encoder.len()));
   return buffer;
 }
@@ -304,6 +313,15 @@ std::vector<uint8_t> DecompressBuffer(std::span<const uint8_t> data,
                                       int64_t uncompressed_len,
                                       ::arrow::Compression::type codec_type,
                                       ::arrow::util::Codec* codec = nullptr) {
+  if (codec_type == ::arrow::Compression::UNCOMPRESSED) {
+    // Codec::Create() returns no codec for it; a page flagged compressed with this
+    // codec is stored as is.
+    if (static_cast<int64_t>(data.size()) != uncompressed_len) {
+      throw ParquetException(
+          "ParquetPageDecoder: values did not decompress to the expected size");
+    }
+    return std::vector<uint8_t>(data.begin(), data.end());
+  }
   std::vector<uint8_t> decompressed(static_cast<size_t>(uncompressed_len));
   if (uncompressed_len > 0) {
     // A page/dictionary may be empty (GH-31992); some codecs reject a
@@ -331,6 +349,9 @@ std::vector<uint8_t> DecompressBuffer(std::span<const uint8_t> data,
 std::vector<uint8_t> CompressBuffer(std::span<const uint8_t> data,
                                     ::arrow::Compression::type codec_type,
                                     ::arrow::util::Codec* codec = nullptr) {
+  if (codec_type == ::arrow::Compression::UNCOMPRESSED) {
+    return std::vector<uint8_t>(data.begin(), data.end());
+  }
   std::unique_ptr<::arrow::util::Codec> owned_codec;
   ::arrow::util::Codec* codec_ptr = codec;
   if (codec_ptr == nullptr) {
@@ -428,10 +449,11 @@ std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
   // addition: an overflow-checked int32 add (level lengths are int32_t on the
   // wire), widened to int64_t only for the buffer-size comparison below.
   int32_t levels_len = 0;
-  if (::arrow::internal::AddWithOverflow(props.GetPageV2DefinitionLevelsByteLength(),
+  if (props.GetPageV2DefinitionLevelsByteLength() < 0 ||
+      props.GetPageV2RepetitionLevelsByteLength() < 0 ||
+      ::arrow::internal::AddWithOverflow(props.GetPageV2DefinitionLevelsByteLength(),
                                          props.GetPageV2RepetitionLevelsByteLength(),
                                          &levels_len) ||
-      levels_len < 0 ||
       static_cast<int64_t>(levels_len) > static_cast<int64_t>(page.size())) {
     throw ParquetException(
         "ParquetPageDecoder: DataPageV2 level byte lengths exceed the page buffer");
@@ -475,7 +497,7 @@ std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
 TypedColumnValues ParquetPageDecoder::Decompress(
     std::span<const uint8_t> compressed_page, const encryption::EncodingProperties& props,
     ::arrow::util::Codec* codec) {
-  if (props.GetPageEncoding() != Encoding::PLAIN) {
+  if (!HasPlainValues(props)) {
     throw ParquetException(
         "ParquetPageDecoder::Decompress: only PLAIN value encoding is currently "
         "supported");
@@ -648,7 +670,7 @@ TypedColumnValues ParquetPageDecoder::Decompress(
 std::vector<uint8_t> ParquetPageDecoder::Recompress(
     const TypedColumnValues& values, const encryption::EncodingProperties& props,
     int64_t* new_uncompressed_size, ::arrow::util::Codec* codec) {
-  if (props.GetPageEncoding() != Encoding::PLAIN) {
+  if (!HasPlainValues(props)) {
     throw ParquetException(
         "ParquetPageDecoder::Recompress: only PLAIN value encoding is currently "
         "supported");
@@ -666,9 +688,10 @@ std::vector<uint8_t> ParquetPageDecoder::Recompress(
 
   if (props.GetPageType() == PageType::DATA_PAGE) {
     // Mirrors the DICTIONARY_PAGE branch's reasoning: repetition/definition levels
-    // are never mutated by EncryptCells()/DecryptCells(), so re-encoding them
-    // always reproduces byte-identical output to props's frozen originals -- only
-    // values_bytes's size can legitimately change. Only RLE-encoded levels can be
+    // are never mutated by EncryptCells()/DecryptCells(), so they are re-encoded
+    // from the decoded levels; only values_bytes's size can legitimately change.
+    // The result matches the original bytes when Arrow's own encoder wrote them.
+    // Only RLE-encoded levels can be
     // re-emitted (the only encoding Arrow's own writer ever produces for V1); a
     // file written by another implementation with BIT_PACKED levels decodes fine
     // (see Decompress()) but cannot round-trip through the cell path.
@@ -715,10 +738,10 @@ std::vector<uint8_t> ParquetPageDecoder::Recompress(
   }
 
   // Repetition/definition levels are never mutated by ParquetCryptoProvider::
-  // EncryptCells()/DecryptCells() -- only values() is -- so re-encoding them always
-  // reproduces byte-identical output to props's frozen originals; only the values
-  // portion's size can legitimately change (e.g. a BYTE_ARRAY value's length
-  // changing).
+  // EncryptCells()/DecryptCells() -- only values() is -- so they are re-encoded from
+  // the decoded levels; only the values portion's size can legitimately change (e.g.
+  // a BYTE_ARRAY value's length changing). The level bytes match the original ones
+  // when Arrow's own encoder wrote them.
   std::vector<uint8_t> rep_bytes;
   if (values.max_repetition_level() > 0) {
     rep_bytes =

@@ -15,10 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <stdexcept>
-
-#include "parquet/column_page.h"
 #include "parquet/encryption/encoding_properties.h"
+#include "arrow/util/compression.h"
+#include "parquet/column_page.h"
+#include "parquet/exception.h"
 #include "parquet/metadata.h"
 
 namespace parquet::encryption {
@@ -49,16 +49,16 @@ EncodingProperties::EncodingProperties(const Builder& builder)
       dict_page_num_values_(builder.dict_page_num_values_),
       dict_page_is_sorted_(builder.dict_page_is_sorted_) {}
 
-// private method to validate the properties
+// Checks that every property required for the page type is set.
 void EncodingProperties::validate() {
   // Validate required fields
   if ((!column_path_.has_value()) || column_path_.value().empty()) {
-    throw std::invalid_argument("ColumnPath is required");
+    throw ParquetException("ColumnPath is required");
   }
 
   // page encoding is required for all page types (data and dictionary)
   if (!page_encoding_.has_value()) {
-    throw std::invalid_argument("PageEncoding is required");
+    throw ParquetException("PageEncoding is required");
   }
 
   // Validate page-level properties.
@@ -67,12 +67,12 @@ void EncodingProperties::validate() {
   if ((page_type_ == parquet::PageType::DATA_PAGE) ||
       (page_type_ == parquet::PageType::DATA_PAGE_V2)) {
     if (!data_page_num_values_.has_value()) {
-      throw std::invalid_argument("DataPageNumValues is required");
+      throw ParquetException("DataPageNumValues is required");
     }
 
     if (physical_type_ == parquet::Type::type::FIXED_LEN_BYTE_ARRAY) {
       if (!fixed_length_bytes_.has_value()) {
-        throw std::invalid_argument(
+        throw ParquetException(
             "FixedLengthBytes is required for column page with "
             "FIXED_LEN_BYTE_ARRAY data type");
       }
@@ -80,7 +80,7 @@ void EncodingProperties::validate() {
 
     if (fixed_length_bytes_.has_value()) {
       if (physical_type_ != parquet::Type::type::FIXED_LEN_BYTE_ARRAY) {
-        throw std::invalid_argument(
+        throw ParquetException(
             "FixedLengthBytes is only allowed for FIXED_LEN_BYTE_ARRAY "
             "physical type");
       }
@@ -88,10 +88,10 @@ void EncodingProperties::validate() {
 
     // max levels may be required  for decoding both data page types
     if (!data_page_max_definition_level_.has_value()) {
-      throw std::invalid_argument("DataPageMaxDefinitionLevel is required");
+      throw ParquetException("DataPageMaxDefinitionLevel is required");
     }
     if (!data_page_max_repetition_level_.has_value()) {
-      throw std::invalid_argument("DataPageMaxRepetitionLevel is required");
+      throw ParquetException("DataPageMaxRepetitionLevel is required");
     }
   }
 
@@ -99,27 +99,27 @@ void EncodingProperties::validate() {
   // DATA_PAGE is equivalent to DATA_PAGE_V1.
   if (page_type_ == parquet::PageType::DATA_PAGE) {
     if (!page_v1_definition_level_encoding_.has_value()) {
-      throw std::invalid_argument("PageV1DefinitionLevelEncoding is required");
+      throw ParquetException("PageV1DefinitionLevelEncoding is required");
     }
     if (!page_v1_repetition_level_encoding_.has_value()) {
-      throw std::invalid_argument("PageV1RepetitionLevelEncoding is required");
+      throw ParquetException("PageV1RepetitionLevelEncoding is required");
     }
   } else if (page_type_ == parquet::PageType::DATA_PAGE_V2) {
     if (!page_v2_num_nulls_.has_value()) {
-      throw std::invalid_argument("PageV2NumNulls is required");
+      throw ParquetException("PageV2NumNulls is required");
     }
     if (!page_v2_definition_levels_byte_length_.has_value()) {
-      throw std::invalid_argument("PageV2DefinitionLevelsByteLength is required");
+      throw ParquetException("PageV2DefinitionLevelsByteLength is required");
     }
     if (!page_v2_repetition_levels_byte_length_.has_value()) {
-      throw std::invalid_argument("PageV2RepetitionLevelsByteLength is required");
+      throw ParquetException("PageV2RepetitionLevelsByteLength is required");
     }
     if (!page_v2_is_compressed_.has_value()) {
-      throw std::invalid_argument("PageV2IsCompressed is required");
+      throw ParquetException("PageV2IsCompressed is required");
     }
   } else if (page_type_ == parquet::PageType::DICTIONARY_PAGE) {
     if (!dict_page_num_values_.has_value()) {
-      throw std::invalid_argument("DictPageNumValues is required for DICTIONARY_PAGE");
+      throw ParquetException("DictPageNumValues is required for DICTIONARY_PAGE");
     }
     // is_sorted is optional per the Parquet spec, so no validation needed.
   }
@@ -136,8 +136,8 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
   builder.PageType(column_page.type());
 
   // If the physical type is FIXED_LEN_BYTE_ARRAY, propagate the byte width
-  // from the column descriptor so downstream users (e.g., external agents)
-  // have access to the length. Validation also requires this for data pages.
+  // from the column descriptor so a provider has access to the length.
+  // Validation also requires this for data pages.
   if (column_descriptor->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY) {
     builder.FixedLengthBytes(column_descriptor->type_length());
   }
@@ -147,7 +147,7 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
 
   // properties common to V1 and V2 data pages.
   if (is_data_page) {
-    DataPage data_page = static_cast<const DataPage&>(column_page);
+    const auto& data_page = static_cast<const DataPage&>(column_page);
     builder.PageEncoding(data_page.encoding());
     builder.DataPageNumValues(data_page.num_values());
     builder.DataPageMaxDefinitionLevel(column_descriptor->max_definition_level());
@@ -156,12 +156,12 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
 
   // properties specific to each type of page
   if (column_page.type() == parquet::PageType::DATA_PAGE) {
-    DataPageV1 data_page_v1 = static_cast<const DataPageV1&>(column_page);
+    const auto& data_page_v1 = static_cast<const DataPageV1&>(column_page);
     builder.PageV1DefinitionLevelEncoding(data_page_v1.definition_level_encoding());
     builder.PageV1RepetitionLevelEncoding(data_page_v1.repetition_level_encoding());
     builder.UncompressedPageSize(data_page_v1.uncompressed_size());
   } else if (column_page.type() == parquet::PageType::DATA_PAGE_V2) {
-    DataPageV2 data_page_v2 = static_cast<const DataPageV2&>(column_page);
+    const auto& data_page_v2 = static_cast<const DataPageV2&>(column_page);
     builder.PageV2DefinitionLevelsByteLength(
         data_page_v2.definition_levels_byte_length());
     builder.PageV2RepetitionLevelsByteLength(
@@ -170,7 +170,7 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
     builder.PageV2IsCompressed(data_page_v2.is_compressed());
     builder.UncompressedPageSize(data_page_v2.uncompressed_size());
   } else if (column_page.type() == parquet::PageType::DICTIONARY_PAGE) {
-    DictionaryPage dict_page = static_cast<const DictionaryPage&>(column_page);
+    const auto& dict_page = static_cast<const DictionaryPage&>(column_page);
     builder.PageEncoding(dict_page.encoding());
     builder.DictPageNumValues(dict_page.num_values());
     builder.DictPageIsSorted(dict_page.is_sorted());
@@ -178,8 +178,8 @@ std::unique_ptr<EncodingProperties> EncodingProperties::MakeFromMetadata(
       builder.UncompressedPageSize(dictionary_page_uncompressed_size.value());
     }
   } else {
-    throw std::invalid_argument(std::string("Unknown Page Type:: ") +
-                                EnumToString(column_page.type()));
+    throw ParquetException(std::string("Unknown Page Type:: ") +
+                           EnumToString(column_page.type()));
   }
 
   return builder.Build();
@@ -189,10 +189,11 @@ std::map<std::string, std::string> EncodingProperties::ToPropertiesMap() const {
   std::map<std::string, std::string> result;
 
   result["column_path"] = std::string(column_path_.value());
-  result["physical_type"] = EnumToString(physical_type_.value());
-  result["compression_codec"] = EnumToString(compression_codec_.value());
+  result["physical_type"] = TypeToString(physical_type_.value());
+  result["compression_codec"] =
+      ::arrow::util::Codec::GetCodecAsString(compression_codec_.value());
   result["page_type"] = EnumToString(page_type_);
-  result["page_encoding"] = EnumToString(page_encoding_.value());
+  result["page_encoding"] = EncodingToString(page_encoding_.value());
 
   if (fixed_length_bytes_.has_value()) {
     result["fixed_length_bytes"] = std::to_string(fixed_length_bytes_.value());
@@ -209,9 +210,9 @@ std::map<std::string, std::string> EncodingProperties::ToPropertiesMap() const {
   if (page_type_ == parquet::PageType::DATA_PAGE) {  // DATA_PAGE_V1
     result["data_page_num_values"] = std::to_string(data_page_num_values_.value());
     result["page_v1_definition_level_encoding"] =
-        EnumToString(page_v1_definition_level_encoding_.value());
+        EncodingToString(page_v1_definition_level_encoding_.value());
     result["page_v1_repetition_level_encoding"] =
-        EnumToString(page_v1_repetition_level_encoding_.value());
+        EncodingToString(page_v1_repetition_level_encoding_.value());
   } else if (page_type_ == parquet::PageType::DATA_PAGE_V2) {
     result["data_page_num_values"] = std::to_string(data_page_num_values_.value());
     result["page_v2_definition_levels_byte_length"] =
@@ -239,8 +240,7 @@ std::unique_ptr<EncodingProperties> EncodingProperties::Builder::Build() {
   // validating here simplifies our code.
 
   if (!page_type_) {
-    throw std::invalid_argument(
-        "EncodingProperties::Builder::Build - PageType is required");
+    throw ParquetException("EncodingProperties::Builder::Build - PageType is required");
   }
 
   return std::unique_ptr<EncodingProperties>(new EncodingProperties(*this));
@@ -372,6 +372,26 @@ void EncodingProperties::set_physical_type(
   physical_type_ = physical_type;
   if (fixed_length_bytes.has_value()) {
     fixed_length_bytes_ = fixed_length_bytes;
+  }
+}
+
+// Parquet has no PageType-to-string helper; Type, Encoding and Compression names come
+// from TypeToString(), EncodingToString() and Codec::GetCodecAsString().
+std::string EnumToString(parquet::PageType::type t) {
+  switch (t) {
+    case parquet::PageType::DATA_PAGE:
+      return "DATA_PAGE_V1";
+    case parquet::PageType::DATA_PAGE_V2:
+      return "DATA_PAGE_V2";
+    case parquet::PageType::DICTIONARY_PAGE:
+      return "DICTIONARY_PAGE";
+    case parquet::PageType::INDEX_PAGE:
+      return "INDEX_PAGE";
+    case parquet::PageType::UNDEFINED:
+      return "UNDEFINED";
+    default:
+      throw ParquetException(std::string("Unknown parquet PageType::type:: ") +
+                             std::to_string(t));
   }
 }
 

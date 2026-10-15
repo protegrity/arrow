@@ -42,9 +42,6 @@
 // Added for encoding properties tests
 #include "parquet/encryption/decryptor_interface.h"
 #include "parquet/encryption/encoding_properties.h"
-#ifdef PARQUET_BUILD_DBPS_LIBS
-#  include "parquet/encryption/external/test_utils.h"
-#endif
 #include "parquet/encryption/internal_file_decryptor.h"
 #include "parquet/schema.h"
 
@@ -1065,9 +1062,9 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
       // own set_physical_type()/set_compression_codec() calls below overwrite them.
       std::map<std::string, std::string> raw_props;
       raw_props["raw_physical_type"] =
-          parquet::encryption::EnumToString(encoding_properties->GetPhysicalType());
-      raw_props["raw_compression_codec"] =
-          parquet::encryption::EnumToString(encoding_properties->GetCompressionCodec());
+          parquet::TypeToString(encoding_properties->GetPhysicalType());
+      raw_props["raw_compression_codec"] = ::arrow::util::Codec::GetCodecAsString(
+          encoding_properties->GetCompressionCodec());
       if (encoding_properties->GetPageType() == parquet::PageType::DATA_PAGE_V2) {
         raw_props["raw_page_v2_uncompressed_page_size"] =
             std::to_string(encoding_properties->GetUncompressedPageSize());
@@ -1206,7 +1203,7 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDictionaryPageEncodingProperties) {
   const auto& props = sink->entries[0];
   ASSERT_EQ(props.at("column_path"), descr->path()->ToDotString());
   ASSERT_EQ(props.at("physical_type"), std::string("INT32"));
-  ASSERT_EQ(props.at("compression_codec"), std::string("UNCOMPRESSED"));
+  ASSERT_EQ(props.at("compression_codec"), std::string("uncompressed"));
   ASSERT_EQ(props.at("page_type"), std::string("DICTIONARY_PAGE"));
   ASSERT_EQ(props.at("page_encoding"), std::string("PLAIN"));
   ASSERT_EQ(props.at("dict_page_num_values"), std::to_string(num_rows));
@@ -1217,7 +1214,7 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDictionaryPageEncodingProperties) {
   // set_compression_codec() calls overwrote them -- proves the reader path, not just
   // this test's own setters, populates these fields correctly.
   ASSERT_EQ(props.at("raw_physical_type"), std::string("INT32"));
-  ASSERT_EQ(props.at("raw_compression_codec"), std::string("UNCOMPRESSED"));
+  ASSERT_EQ(props.at("raw_compression_codec"), std::string("uncompressed"));
 }
 
 TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV1EncodingProperties) {
@@ -1271,7 +1268,7 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV1EncodingProperties) {
   ASSERT_EQ(props.at("data_page_max_repetition_level"),
             std::to_string(descr->max_repetition_level()));
   ASSERT_EQ(props.at("raw_physical_type"), std::string("INT32"));
-  ASSERT_EQ(props.at("raw_compression_codec"), std::string("UNCOMPRESSED"));
+  ASSERT_EQ(props.at("raw_compression_codec"), std::string("uncompressed"));
 }
 
 TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV2EncodingProperties) {
@@ -1329,7 +1326,7 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesDataPageV2EncodingProperties) {
   ASSERT_EQ(props.at("data_page_max_repetition_level"),
             std::to_string(descr->max_repetition_level()));
   ASSERT_EQ(props.at("raw_physical_type"), std::string("INT32"));
-  ASSERT_EQ(props.at("raw_compression_codec"), std::string("UNCOMPRESSED"));
+  ASSERT_EQ(props.at("raw_compression_codec"), std::string("uncompressed"));
   ASSERT_EQ(props.at("raw_page_v2_uncompressed_page_size"), std::to_string(data_size));
 }
 
@@ -1410,107 +1407,273 @@ TEST_F(EncodingPropertiesSerdeTest, CapturesCompressedDataPageV2EncodingProperti
   // (parquet_page_decoder_test.cc's compressed-page test builds EncodingProperties
   // directly via the Builder, bypassing this path entirely).
   ASSERT_EQ(props.at("raw_compression_codec"),
-            parquet::encryption::EnumToString(codec_type));
+            ::arrow::util::Codec::GetCodecAsString(codec_type));
   ASSERT_EQ(props.at("raw_page_v2_uncompressed_page_size"),
             std::to_string(uncompressed_size));
 }
 
-// The test below exercises the legacy external adapter path
-// (ExternalFileEncryptionProperties with EXTERNAL_PROTECT_V1 per-column cipher and an
-// external agent library). Before removing the adapter sources, port this test to the
-// external encryption service repository and validate it against the
-// ExternalEncryptorProvider / ExternalDecryptorProvider interface.
-#ifdef PARQUET_BUILD_DBPS_LIBS
-TEST(PlaintextFooter_EncryptionAlgorithmsSetCorrectly, ExternalAndAES) {
-  using schema::GroupNode;
-  using schema::NodePtr;
-  using schema::PrimitiveNode;
+namespace {
 
-  NodePtr root =
-      GroupNode::Make("schema", Repetition::REQUIRED,
-                      {PrimitiveNode::Make("col", Repetition::REQUIRED, Type::INT32)});
-  auto schema = std::static_pointer_cast<GroupNode>(root);
+// Returns preset bytes as the decrypted page and, if `reported_size` is set, reports it
+// through `new_uncompressed_size` like a decryptor that changed the page content length.
+class PresetPageTestDecryptor : public parquet::encryption::DecryptorInterface {
+ public:
+  PresetPageTestDecryptor(std::vector<uint8_t> page, std::optional<int64_t> reported_size)
+      : page_(std::move(page)), reported_size_(reported_size) {}
 
-  std::vector<int32_t> values = {1, 2, 3, 4, 5};
+  [[nodiscard]] bool CanCalculateLengths() const override { return false; }
 
-  const std::string column_name = "col";
-  ::arrow::util::SecureString column_key_id(std::string("0123456789ABCDEF"));
-  ::arrow::util::SecureString footer_key(
-      std::string("1234567890123456"));  // 16 bytes for tests
-  std::string app_context =
-      "{\"user_id\":\"test_user\",\"location\":{\"lat\":0.0,\"lon\":0.0}}";
-  std::string library_path =
-      parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
-
-  std::map<std::string, std::shared_ptr<parquet::ColumnEncryptionProperties>> enc_cols;
-  auto col_enc_builder = parquet::ColumnEncryptionProperties::Builder(column_name);
-  col_enc_builder.key(column_key_id)
-      ->key_id(std::string(column_key_id.as_view()))
-      ->parquet_cipher(parquet::ParquetCipher::EXTERNAL_PROTECT_V1);
-  enc_cols[column_name] = col_enc_builder.build();
-
-  auto fep_builder = parquet::ExternalFileEncryptionProperties::Builder(footer_key);
-  fep_builder.footer_key_metadata("kf")
-      ->set_plaintext_footer()
-      ->algorithm(parquet::ParquetCipher::AES_GCM_CTR_V1)
-      ->encrypted_columns(enc_cols)
-      ->app_context(app_context)
-      ->configuration_properties({{parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
-                                   {{"agent_library_path", library_path}}}});
-  auto file_enc_props = fep_builder.build_external();
-
-  auto sink = CreateOutputStream();
-  auto writer_props =
-      parquet::WriterProperties::Builder().encryption(file_enc_props)->build();
-  auto file_writer = parquet::ParquetFileWriter::Open(sink, schema, writer_props);
-  {
-    auto rg = file_writer->AppendRowGroup();
-    auto w = static_cast<parquet::Int32Writer*>(rg->NextColumn());
-    w->WriteBatch(static_cast<int64_t>(values.size()), nullptr, nullptr, values.data());
-    w->Close();
+  [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const override {
+    return ciphertext_len;
   }
-  file_writer->Close();
-  ASSERT_OK_AND_ASSIGN(auto buffer, sink->Finish());
 
-  std::map<std::string, std::shared_ptr<parquet::ColumnDecryptionProperties>> dec_cols;
-  auto col_dec_builder = parquet::ColumnDecryptionProperties::Builder(column_name);
-  dec_cols[column_name] = col_dec_builder.key(column_key_id)->build();
+  [[nodiscard]] int32_t CiphertextLength(int32_t plaintext_len) const override {
+    return plaintext_len;
+  }
 
-  parquet::ReaderProperties reader_props;
-  auto dep_builder = parquet::ExternalFileDecryptionProperties::Builder();
-  dep_builder.footer_key(footer_key)
-      ->column_keys(dec_cols)
-      ->app_context(app_context)
-      ->configuration_properties({{parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
-                                   {{"agent_library_path", library_path}}}});
-  reader_props.file_decryption_properties(dep_builder.build_external());
+  int32_t Decrypt(std::span<const uint8_t> /*ciphertext*/,
+                  std::span<const uint8_t> /*key*/, std::span<const uint8_t> /*aad*/,
+                  std::span<uint8_t> /*plaintext*/,
+                  std::unique_ptr<parquet::encryption::EncodingProperties>
+                  /*encoding_properties*/) override {
+    throw ParquetException("Decrypt not supported");
+  }
 
-  auto file_reader = parquet::ParquetFileReader::Open(
-      std::make_shared<::arrow::io::BufferReader>(buffer), reader_props);
-  ASSERT_NE(file_reader, nullptr);
+  int32_t DecryptWithManagedBuffer(
+      std::span<const uint8_t> /*ciphertext*/, ::arrow::ResizableBuffer* plaintext,
+      std::span<const uint8_t> /*aad*/, std::span<const uint8_t> /*dek*/,
+      std::unique_ptr<parquet::encryption::EncodingProperties> /*encoding_properties*/,
+      int64_t* new_uncompressed_size, ::arrow::util::Codec* /*codec*/) override {
+    PARQUET_THROW_NOT_OK(plaintext->Resize(static_cast<int64_t>(page_.size()), false));
+    std::memcpy(plaintext->mutable_data(), page_.data(), page_.size());
+    if (reported_size_.has_value() && new_uncompressed_size != nullptr) {
+      *new_uncompressed_size = *reported_size_;
+    }
+    return static_cast<int32_t>(page_.size());
+  }
 
-  auto file_md = file_reader->metadata();
-  auto file_algo = file_md->encryption_algorithm();
-  EXPECT_EQ(file_algo.algorithm, parquet::ParquetCipher::AES_GCM_CTR_V1);
+ private:
+  std::vector<uint8_t> page_;
+  std::optional<int64_t> reported_size_;
+};
 
-  auto rg_md = file_md->RowGroup(0);
-  auto col_md = rg_md->ColumnChunk(0);
-  auto crypto_md = col_md->crypto_metadata();
-  ASSERT_NE(crypto_md, nullptr);
-  ASSERT_TRUE(crypto_md->is_encryption_algorithm_set());
-  EXPECT_EQ(crypto_md->encryption_algorithm().algorithm,
-            parquet::ParquetCipher::EXTERNAL_PROTECT_V1);
+}  // namespace
 
-  auto rg_reader = file_reader->RowGroup(0);
-  auto col_reader =
-      std::static_pointer_cast<TypedColumnReader<Int32Type>>(rg_reader->Column(0));
-  std::vector<int32_t> out(values.size());
-  int64_t read = 0;
-  col_reader->ReadBatch(static_cast<int>(values.size()), nullptr, nullptr, out.data(),
-                        &read);
-  ASSERT_EQ(read, static_cast<int64_t>(values.size()));
-  ASSERT_EQ(values, out);
+// When a decryptor changes the page content length (for example a detokenizer restoring
+// shorter values), the page header's uncompressed_page_size is stale. The reader must
+// check decompression against the size the decryptor reports, or it rejects a
+// valid page ("Page didn't decompress to expected size").
+TEST_F(EncodingPropertiesSerdeTest, ReaderUsesUncompressedSizeReportedByDecryptor) {
+  ::arrow::Compression::type codec_type = ::arrow::Compression::UNCOMPRESSED;
+  for (auto candidate : {::arrow::Compression::SNAPPY, ::arrow::Compression::GZIP,
+                         ::arrow::Compression::ZSTD, ::arrow::Compression::LZ4}) {
+    if (::arrow::util::Codec::IsAvailable(candidate)) {
+      codec_type = candidate;
+      break;
+    }
+  }
+  if (codec_type == ::arrow::Compression::UNCOMPRESSED) {
+    GTEST_SKIP() << "No optional compression codec built into this Arrow build";
+  }
+  ASSERT_OK_AND_ASSIGN(auto codec, ::arrow::util::Codec::Create(codec_type));
+  auto compress = [&](const std::vector<uint8_t>& input) {
+    std::vector<uint8_t> output(
+        codec->MaxCompressedLen(static_cast<int64_t>(input.size()), input.data()));
+    auto result = codec->Compress(static_cast<int64_t>(input.size()), input.data(),
+                                  static_cast<int64_t>(output.size()), output.data());
+    EXPECT_TRUE(result.ok());
+    output.resize(static_cast<size_t>(*result));
+    return output;
+  };
+
+  const std::vector<uint8_t> levels(6, 0x11);
+  const std::vector<uint8_t> values(200, 0x5A);
+  std::vector<uint8_t> uncompressed_page = levels;
+  uncompressed_page.insert(uncompressed_page.end(), values.begin(), values.end());
+  const auto true_size = static_cast<int32_t>(uncompressed_page.size());
+  // What an encryptor that changed the content length would have left in the header.
+  const int32_t stale_size = true_size + 8;
+
+  auto schema = MakeSingleInt32Schema();
+  const ColumnDescriptor* descr = schema->Column(0);
+
+  for (bool is_v2 : {false, true}) {
+    for (bool reports_size : {true, false}) {
+      SCOPED_TRACE(std::string(is_v2 ? "DataPageV2" : "DataPageV1") +
+                   (reports_size ? ", size reported" : ", size not reported"));
+      ResetStream();
+
+      // V1 compresses levels and values as one blob; V2 leaves the levels as is.
+      std::vector<uint8_t> on_disk_page;
+      if (is_v2) {
+        on_disk_page = levels;
+        auto compressed_values = compress(values);
+        on_disk_page.insert(on_disk_page.end(), compressed_values.begin(),
+                            compressed_values.end());
+        data_page_header_v2_.encoding = format::Encoding::PLAIN;
+        data_page_header_v2_.num_values = 12;
+        data_page_header_v2_.num_nulls = 0;
+        data_page_header_v2_.definition_levels_byte_length = 3;
+        data_page_header_v2_.repetition_levels_byte_length = 3;
+        data_page_header_v2_.is_compressed = true;
+        ASSERT_NO_FATAL_FAILURE(
+            WriteDataPageHeaderV2(/*max_serialized_len=*/1024, stale_size,
+                                  static_cast<int32_t>(on_disk_page.size())));
+      } else {
+        on_disk_page = compress(uncompressed_page);
+        ASSERT_NO_FATAL_FAILURE(
+            WriteDataPageHeader(/*max_serialized_len=*/1024, stale_size,
+                                static_cast<int32_t>(on_disk_page.size())));
+      }
+      ASSERT_OK(out_stream_->Write(on_disk_page.data(), on_disk_page.size()));
+
+      CryptoContext ctx;
+      ctx.column_descriptor = descr;
+      std::optional<int64_t> reported_size;
+      if (reports_size) reported_size = true_size;
+      ctx.data_decryptor_factory = [on_disk_page, reported_size]() {
+        return std::make_unique<Decryptor>(
+            std::make_unique<PresetPageTestDecryptor>(on_disk_page, reported_size),
+            ::arrow::util::SecureString(), std::string("aad_test"), std::string(),
+            ::arrow::default_memory_pool());
+      };
+      OpenWithCryptoContext(/*num_rows=*/12, codec_type, ReaderProperties(), ctx);
+
+      if (!reports_size) {
+        EXPECT_THAT([&] { page_reader_->NextPage(); },
+                    ::testing::ThrowsMessage<ParquetException>(
+                        ::testing::HasSubstr("Page didn't decompress to expected size")));
+        continue;
+      }
+      std::shared_ptr<Page> page = page_reader_->NextPage();
+      ASSERT_NE(page, nullptr);
+      auto data_page = std::static_pointer_cast<DataPage>(page);
+      EXPECT_EQ(true_size, data_page->uncompressed_size());
+      ASSERT_EQ(static_cast<size_t>(true_size), static_cast<size_t>(page->size()));
+      EXPECT_EQ(0, std::memcmp(page->data(), uncompressed_page.data(), true_size));
+    }
+  }
 }
-#endif  // PARQUET_BUILD_DBPS_LIBS
+
+// Like the rest of the reader, an out-of-range encoding is mapped to UNDEFINED instead of
+// being passed on as an invalid enum value; the decoder rejects it when the page is read.
+TEST_F(EncodingPropertiesSerdeTest, UnknownEncodingInPageHeaderBecomesUndefined) {
+  data_page_header_.encoding = static_cast<format::Encoding::type>(99);
+  const int data_size = 16;
+  ASSERT_NO_FATAL_FAILURE(WriteDataPageHeader(/*max_serialized_len=*/1024, data_size,
+                                              /*compressed_size=*/data_size));
+  std::vector<uint8_t> faux_data(data_size);
+  ASSERT_OK(out_stream_->Write(faux_data.data(), data_size));
+
+  auto schema = MakeSingleInt32Schema();
+  const ColumnDescriptor* descr = schema->Column(0);
+  CryptoContext ctx;
+  ctx.column_descriptor = descr;
+  ctx.data_decryptor_factory = [faux_data]() {
+    return std::make_unique<Decryptor>(
+        std::make_unique<PresetPageTestDecryptor>(faux_data, std::nullopt),
+        ::arrow::util::SecureString(), std::string("aad_test"), std::string(),
+        ::arrow::default_memory_pool());
+  };
+  OpenWithCryptoContext(/*num_rows=*/12, Compression::UNCOMPRESSED, ReaderProperties(),
+                        ctx);
+
+  std::shared_ptr<Page> page = page_reader_->NextPage();
+  ASSERT_NE(page, nullptr);
+  EXPECT_EQ(Encoding::UNDEFINED, std::static_pointer_cast<DataPage>(page)->encoding());
+}
+
+namespace {
+
+// A decryptor whose ciphertext is a 4-byte little-endian length followed by the payload,
+// like a provider whose output size Arrow cannot calculate. It remembers how many bytes
+// the deserializer handed to DecryptWithManagedBuffer().
+class LengthPrefixedTestDecryptor : public parquet::encryption::DecryptorInterface {
+ public:
+  explicit LengthPrefixedTestDecryptor(std::shared_ptr<int64_t> received_size)
+      : received_size_(std::move(received_size)) {}
+
+  [[nodiscard]] bool CanCalculateLengths() const override { return false; }
+  [[nodiscard]] int32_t PlaintextLength(int32_t) const override {
+    throw ParquetException("PlaintextLength not supported");
+  }
+  [[nodiscard]] int32_t CiphertextLength(int32_t) const override {
+    throw ParquetException("CiphertextLength not supported");
+  }
+
+  [[nodiscard]] int32_t GetCiphertextLength(
+      std::span<const uint8_t> ciphertext) const override {
+    return 4 + static_cast<int32_t>(PayloadLength(ciphertext));
+  }
+
+  int32_t Decrypt(std::span<const uint8_t>, std::span<const uint8_t>,
+                  std::span<const uint8_t>, std::span<uint8_t>,
+                  std::unique_ptr<parquet::encryption::EncodingProperties>) override {
+    throw ParquetException("Decrypt not supported");
+  }
+
+  int32_t DecryptWithManagedBuffer(
+      std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
+      std::span<const uint8_t>, std::span<const uint8_t>,
+      std::unique_ptr<parquet::encryption::EncodingProperties>, int64_t*,
+      ::arrow::util::Codec*) override {
+    *received_size_ = static_cast<int64_t>(ciphertext.size());
+    const uint32_t payload_length = PayloadLength(ciphertext);
+    PARQUET_THROW_NOT_OK(plaintext->Resize(payload_length, false));
+    std::memcpy(plaintext->mutable_data(), ciphertext.data() + 4, payload_length);
+    return static_cast<int32_t>(payload_length);
+  }
+
+ private:
+  static uint32_t PayloadLength(std::span<const uint8_t> ciphertext) {
+    uint32_t length = 0;
+    std::memcpy(&length, ciphertext.data(), sizeof(length));
+    return length;
+  }
+
+  std::shared_ptr<int64_t> received_size_;
+};
+
+}  // namespace
+
+// For a decryptor that cannot calculate lengths, ThriftDeserializer asks it for the
+// extent of the ciphertext. Whatever follows (here a peek window that is larger than the
+// message, as SerializedPageReader reads page headers) is neither decrypted nor counted
+// as consumed.
+TEST(ThriftDeserializerTest, DecryptorWithoutLengthsConsumesOnlyItsCiphertext) {
+  format::PageHeader header;
+  header.__set_type(format::PageType::DATA_PAGE);
+  header.__set_uncompressed_page_size(1234);
+  header.__set_compressed_page_size(567);
+  ThriftSerializer serializer;
+  const auto serialized = serializer.SerializeToBuffer(&header);
+
+  std::vector<uint8_t> ciphertext(4);
+  const auto payload_length = static_cast<uint32_t>(serialized.size());
+  std::memcpy(ciphertext.data(), &payload_length, sizeof(payload_length));
+  ciphertext.insert(ciphertext.end(), serialized.begin(), serialized.end());
+  const auto ciphertext_size = static_cast<int64_t>(ciphertext.size());
+
+  for (size_t trailing_bytes : {size_t{0}, size_t{17}}) {
+    ARROW_SCOPED_TRACE("trailing bytes = ", trailing_bytes);
+    std::vector<uint8_t> buffer = ciphertext;
+    buffer.insert(buffer.end(), trailing_bytes, 0xCD);
+
+    auto received_size = std::make_shared<int64_t>(-1);
+    Decryptor decryptor(std::make_unique<LengthPrefixedTestDecryptor>(received_size),
+                        ::arrow::util::SecureString(), "file_aad", "aad",
+                        ::arrow::default_memory_pool());
+    ThriftDeserializer deserializer{ReaderProperties()};
+    format::PageHeader decoded;
+    const int64_t consumed = deserializer.DeserializeMessage(
+        buffer.data(), static_cast<int64_t>(buffer.size()), &decoded, &decryptor);
+
+    EXPECT_EQ(ciphertext_size, consumed);
+    EXPECT_EQ(ciphertext_size, *received_size);
+    EXPECT_EQ(header.type, decoded.type);
+    EXPECT_EQ(header.uncompressed_page_size, decoded.uncompressed_page_size);
+    EXPECT_EQ(header.compressed_page_size, decoded.compressed_page_size);
+  }
+}
 
 }  // namespace parquet

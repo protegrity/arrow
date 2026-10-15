@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <cstdint>
+#include <memory>
 #include <span>
 #include <vector>
 
@@ -83,14 +85,6 @@ class PARQUET_EXPORT EncryptorInterface {
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr,
       int64_t* new_uncompressed_size = nullptr,
       ::arrow::util::Codec* codec = nullptr) = 0;
-
-  /// Return column-level metadata accumulated during encryption of a single page.
-  ///
-  /// Called by the column writer after each dictionary or data page write.
-  virtual std::shared_ptr<::arrow::KeyValueMetadata> GetKeyValueMetadata(
-      int8_t module_type) {
-    return nullptr;
-  }
 
   /// Encrypt footer bytes to produce the authentication tag for plaintext-footer files.
   virtual int32_t SignedFooterEncrypt(std::span<const uint8_t> footer,

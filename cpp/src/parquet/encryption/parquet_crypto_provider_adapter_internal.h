@@ -38,9 +38,9 @@ class PARQUET_EXPORT ParquetCryptoProviderEncryptorAdapter
     : public encryption::EncryptorInterface {
  public:
   /// dispatch_module_type is one of parquet::encryption's module-type constants
-  /// (encryption_utils.h) -- the same values CreateModuleAad()/GetKeyValueMetadata()
-  /// already use. Fixed once for this adapter's lifetime (one instance per column or
-  /// footer); used only to gate UseCellPath().
+  /// (encryption_utils.h) -- the same values CreateModuleAad() uses. Fixed once for this
+  /// adapter's lifetime (one instance per column or footer); used only to gate
+  /// UseCellPath().
   ParquetCryptoProviderEncryptorAdapter(std::shared_ptr<ParquetCryptoProvider> provider,
                                         ParquetCryptoContext ctx,
                                         int8_t dispatch_module_type);
@@ -107,15 +107,14 @@ class PARQUET_EXPORT ParquetCryptoProviderEncryptorAdapter
   // True when the provider should receive the page's decoded values instead of
   // opaque ciphertext bytes: the provider supports typed values, the dispatch
   // module is a data or dictionary page, and -- when encoding_properties is known --
-  // the page is either a real DictionaryPage (always PLAIN by spec) or a DataPageV2
-  // with PLAIN value encoding. A dictionary-encoded DataPage's indices
+  // the page is either a DictionaryPage or a DataPage (V1 or V2) with PLAIN value
+  // encoding. A dictionary-encoded DataPage's indices
   // (RLE_DICTIONARY/PLAIN_DICTIONARY) and any other non-PLAIN encoding (RLE,
   // DELTA_*) always fall back to the block path -- as does any BZ2-compressed page
   // regardless of value encoding (ParquetPageDecoder's one-shot codec machinery
-  // can't support BZ2; the block path is codec-agnostic). encoding_properties is
-  // null before the cell-path-required check below has run; UseCellPath() still
-  // returns true in that case so the caller's own null check raises the real
-  // error instead of silently choosing the block path.
+  // can't support BZ2; the block path is codec-agnostic). A null encoding_properties
+  // returns true, so the caller's null check raises an error instead of silently
+  // choosing the block path.
   [[nodiscard]] bool UseCellPath(
       const encryption::EncodingProperties* encoding_properties) const;
 

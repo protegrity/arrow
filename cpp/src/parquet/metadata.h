@@ -144,9 +144,6 @@ class PARQUET_EXPORT ColumnChunkMetaData {
   // get the column descriptor
   const ColumnDescriptor* descr() const;
 
-  // get the reader properties
-  const ReaderProperties* properties() const;
-
   Compression::type compression() const;
   // Indicate if the ColumnChunk compression is supported by the current
   // compiled parquet library.
@@ -469,7 +466,6 @@ class PARQUET_EXPORT ColumnChunkMetaDataBuilder {
   // column geometry statistics
   void SetGeoStatistics(const geospatial::EncodedGeoStatistics& geo_stats);
 
-  void AddKeyValueMetadata(std::shared_ptr<const KeyValueMetadata> key_value_metadata);
   void SetKeyValueMetadata(std::shared_ptr<const KeyValueMetadata> key_value_metadata);
 
   // get the column descriptor

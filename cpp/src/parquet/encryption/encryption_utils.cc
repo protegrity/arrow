@@ -16,8 +16,15 @@
 // under the License.
 
 #include "parquet/encryption/encryption_utils.h"
+
 #include <openssl/err.h>
 #include <openssl/rand.h>
+
+#include <cstring>
+#include <limits>
+#include <sstream>
+
+#include "arrow/util/macros.h"
 #include "parquet/encryption/openssl_internal.h"
 #include "parquet/exception.h"
 

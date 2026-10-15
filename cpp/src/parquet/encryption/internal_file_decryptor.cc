@@ -296,14 +296,15 @@ InternalFileDecryptor::GetColumnDecryptorFactory(
         metadata ? encryption::kColumnMetaData : encryption::kDataPage;
     // Captured by value: the provider is resolved once here rather than re-cast on
     // every invocation of the returned factory (once per page).
-    return [this, aad, ctx = std::move(ctx), dispatch_module_type, column_path,
-            column_key_metadata,
+    const SecureString& external_column_key =
+        GetColumnKey(column_path, column_key_metadata);
+    return [this, aad, ctx = std::move(ctx), dispatch_module_type,
+            column_key = external_column_key,
             parquet_crypto_provider =
                 std::move(external_info.parquet_crypto_provider)]() {
       auto decryptor_instance = std::make_unique<ParquetCryptoProviderDecryptorAdapter>(
           parquet_crypto_provider, ctx, dispatch_module_type);
-      return std::make_unique<Decryptor>(std::move(decryptor_instance),
-                                         GetColumnKey(column_path, column_key_metadata),
+      return std::make_unique<Decryptor>(std::move(decryptor_instance), column_key,
                                          file_aad_, aad, pool_);
     };
   }

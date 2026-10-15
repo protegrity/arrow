@@ -62,15 +62,8 @@ class PARQUET_EXPORT Encryptor {
   // write alongside the plaintext footer bytes. `footer_aad` (CreateFooterAad()'s
   // result) is already stored as aad_ from construction. Only encryptors that
   // override EncryptorInterface::ComputeFooterSignature() support this (currently
-  // just the vendor adapter); others throw.
+  // just the ParquetCryptoProvider adapter); others throw.
   std::vector<uint8_t> ComputeFooterSignature(std::span<const uint8_t> footer);
-
-  /// After the column_writer writes a dictionary or a data page, this method will
-  /// be called so that each encryptor can provide any encryptor-specific column
-  /// metadata that should be stored in the Parquet file. The keys and values are
-  /// added to the column metadata, any conflicting key and value pairs are
-  /// overwritten. There is no need to clear the metadata after the call.
-  std::shared_ptr<KeyValueMetadata> GetKeyValueMetadata(int8_t module_type);
 
   bool EncryptColumnMetaData(
       bool encrypted_footer,

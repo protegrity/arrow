@@ -17,10 +17,12 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
 #include <string>
 
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/test_encryption_util.h"
+#include "parquet/encryption/test_mock_crypto_providers.h"
 
 namespace parquet::encryption::test {
 
@@ -400,11 +402,10 @@ TEST(TestExternalFileEncryptionProperties, SuperClassFieldsSetCorrectly) {
 
   ASSERT_EQ(NULLPTR, out_col_props_3);
   ASSERT_EQ(true, props->app_context().empty());
-  ASSERT_EQ(true, props->configuration_properties().size() == 0);
 }
 
-// The subclass adds two additional fields
-TEST(TestExternalFileEncryptionProperties, SetExternalContextAndConfig) {
+// The subclass adds the application context
+TEST(TestExternalFileEncryptionProperties, SetExternalContext) {
   std::string app_context =
       "{\n"
       "  \"user_id\": \"abc123\",\n"
@@ -413,21 +414,13 @@ TEST(TestExternalFileEncryptionProperties, SetExternalContextAndConfig) {
       "    \"lon\": -84.0\n"
       "  }\n"
       "}";
-  std::map<ParquetCipher::type, std::map<std::string, std::string>>
-      configuration_properties;
-  configuration_properties[ParquetCipher::AES_GCM_V1]["lib_location"] = "path/to/lib.so";
-  configuration_properties[ParquetCipher::AES_GCM_V1]["config_file"] =
-      "path/to/config/file";
 
   ExternalFileEncryptionProperties::Builder builder(kFooterEncryptionKey);
   builder.app_context(app_context);
-  builder.configuration_properties(configuration_properties);
   std::shared_ptr<ExternalFileEncryptionProperties> props = builder.build_external();
 
   ASSERT_EQ(false, props->app_context().empty());
   ASSERT_EQ(app_context, props->app_context());
-  ASSERT_EQ(false, props->configuration_properties().size() == 0);
-  ASSERT_EQ(configuration_properties, props->configuration_properties());
 }
 
 TEST(TestExternalFileEncryptionProperties, EncryptTwoColumnsWithDifferentAlgorithms) {
@@ -555,7 +548,6 @@ TEST(TestExternalFileDecryptionProperties, SuperClassFieldsSetCorrectly) {
   ASSERT_EQ(true, props->plaintext_files_allowed());
   ASSERT_EQ(kFooterEncryptionKey, props->footer_key());
   ASSERT_EQ(true, props->app_context().empty());
-  ASSERT_EQ(true, props->configuration_properties().size() == 0);
 
   auto out_key_retriever = props->key_retriever();
   ASSERT_EQ(kFooterEncryptionKey, out_key_retriever->GetKey("kf"));
@@ -563,7 +555,7 @@ TEST(TestExternalFileDecryptionProperties, SuperClassFieldsSetCorrectly) {
   ASSERT_EQ(kColumnEncryptionKey2, out_key_retriever->GetKey("kc2"));
 }
 
-TEST(TestExternalFileDecryptionProperties, SetExternalContextAndConfig) {
+TEST(TestExternalFileDecryptionProperties, SetExternalContext) {
   std::shared_ptr<parquet::StringKeyIdRetriever> string_kr1 =
       std::make_shared<parquet::StringKeyIdRetriever>();
   std::string app_context =
@@ -574,23 +566,15 @@ TEST(TestExternalFileDecryptionProperties, SetExternalContextAndConfig) {
       "    \"lon\": -84.0\n"
       "  }\n"
       "}";
-  std::map<ParquetCipher::type, std::map<std::string, std::string>> connection_config;
-  std::map<std::string, std::string> inner_config;
-  inner_config["lib_location"] = "path/to/lib.so";
-  inner_config["config_file"] = "path/to/config/file";
-  connection_config[ParquetCipher::AES_GCM_CTR_V1] = inner_config;
 
   auto builder = parquet::ExternalFileDecryptionProperties::Builder();
   builder.footer_key(kFooterEncryptionKey);
   builder.app_context(app_context);
-  builder.configuration_properties(connection_config);
   std::shared_ptr<parquet::ExternalFileDecryptionProperties> props =
       builder.build_external();
 
   ASSERT_EQ(false, props->app_context().empty());
   ASSERT_EQ(app_context, props->app_context());
-  ASSERT_EQ(false, props->configuration_properties().size() == 0);
-  ASSERT_EQ(connection_config, props->configuration_properties());
 }
 
 TEST(TestExternalFileDecryptionProperties, SetInvalidAppContext) {
@@ -598,6 +582,32 @@ TEST(TestExternalFileDecryptionProperties, SetInvalidAppContext) {
   parquet::ExternalFileDecryptionProperties::Builder builder;
   builder.footer_key(kFooterEncryptionKey);
   ASSERT_THROW(builder.app_context(invalid_app_context), parquet::ParquetException);
+}
+
+// The external properties keep the provider the caller passed in, and have none by
+// default (plain AES files do not need one).
+TEST(TestExternalFileEncryptionProperties, ParquetCryptoProviderIsKept) {
+  ExternalFileEncryptionProperties::Builder default_builder(kFooterEncryptionKey);
+  EXPECT_EQ(nullptr, default_builder.build_external()->parquet_crypto_provider());
+
+  auto provider = std::make_shared<XorBlockCryptoProvider>();
+  ExternalFileEncryptionProperties::Builder builder(kFooterEncryptionKey);
+  builder.parquet_crypto_provider(provider);
+  auto props = builder.build_external();
+  EXPECT_EQ(provider, props->parquet_crypto_provider());
+}
+
+TEST(TestExternalFileDecryptionProperties, ParquetCryptoProviderIsKept) {
+  ExternalFileDecryptionProperties::Builder default_builder;
+  default_builder.footer_key(kFooterEncryptionKey);
+  EXPECT_EQ(nullptr, default_builder.build_external()->parquet_crypto_provider());
+
+  auto provider = std::make_shared<XorBlockCryptoProvider>();
+  ExternalFileDecryptionProperties::Builder builder;
+  builder.footer_key(kFooterEncryptionKey);
+  builder.parquet_crypto_provider(provider);
+  auto props = builder.build_external();
+  EXPECT_EQ(provider, props->parquet_crypto_provider());
 }
 
 }  // namespace parquet::encryption::test

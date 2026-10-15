@@ -17,6 +17,7 @@
 
 #include <string_view>
 
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 #include "arrow/array.h"
@@ -40,9 +41,9 @@
 #include "parquet/arrow/reader.h"
 #include "parquet/encryption/crypto_factory.h"
 #include "parquet/encryption/encryption_utils.h"  // for EnsureBackendInitialized
-#include "parquet/encryption/external/test_utils.h"
 #include "parquet/encryption/kms_client.h"
 #include "parquet/encryption/test_in_memory_kms.h"
+#include "parquet/encryption/test_mock_crypto_providers.h"
 
 using arrow::util::SecureString;
 
@@ -54,6 +55,8 @@ const SecureString kColumnMasterKey("1234567890123450");
 constexpr std::string_view kColumnMasterKeyId = "col_key";
 constexpr std::string_view kColumnName = "a";
 constexpr std::string_view kColumnKeyMapping = "col_key: a";
+constexpr std::string_view kExternalAppContext =
+    R"({"user_id": "dataset-test", "location": "test"})";
 
 constexpr std::string_view kBaseDir = "";
 
@@ -358,10 +361,36 @@ class DatasetEncryptionTest : public DatasetEncryptionTestBase<EncryptionTestPar
   }
 };
 
-// Base class to test writing and reading encrypted dataset using
-// ExternalEncryptionConfiguration / ExternalDecryptionConfiguration.
-class DatasetExternalConfigEncryptionTestBase : public testing::Test {
+// Base class to test writing and reading an encrypted dataset through
+// ExternalEncryptionConfiguration / ExternalDecryptionConfiguration (dispatched through a
+// real ParquetCryptoProvider), mirroring DatasetEncryptionTestBase's shape (including its
+// concurrency coverage) for the standard EncryptionConfiguration path.
+struct ExternalEncryptionTestParam {
+  bool concurrently;
+};
+
+std::ostream& operator<<(std::ostream& os, const ExternalEncryptionTestParam& param) {
+  os << (param.concurrently ? "Threaded" : "Serial");
+  return os;
+}
+
+const auto kAllExternalParamValues = ::testing::Values(ExternalEncryptionTestParam{false},
+                                                       ExternalEncryptionTestParam{true});
+
+template <typename T, typename = typename std::enable_if_t<
+                          std::is_base_of_v<ExternalEncryptionTestParam, T>>>
+class DatasetExternalConfigEncryptionTestBase : public testing::TestWithParam<T> {
  public:
+#ifdef ARROW_VALGRIND
+  static constexpr int kConcurrentIterations = 4;
+#else
+  static constexpr int kConcurrentIterations = 20;
+#endif
+
+  // This function creates a mock file system using the current time point, creates a
+  // directory with the given base directory path, and writes a dataset to it using
+  // provided Parquet file write options. The function also checks if the written files
+  // exist in the file system.
   void SetUp() override {
 #ifdef ARROW_VALGRIND
     // Not necessary otherwise, but prevents a Valgrind leak by making sure
@@ -376,16 +405,7 @@ class DatasetExternalConfigEncryptionTestBase : public testing::Test {
 
     ASSERT_NO_FATAL_FAILURE(PrepareTableAndPartitioning());
     ASSERT_OK_AND_ASSIGN(expected_table_, table_->CombineChunks());
-    ASSERT_OK_AND_ASSIGN(expected_table_, SortTable(expected_table_));
 
-    try {
-      library_path_ =
-          parquet::encryption::external::test::TestUtils::GetTestLibraryPath();
-    } catch (const std::exception& e) {
-      GTEST_SKIP() << "External DBPA agent library not available: " << e.what();
-    }
-
-    // Configure CryptoFactory / KMS for dataset write & scan.
     std::unordered_map<std::string, SecureString> key_map;
     key_map.emplace(kColumnMasterKeyId, kColumnMasterKey);
     key_map.emplace(kFooterKeyMasterKeyId, kFooterKeyMasterKey);
@@ -396,61 +416,100 @@ class DatasetExternalConfigEncryptionTestBase : public testing::Test {
             /*wrap_locally=*/true, key_map);
     crypto_factory_->RegisterKmsClientFactory(std::move(kms_client_factory));
     kms_connection_config_ = std::make_shared<parquet::encryption::KmsConnectionConfig>();
+    provider_ = std::make_shared<parquet::encryption::test::XorBlockCryptoProvider>();
 
-    // External encryption config (this is what dataset plumbing should support).
+    // The ColumnName() column is routed through the real ParquetCryptoProvider via
+    // EXTERNAL_PROTECT_V1; ColumnKeysMapping(), if non-empty, AES-encrypts another
+    // column.
     auto external_encryption_config =
         std::make_shared<parquet::encryption::ExternalEncryptionConfiguration>(
             std::string(kFooterKeyName));
     external_encryption_config->uniform_encryption = false;
-    // Encrypt column "a" with the default algorithm/key mapping.
-    external_encryption_config->column_keys = kColumnKeyMapping;
-    // Encrypt column "c" using the external algorithm.
+    external_encryption_config->app_context = std::string(kExternalAppContext);
+    auto column_keys_mapping = ColumnKeysMapping();
+    if (!column_keys_mapping.empty()) {
+      external_encryption_config->column_keys = std::string(column_keys_mapping);
+    }
     external_encryption_config->per_column_encryption.emplace(
-        "c", parquet::encryption::ColumnEncryptionAttributes{
-                 parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
-                 std::string(kColumnMasterKeyId)});
-    external_encryption_config->app_context =
-        "{\"user_id\": \"dataset-test\", \"location\": \"test\"}";
-    external_encryption_config
-        ->configuration_properties[parquet::ParquetCipher::EXTERNAL_PROTECT_V1] = {
-        {"agent_library_path", library_path_}};
+        std::string(ColumnName()), parquet::encryption::ColumnEncryptionAttributes{
+                                       parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
+                                       std::string(kColumnMasterKeyId)});
 
     auto file_format = std::make_shared<ParquetFileFormat>();
     auto parquet_file_write_options =
         checked_pointer_cast<ParquetFileWriteOptions>(file_format->DefaultWriteOptions());
-
     auto parquet_encryption_config = std::make_shared<ParquetEncryptionConfig>();
     parquet_encryption_config->crypto_factory = crypto_factory_;
     parquet_encryption_config->kms_connection_config = kms_connection_config_;
-    parquet_encryption_config->encryption_config = nullptr;
     parquet_encryption_config->external_encryption_config =
         std::move(external_encryption_config);
+    parquet_encryption_config->parquet_crypto_provider = provider_;
     parquet_file_write_options->parquet_encryption_config =
         std::move(parquet_encryption_config);
 
-    // Write dataset.
     auto dataset = std::make_shared<InMemoryDataset>(table_);
     EXPECT_OK_AND_ASSIGN(auto scanner_builder, dataset->NewScan());
-    ARROW_EXPECT_OK(scanner_builder->UseThreads(false));
+    ARROW_EXPECT_OK(scanner_builder->UseThreads(this->GetParam().concurrently));
     EXPECT_OK_AND_ASSIGN(auto scanner, scanner_builder->Finish());
 
-    FileSystemDatasetWriteOptions write_options;
-    write_options.file_write_options = parquet_file_write_options;
-    write_options.filesystem = file_system_;
-    write_options.base_dir = "external";
-    write_options.partitioning = partitioning_;
-    write_options.basename_template = "part{i}.parquet";
-    ASSERT_OK(FileSystemDataset::Write(write_options, std::move(scanner)));
+    if (this->GetParam().concurrently) {
+      // Have a notable number of threads to exhibit multi-threading issues in the
+      // shared XorBlockCryptoProvider instance.
+      ASSERT_OK_AND_ASSIGN(auto pool, arrow::internal::ThreadPool::Make(16));
+      std::vector<Future<>> futures;
+
+      for (int i = 1; i <= kConcurrentIterations; ++i) {
+        FileSystemDatasetWriteOptions write_options;
+        write_options.file_write_options = parquet_file_write_options;
+        write_options.filesystem = file_system_;
+        write_options.base_dir = "thread-" + std::to_string(i);
+        write_options.partitioning = partitioning_;
+        write_options.basename_template = "part{i}.parquet";
+        write_options.preserve_order = true;
+        futures.push_back(
+            DeferNotOk(pool->Submit(FileSystemDataset::Write, write_options, scanner)));
+      }
+
+      for (auto& future : futures) {
+        ASSERT_FINISHES_OK(future);
+      }
+    } else {
+      FileSystemDatasetWriteOptions write_options;
+      write_options.file_write_options = parquet_file_write_options;
+      write_options.filesystem = file_system_;
+      write_options.base_dir = std::string(kBaseDir);
+      write_options.partitioning = partitioning_;
+      write_options.basename_template = "part{i}.parquet";
+      ASSERT_OK(FileSystemDataset::Write(write_options, std::move(scanner)));
+    }
   }
 
   virtual void PrepareTableAndPartitioning() = 0;
+  // The column that gets routed through the real ParquetCryptoProvider.
+  virtual std::string_view ColumnName() { return "c"; }
+  // AES column_keys mapping for any other column; empty means no AES column at all.
+  virtual std::string_view ColumnKeysMapping() { return kColumnKeyMapping; }
 
-  Result<std::shared_ptr<Dataset>> OpenDataset(
-      std::string_view base_dir, const std::shared_ptr<ParquetFileFormat>& file_format) {
+  Result<std::shared_ptr<Dataset>> OpenDataset(std::string_view base_dir) const {
+    auto external_decryption_config =
+        std::make_shared<parquet::encryption::ExternalDecryptionConfiguration>();
+    external_decryption_config->app_context = std::string(kExternalAppContext);
+    auto parquet_scan_options = std::make_shared<ParquetFragmentScanOptions>();
+    auto parquet_decryption_config = std::make_shared<ParquetDecryptionConfig>();
+    parquet_decryption_config->crypto_factory = crypto_factory_;
+    parquet_decryption_config->kms_connection_config = kms_connection_config_;
+    parquet_decryption_config->external_decryption_config =
+        std::move(external_decryption_config);
+    parquet_decryption_config->parquet_crypto_provider = provider_;
+    parquet_scan_options->parquet_decryption_config =
+        std::move(parquet_decryption_config);
+
+    auto file_format = std::make_shared<ParquetFileFormat>();
+    file_format->default_fragment_scan_options = std::move(parquet_scan_options);
+
     fs::FileSelector selector;
     selector.base_dir = base_dir;
     selector.recursive = true;
-
     FileSystemFactoryOptions factory_options;
     factory_options.partitioning = partitioning_;
     factory_options.partition_base_dir = base_dir;
@@ -460,58 +519,50 @@ class DatasetExternalConfigEncryptionTestBase : public testing::Test {
     return dataset_factory->Finish();
   }
 
-  void TestScanDataset() {
-    auto parquet_scan_options = std::make_shared<ParquetFragmentScanOptions>();
-
-    // External decryption config (this is what dataset plumbing should support).
-    auto external_decryption_config =
-        std::make_shared<parquet::encryption::ExternalDecryptionConfiguration>();
-    external_decryption_config->app_context =
-        "{\"user_id\": \"dataset-test\", \"location\": \"test\"}";
-    external_decryption_config
-        ->configuration_properties[parquet::ParquetCipher::EXTERNAL_PROTECT_V1] = {
-        {"agent_library_path", library_path_}};
-
-    auto parquet_decryption_config = std::make_shared<ParquetDecryptionConfig>();
-    parquet_decryption_config->crypto_factory = crypto_factory_;
-    parquet_decryption_config->kms_connection_config = kms_connection_config_;
-    parquet_decryption_config->decryption_config = nullptr;
-    parquet_decryption_config->external_decryption_config =
-        std::move(external_decryption_config);
-    parquet_scan_options->parquet_decryption_config =
-        std::move(parquet_decryption_config);
-
-    auto file_format = std::make_shared<ParquetFileFormat>();
-    file_format->default_fragment_scan_options = std::move(parquet_scan_options);
-
-    ASSERT_OK_AND_ASSIGN(auto dataset, OpenDataset("external", file_format));
-    for (int i = 0; i < 2; ++i) {
-      ASSERT_OK_AND_ASSIGN(auto read_table, ReadDataset(dataset, /*use_threads=*/false));
-      CheckDatasetResults(read_table);
-    }
-  }
-
   static Result<std::shared_ptr<Table>> ReadDataset(
-      const std::shared_ptr<Dataset>& dataset, bool use_threads) {
+      const std::shared_ptr<Dataset>& dataset) {
     ARROW_ASSIGN_OR_RAISE(auto scanner_builder, dataset->NewScan());
-    ARROW_EXPECT_OK(scanner_builder->UseThreads(use_threads));
     ARROW_ASSIGN_OR_RAISE(auto scanner, scanner_builder->Finish());
+    ARROW_EXPECT_OK(scanner_builder->UseThreads(
+        testing::WithParamInterface<T>::GetParam().concurrently));
     return scanner->ToTable();
   }
 
   void CheckDatasetResults(const std::shared_ptr<Table>& table) {
     ASSERT_OK(table->ValidateFull());
+    // Make results comparable despite chunking differences
     ASSERT_OK_AND_ASSIGN(auto combined_table, table->CombineChunks());
-    ASSERT_OK_AND_ASSIGN(auto sorted_table, SortTable(combined_table));
-    AssertTablesEqual(*sorted_table, *expected_table_);
+    AssertTablesEqual(*combined_table, *expected_table_);
   }
 
-  Result<std::shared_ptr<Table>> SortTable(const std::shared_ptr<Table>& table) {
-    compute::SortOptions options({compute::SortKey("a")});
-    ARROW_ASSIGN_OR_RAISE(auto indices, compute::SortIndices(table, options));
-    ARROW_ASSIGN_OR_RAISE(auto sorted, compute::Take(table, indices));
-    EXPECT_EQ(sorted.kind(), Datum::TABLE);
-    return sorted.table();
+  void TestScanDataset() {
+    if (this->GetParam().concurrently) {
+      ASSERT_OK_AND_ASSIGN(auto dataset, OpenDataset("thread-1"));
+
+      ASSERT_OK_AND_ASSIGN(auto pool, arrow::internal::ThreadPool::Make(16));
+      std::vector<Future<std::shared_ptr<Table>>> futures;
+      for (int i = 0; i < kConcurrentIterations; ++i) {
+        futures.push_back(DeferNotOk(pool->Submit(ReadDataset, dataset)));
+      }
+      for (auto& future : futures) {
+        ASSERT_OK_AND_ASSIGN(auto read_table, future.result());
+        CheckDatasetResults(read_table);
+      }
+
+      // Finally check datasets written by all other threads are as expected.
+      for (int i = 2; i <= kConcurrentIterations; ++i) {
+        ASSERT_OK_AND_ASSIGN(dataset, OpenDataset("thread-" + std::to_string(i)));
+        ASSERT_OK_AND_ASSIGN(auto read_table, ReadDataset(dataset));
+        CheckDatasetResults(read_table);
+      }
+    } else {
+      ASSERT_OK_AND_ASSIGN(auto dataset, OpenDataset(kBaseDir));
+      // Reuse the dataset above to scan it twice to make sure decryption works correctly.
+      for (int i = 0; i < 2; ++i) {
+        ASSERT_OK_AND_ASSIGN(auto read_table, ReadDataset(dataset));
+        ASSERT_NO_FATAL_FAILURE(CheckDatasetResults(read_table));
+      }
+    }
   }
 
  protected:
@@ -520,34 +571,209 @@ class DatasetExternalConfigEncryptionTestBase : public testing::Test {
   std::shared_ptr<Partitioning> partitioning_;
   std::shared_ptr<parquet::encryption::CryptoFactory> crypto_factory_;
   std::shared_ptr<parquet::encryption::KmsConnectionConfig> kms_connection_config_;
-  std::string library_path_;
+  std::shared_ptr<parquet::encryption::test::XorBlockCryptoProvider> provider_;
 };
 
 class DatasetExternalConfigEncryptionTest
-    : public DatasetExternalConfigEncryptionTestBase {
+    : public DatasetExternalConfigEncryptionTestBase<ExternalEncryptionTestParam> {
  public:
   void PrepareTableAndPartitioning() override {
-    auto table_schema = schema({field("a", int64()), field("c", int64()),
-                                field("e", int64()), field("part", utf8())});
+    auto table_schema = schema({field(std::string(kColumnName), int64()),
+                                field("c", int64()), field("part", utf8())});
     table_ = TableFromJSON(table_schema, {R"([
-                          [ 0, 9, 1, "a" ],
-                          [ 1, 8, 2, "a" ],
-                          [ 2, 7, 1, "c" ],
-                          [ 3, 6, 2, "c" ],
-                          [ 4, 5, 1, "e" ],
-                          [ 5, 4, 2, "e" ],
-                          [ 6, 3, 1, "g" ],
-                          [ 7, 2, 2, "g" ],
-                          [ 8, 1, 1, "i" ],
-                          [ 9, 0, 2, "i" ]
+                          [ 0, 9, "a" ],
+                          [ 1, 8, "a" ],
+                          [ 2, 7, "c" ],
+                          [ 3, 6, "c" ]
                         ])"});
     partitioning_ = std::make_shared<HivePartitioning>(schema({field("part", utf8())}));
   }
 };
 
-TEST_F(DatasetExternalConfigEncryptionTest, WriteReadDatasetWithExternalConfigs) {
+TEST_P(DatasetExternalConfigEncryptionTest, WriteReadDatasetWithExternalConfigs) {
+  // The write above must have actually routed column "c" through the provider.
+  ASSERT_GT(provider_->encrypt_block_calls(), 0);
+  ASSERT_NO_FATAL_FAILURE(TestScanDataset());
+  ASSERT_GT(provider_->decrypt_block_calls(), 0);
+  // ExternalEncryptionConfiguration/ExternalDecryptionConfiguration::app_context must
+  // reach the provider verbatim, on both the write (encrypt) and read (decrypt) side.
+  for (const auto& ctx : provider_->seen_contexts()) {
+    ASSERT_EQ(ctx.app_context, kExternalAppContext);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(DatasetExternalConfigEncryptionTest,
+                         DatasetExternalConfigEncryptionTest, kAllExternalParamValues);
+
+// GH-39444: mirrors LargeRowCountEncryptionTest for the EXTERNAL_PROTECT_V1 path.
+class LargeRowCountExternalConfigEncryptionTest
+    : public DatasetExternalConfigEncryptionTestBase<ExternalEncryptionTestParam> {
+ public:
+  void PrepareTableAndPartitioning() override {
+    // Specifically chosen to be greater than batch size for triggering prefetch.
+    constexpr int kRowCount = 32769;
+    constexpr int kBatchCount = 5;
+
+    arrow::random::RandomArrayGenerator rand_gen(0);
+    std::vector<std::shared_ptr<arrow::Array>> a_arrays, c_arrays;
+    for (int i = 0; i < kBatchCount; i++) {
+      a_arrays.push_back(rand_gen.Float32(kRowCount, 0.0, 1.0, false));
+      c_arrays.push_back(rand_gen.Float32(kRowCount, 0.0, 1.0, false));
+    }
+    ASSERT_OK_AND_ASSIGN(auto column_a, ChunkedArray::Make(a_arrays, float32()));
+    ASSERT_OK_AND_ASSIGN(auto column_c, ChunkedArray::Make(c_arrays, float32()));
+    auto table_schema =
+        schema({field(std::string(kColumnName), float32()), field("c", float32())});
+
+    table_ = arrow::Table::Make(table_schema, {column_a, column_c});
+    partitioning_ = std::make_shared<dataset::DirectoryPartitioning>(arrow::schema({}));
+  }
+};
+
+TEST_P(LargeRowCountExternalConfigEncryptionTest, ReadEncryptLargeRowCount) {
   ASSERT_NO_FATAL_FAILURE(TestScanDataset());
 }
+
+INSTANTIATE_TEST_SUITE_P(LargeRowCountExternalConfigEncryptionTest,
+                         LargeRowCountExternalConfigEncryptionTest,
+                         kAllExternalParamValues);
+
+struct NestedFieldsExternalEncryptionTestParam : ExternalEncryptionTestParam {
+  std::string column_name;
+
+  explicit NestedFieldsExternalEncryptionTestParam(std::string column_name)
+      : ExternalEncryptionTestParam{false}, column_name(std::move(column_name)) {}
+};
+
+std::ostream& operator<<(std::ostream& os,
+                         const NestedFieldsExternalEncryptionTestParam& param) {
+  os << param.column_name;
+  return os;
+}
+
+// Mirrors NestedFieldsEncryptionTest, verifying a nested-field dot-path (list/map/struct
+// element, key, or value) correctly reaches the real ParquetCryptoProvider via
+// EXTERNAL_PROTECT_V1. Unlike the internal path, there is no wrong-key equivalent test
+// here: XorBlockCryptoProvider has no notion of a mismatched key to reject.
+class NestedFieldsExternalConfigEncryptionTest
+    : public DatasetExternalConfigEncryptionTestBase<
+          NestedFieldsExternalEncryptionTestParam> {
+ public:
+  NestedFieldsExternalConfigEncryptionTest()
+      : id_data_(ArrayFromJSON(int8(), "[1,2,3]")) {}
+
+  void PrepareTableAndPartitioning() override {
+    auto table_schema = schema({field("id", int8()), field("a", column_type_)});
+    table_ = arrow::Table::Make(table_schema, {id_data_, column_data_});
+    partitioning_ = std::make_shared<dataset::DirectoryPartitioning>(arrow::schema({}));
+  }
+
+  std::string_view ColumnName() override { return GetParam().column_name; }
+  std::string_view ColumnKeysMapping() override { return ""; }
+
+ protected:
+  std::shared_ptr<DataType> column_type_;
+  std::shared_ptr<Array> id_data_;
+  std::shared_ptr<Array> column_data_;
+};
+
+class ListFieldExternalConfigEncryptionTest
+    : public NestedFieldsExternalConfigEncryptionTest {
+ public:
+  ListFieldExternalConfigEncryptionTest() {
+    column_type_ = list(int32());
+    column_data_ = ArrayFromJSON(column_type_, "[[1, 2, 3], [4, 5], [6]]");
+  }
+};
+
+class MapFieldExternalConfigEncryptionTest
+    : public NestedFieldsExternalConfigEncryptionTest {
+ public:
+  MapFieldExternalConfigEncryptionTest() {
+    column_type_ = map(utf8(), int32());
+    column_data_ =
+        ArrayFromJSON(column_type_, R"([[["one", 1]], [["two", 2]], [["three", 3]]])");
+  }
+};
+
+class StructFieldExternalConfigEncryptionTest
+    : public NestedFieldsExternalConfigEncryptionTest {
+ public:
+  StructFieldExternalConfigEncryptionTest() {
+    column_type_ = struct_({field("f1", int32()), field("f2", utf8())});
+    column_data_ = ArrayFromJSON(
+        column_type_,
+        R"([{"f1":1, "f2":"one"}, {"f1":2, "f2":"two"}, {"f1":3, "f2":"three"}])");
+  }
+};
+
+class DeepNestedFieldExternalConfigEncryptionTest
+    : public NestedFieldsExternalConfigEncryptionTest {
+ public:
+  DeepNestedFieldExternalConfigEncryptionTest() {
+    auto struct_type = struct_({field("f1", int32()), field("f2", utf8())});
+    auto map_type = map(int32(), struct_type);
+    auto list_type = list(map_type);
+
+    column_type_ = list_type;
+    column_data_ = ArrayFromJSON(column_type_, R"([
+      [
+        [[1, {"f1":1, "f2":"one"}], [2, {"f1":2, "f2":"two"}]],
+        [[3, {"f1":3, "f2":"three"}]]
+      ],
+      [
+        [[4, {"f1":4, "f2":"four"}]]
+      ],
+      []
+    ])");
+  }
+};
+
+const auto kListFieldExternalEncryptionTestParamValues =
+    ::testing::Values(NestedFieldsExternalEncryptionTestParam("a"),
+                      NestedFieldsExternalEncryptionTestParam("a.list.element"));
+
+const auto kMapFieldExternalEncryptionTestParamValues =
+    ::testing::Values(NestedFieldsExternalEncryptionTestParam("a"),
+                      NestedFieldsExternalEncryptionTestParam("a.key_value.key"),
+                      NestedFieldsExternalEncryptionTestParam("a.key_value.value"));
+
+const auto kStructFieldExternalEncryptionTestParamValues =
+    ::testing::Values(NestedFieldsExternalEncryptionTestParam("a"),
+                      NestedFieldsExternalEncryptionTestParam("a.f1"),
+                      NestedFieldsExternalEncryptionTestParam("a.f2"));
+
+const auto kDeepNestedFieldExternalEncryptionTestParamValues = ::testing::Values(
+    NestedFieldsExternalEncryptionTestParam("a"),
+    NestedFieldsExternalEncryptionTestParam("a.list.element.key_value.key"),
+    NestedFieldsExternalEncryptionTestParam("a.list.element.key_value.value.f1"),
+    NestedFieldsExternalEncryptionTestParam("a.list.element.key_value.value.f2"));
+
+TEST_P(ListFieldExternalConfigEncryptionTest, ColumnKeys) {
+  ASSERT_NO_FATAL_FAILURE(TestScanDataset());
+}
+
+TEST_P(MapFieldExternalConfigEncryptionTest, ColumnKeys) {
+  ASSERT_NO_FATAL_FAILURE(TestScanDataset());
+}
+
+TEST_P(StructFieldExternalConfigEncryptionTest, ColumnKeys) {
+  ASSERT_NO_FATAL_FAILURE(TestScanDataset());
+}
+
+TEST_P(DeepNestedFieldExternalConfigEncryptionTest, ColumnKeys) {
+  ASSERT_NO_FATAL_FAILURE(TestScanDataset());
+}
+
+// Test writing and reading EXTERNAL_PROTECT_V1-encrypted nested fields.
+INSTANTIATE_TEST_SUITE_P(List, ListFieldExternalConfigEncryptionTest,
+                         kListFieldExternalEncryptionTestParamValues);
+INSTANTIATE_TEST_SUITE_P(Map, MapFieldExternalConfigEncryptionTest,
+                         kMapFieldExternalEncryptionTestParamValues);
+INSTANTIATE_TEST_SUITE_P(Struct, StructFieldExternalConfigEncryptionTest,
+                         kStructFieldExternalEncryptionTestParamValues);
+INSTANTIATE_TEST_SUITE_P(DeepNested, DeepNestedFieldExternalConfigEncryptionTest,
+                         kDeepNestedFieldExternalEncryptionTestParamValues);
 
 TEST(DatasetExternalConfigEncryptionValidationTest, RejectBothEncryptionConfigs) {
   ASSERT_OK_AND_ASSIGN(auto file_system, fs::internal::MockFileSystem::Make(
@@ -592,17 +818,58 @@ TEST(DatasetExternalConfigEncryptionValidationTest, RejectBothEncryptionConfigs)
   auto table_schema = schema({field("a", int64()), field("part", utf8())});
   fs::FileLocator destination_locator{file_system, "part0.parquet"};
 
-  try {
-    (void)file_format->MakeWriter(sink, table_schema, parquet_file_write_options,
-                                  destination_locator);
-    FAIL() << "Expected ParquetException";
-  } catch (const parquet::ParquetException& e) {
-    const std::string msg = e.what();
-    ASSERT_NE(
-        msg.find("Cannot set both encryption_config and external_encryption_config"),
-        std::string::npos)
-        << msg;
-  }
+  EXPECT_RAISES_WITH_MESSAGE_THAT(
+      Invalid,
+      ::testing::HasSubstr(
+          "Cannot set both encryption_config and external_encryption_config"),
+      file_format->MakeWriter(sink, table_schema, parquet_file_write_options,
+                              destination_locator));
+}
+
+// MakeWriter() runs on a worker thread, so a configuration the crypto factory rejects
+// has to come back as a Status instead of an exception.
+TEST(DatasetExternalConfigEncryptionValidationTest,
+     ExternalProtectColumnWithoutProviderReturnsStatus) {
+  ASSERT_OK_AND_ASSIGN(auto file_system, fs::internal::MockFileSystem::Make(
+                                             std::chrono::system_clock::now(), {}));
+  ASSERT_OK(file_system->CreateDir(std::string(kBaseDir)));
+
+  std::unordered_map<std::string, SecureString> key_map;
+  key_map.emplace(kColumnMasterKeyId, kColumnMasterKey);
+  key_map.emplace(kFooterKeyMasterKeyId, kFooterKeyMasterKey);
+
+  auto crypto_factory = std::make_shared<parquet::encryption::CryptoFactory>();
+  crypto_factory->RegisterKmsClientFactory(
+      std::make_shared<parquet::encryption::TestOnlyInMemoryKmsClientFactory>(
+          /*wrap_locally=*/true, key_map));
+
+  auto external_encryption_config =
+      std::make_shared<parquet::encryption::ExternalEncryptionConfiguration>(
+          std::string(kFooterKeyName));
+  parquet::encryption::ColumnEncryptionAttributes attributes;
+  attributes.parquet_cipher = parquet::ParquetCipher::EXTERNAL_PROTECT_V1;
+  attributes.key_id = std::string(kColumnMasterKeyId);
+  external_encryption_config->per_column_encryption["a"] = attributes;
+
+  auto parquet_encryption_config = std::make_shared<ParquetEncryptionConfig>();
+  parquet_encryption_config->crypto_factory = crypto_factory;
+  parquet_encryption_config->kms_connection_config =
+      std::make_shared<parquet::encryption::KmsConnectionConfig>();
+  parquet_encryption_config->external_encryption_config = external_encryption_config;
+
+  auto file_format = std::make_shared<ParquetFileFormat>();
+  auto parquet_file_write_options =
+      checked_pointer_cast<ParquetFileWriteOptions>(file_format->DefaultWriteOptions());
+  parquet_file_write_options->parquet_encryption_config = parquet_encryption_config;
+
+  ASSERT_OK_AND_ASSIGN(auto sink, io::BufferOutputStream::Create());
+  auto table_schema = schema({field("a", int64()), field("part", utf8())});
+  fs::FileLocator destination_locator{file_system, "part0.parquet"};
+
+  EXPECT_RAISES_WITH_MESSAGE_THAT(
+      IOError, ::testing::HasSubstr("parquet_crypto_provider must be set"),
+      file_format->MakeWriter(sink, table_schema, parquet_file_write_options,
+                              destination_locator));
 }
 
 TEST(DatasetExternalConfigEncryptionValidationTest, RejectBothDecryptionConfigs) {

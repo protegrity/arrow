@@ -405,8 +405,6 @@ class ColumnChunkMetaData::ColumnChunkMetaDataImpl {
 
   const ColumnDescriptor* descr() const { return descr_; }
 
-  const ReaderProperties* properties() const { return &properties_; }
-
   const std::vector<Encoding::type>& encodings() const { return encodings_; }
 
   const std::vector<PageEncodingStats>& encoding_stats() const { return encoding_stats_; }
@@ -583,10 +581,6 @@ Compression::type ColumnChunkMetaData::compression() const {
 }
 
 const ColumnDescriptor* ColumnChunkMetaData::descr() const { return impl_->descr(); }
-
-const ReaderProperties* ColumnChunkMetaData::properties() const {
-  return impl_->properties();
-}
 
 bool ColumnChunkMetaData::can_decompress() const {
   return ::arrow::util::Codec::IsAvailable(compression());
@@ -835,7 +829,7 @@ class FileMetaData::FileMetaDataImpl {
         encryption_algorithm().algorithm == ParquetCipher::EXTERNAL_PROTECT_V1) {
       throw ParquetException(
           "FileMetaData::VerifySignature(const void*) cannot verify an "
-          "EXTERNAL_PROTECT_V1 footer signature: its length is vendor-defined and "
+          "EXTERNAL_PROTECT_V1 footer signature: its length is provider-defined and "
           "not known to this deprecated, length-less API. Read the file through "
           "ParquetFileReader/parquet::arrow::FileReader instead, which verifies the "
           "signature internally.");
@@ -901,7 +895,7 @@ class FileMetaData::FileMetaDataImpl {
 
       if (FromThrift(metadata_->encryption_algorithm).algorithm ==
           ParquetCipher::EXTERNAL_PROTECT_V1) {
-        // Vendor-defined opaque signature blob -- no assumed byte layout here,
+        // Provider-defined opaque signature blob -- no assumed byte layout here,
         // unlike the AES-GCM-specific nonce/tag slicing below. (encryption_algorithm()
         // isn't usable here: it's non-const, and WriteTo() is a const method.)
         std::vector<uint8_t> signature =
@@ -917,19 +911,9 @@ class FileMetaData::FileMetaDataImpl {
       const auto serialized_data_len = static_cast<int64_t>(serialized_data_span.size());
 
       // encrypt the footer key
-      std::vector<uint8_t> encrypted_data;
-      int32_t encrypted_len;
-      if (encryptor->CanCalculateCiphertextLength()) {
-        encrypted_data =
-            std::vector<uint8_t>(encryptor->CiphertextLength(serialized_data_len));
-        encrypted_len = encryptor->Encrypt(serialized_data_span, encrypted_data);
-      } else {
-        auto resizable_buffer = ::arrow::AllocateResizableBuffer(0);
-        encrypted_len = encryptor->EncryptWithManagedBuffer(serialized_data_span,
-                                                            resizable_buffer->get());
-        encrypted_data.assign(resizable_buffer->get()->data(),
-                              resizable_buffer->get()->data() + encrypted_len);
-      }
+      std::vector<uint8_t> encrypted_data(
+          encryptor->CiphertextLength(serialized_data_len));
+      int32_t encrypted_len = encryptor->Encrypt(serialized_data_span, encrypted_data);
 
       // write unencrypted footer
       PARQUET_THROW_NOT_OK(dst->Write(serialized_data_span.data(), serialized_data_len));
@@ -1240,7 +1224,7 @@ bool FileMetaData::VerifySignature(std::span<const uint8_t> serialized_metadata,
   DCHECK_NE(file_decryptor, nullptr);
 
   if (file_decryptor->algorithm() == ParquetCipher::EXTERNAL_PROTECT_V1) {
-    // Vendor-defined opaque signature blob -- delegates to the vendor provider via
+    // Provider-defined opaque signature blob -- delegates to the provider via
     // Decryptor::VerifyFooterSignature() rather than assuming an AES-GCM nonce+tag
     // layout, unlike the fixed-size-signature path below.
     auto decryptor = file_decryptor->GetFooterDecryptor();
@@ -1870,29 +1854,28 @@ class ColumnChunkMetaDataBuilder::ColumnChunkMetaDataBuilderImpl {
         // Serialize and encrypt ColumnMetadata separately
         // Thrift-serialize the ColumnMetaData structure,
         // encrypt it with the column key, and write to encrypted_column_metadata
-        const auto serialized_data_span =
+        auto serialized_data_span =
             serializer.SerializeToBuffer(&column_chunk_->meta_data);
-        const auto serialized_data_len =
-            static_cast<int64_t>(serialized_data_span.size());
 
-        std::vector<uint8_t> encrypted_data;
+        std::string encrypted_metadata;
         int32_t encrypted_len;
         if (encryptor->CanCalculateCiphertextLength()) {
-          encrypted_data =
-              std::vector<uint8_t>(encryptor->CiphertextLength(serialized_data_len));
-          encrypted_len = encryptor->Encrypt(serialized_data_span, encrypted_data);
+          encrypted_metadata.resize(encryptor->CiphertextLength(
+              static_cast<int64_t>(serialized_data_span.size())));
+          encrypted_len = encryptor->Encrypt(
+              serialized_data_span,
+              std::span(reinterpret_cast<uint8_t*>(encrypted_metadata.data()),
+                        encrypted_metadata.size()));
         } else {
-          auto resizable_buffer = ::arrow::AllocateResizableBuffer(0);
-          encrypted_len = encryptor->EncryptWithManagedBuffer(serialized_data_span,
-                                                              resizable_buffer->get());
-          encrypted_data.assign(resizable_buffer->get()->data(),
-                                resizable_buffer->get()->data() + encrypted_len);
+          PARQUET_ASSIGN_OR_THROW(auto buffer,
+                                  ::arrow::AllocateResizableBuffer(0, encryptor->pool()));
+          encrypted_len =
+              encryptor->EncryptWithManagedBuffer(serialized_data_span, buffer.get());
+          encrypted_metadata.assign(reinterpret_cast<const char*>(buffer->data()),
+                                    encrypted_len);
         }
-
-        const char* temp =
-            const_cast<const char*>(reinterpret_cast<char*>(encrypted_data.data()));
-        std::string encrypted_column_metadata(temp, encrypted_len);
-        column_chunk_->__set_encrypted_column_metadata(encrypted_column_metadata);
+        encrypted_metadata.resize(encrypted_len);
+        column_chunk_->__set_encrypted_column_metadata(std::move(encrypted_metadata));
 
         if (encrypted_footer) {
           column_chunk_->__isset.meta_data = false;
@@ -1918,16 +1901,6 @@ class ColumnChunkMetaDataBuilder::ColumnChunkMetaDataBuilderImpl {
 
   void SetKeyValueMetadata(std::shared_ptr<const KeyValueMetadata> key_value_metadata) {
     key_value_metadata_ = std::move(key_value_metadata);
-  }
-
-  void AddKeyValueMetadata(std::shared_ptr<const KeyValueMetadata> key_value_metadata) {
-    if (key_value_metadata == nullptr) return;
-
-    if (key_value_metadata_ == nullptr) {
-      key_value_metadata_ = std::move(key_value_metadata);
-    } else {
-      key_value_metadata_ = key_value_metadata_->Merge(*key_value_metadata);
-    }
   }
 
  private:
@@ -2013,11 +1986,6 @@ void ColumnChunkMetaDataBuilder::SetSizeStatistics(const SizeStatistics& size_st
 void ColumnChunkMetaDataBuilder::SetGeoStatistics(
     const geospatial::EncodedGeoStatistics& result) {
   impl_->SetGeoStatistics(result);
-}
-
-void ColumnChunkMetaDataBuilder::AddKeyValueMetadata(
-    std::shared_ptr<const KeyValueMetadata> key_value_metadata) {
-  impl_->AddKeyValueMetadata(std::move(key_value_metadata));
 }
 
 void ColumnChunkMetaDataBuilder::SetKeyValueMetadata(

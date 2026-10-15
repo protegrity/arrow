@@ -18,6 +18,10 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "arrow/util/secure_string.h"
 
 #include "parquet/encryption/crypto_factory.h"
@@ -35,7 +39,7 @@ using ::testing::StrEq;
 namespace parquet::encryption::test {
 
 namespace {
-// Minimal stand-in for a vendor ParquetCryptoProvider: only used here to verify
+// Minimal stand-in for an external ParquetCryptoProvider: only used here to verify
 // CryptoFactory wires it through, never actually invoked to encrypt/decrypt.
 class NoOpParquetCryptoProvider : public ParquetCryptoProvider {
  public:
@@ -212,8 +216,6 @@ TEST_F(CryptoFactoryTest, ExternalEncryptionConfig) {
   config.per_column_encryption = per_column_encryption;
   config.app_context =
       "{\"user_id\": \"abc123\", \"location\": {\"lat\": 9.7489, \"lon\": -83.7534}}";
-  config.configuration_properties = {
-      {ParquetCipher::EXTERNAL_PROTECT_V1, {{"file_path", "path/to/file"}}}};
 
   auto properties =
       crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, nullptr);
@@ -247,23 +249,7 @@ TEST_F(CryptoFactoryTest, ExternalEncryptionConfig) {
   EXPECT_FALSE(column_properties_3->parquet_cipher().has_value());
 
   EXPECT_FALSE(properties->app_context().empty());
-  EXPECT_FALSE(properties->configuration_properties().empty());
   EXPECT_EQ(properties->app_context(), config.app_context);
-  EXPECT_NE(
-      properties->configuration_properties().find(ParquetCipher::EXTERNAL_PROTECT_V1),
-      properties->configuration_properties().end());
-  EXPECT_EQ(properties->configuration_properties().find(ParquetCipher::AES_GCM_CTR_V1),
-            properties->configuration_properties().end());
-  EXPECT_NE(properties->configuration_properties()
-                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
-                .find("file_path"),
-            properties->configuration_properties()
-                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
-                .end());
-  EXPECT_EQ(properties->configuration_properties()
-                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
-                .at("file_path"),
-            "path/to/file");
 }
 
 TEST_F(CryptoFactoryTest, ExternalEncryptionConfigWithExternalProtectRequiresProvider) {
@@ -371,7 +357,6 @@ TEST_F(CryptoFactoryTest, BasicDecryptionConfig) {
   EXPECT_TRUE(properties->plaintext_files_allowed());
   EXPECT_THAT(properties->key_retriever(), testing::NotNull());
   EXPECT_TRUE(properties->app_context().empty());
-  EXPECT_TRUE(properties->configuration_properties().empty());
 }
 
 TEST_F(CryptoFactoryTest, ExternalDecryptionConfig) {
@@ -379,8 +364,6 @@ TEST_F(CryptoFactoryTest, ExternalDecryptionConfig) {
   config.cache_lifetime_seconds = 600;
   config.app_context =
       "{\"user_id\": \"abc123\", \"location\": {\"lat\": 9.7489, \"lon\": -83.7534}}";
-  config.configuration_properties = {
-      {ParquetCipher::EXTERNAL_PROTECT_V1, {{"file_path", "path/to/file"}}}};
 
   auto properties =
       crypto_factory_.GetExternalFileDecryptionProperties(kms_config_, config, nullptr);
@@ -388,33 +371,22 @@ TEST_F(CryptoFactoryTest, ExternalDecryptionConfig) {
   EXPECT_TRUE(properties->plaintext_files_allowed());
   EXPECT_THAT(properties->key_retriever(), testing::NotNull());
   EXPECT_FALSE(properties->app_context().empty());
-  EXPECT_FALSE(properties->configuration_properties().empty());
   EXPECT_EQ(properties->app_context(), config.app_context);
-  EXPECT_NE(
-      properties->configuration_properties().find(ParquetCipher::EXTERNAL_PROTECT_V1),
-      properties->configuration_properties().end());
-  EXPECT_EQ(properties->configuration_properties().find(ParquetCipher::AES_GCM_CTR_V1),
-            properties->configuration_properties().end());
-  EXPECT_NE(properties->configuration_properties()
-                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
-                .find("file_path"),
-            properties->configuration_properties()
-                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
-                .end());
-  EXPECT_EQ(properties->configuration_properties()
-                .at(ParquetCipher::EXTERNAL_PROTECT_V1)
-                .at("file_path"),
-            "path/to/file");
+  EXPECT_EQ(nullptr, properties->parquet_crypto_provider());
 }
 
 TEST_F(CryptoFactoryTest, ExternalDecryptionConfigWithParquetCryptoProvider) {
   ExternalDecryptionConfiguration config;
   config.cache_lifetime_seconds = 600;
+  config.app_context = "{\"user_id\": \"abc123\"}";
   auto parquet_crypto_provider = std::make_shared<NoOpParquetCryptoProvider>();
 
   auto properties = crypto_factory_.GetExternalFileDecryptionProperties(
       kms_config_, config, parquet_crypto_provider);
   EXPECT_EQ(properties->parquet_crypto_provider(), parquet_crypto_provider);
+  // The provider travels together with the application context and the key retriever.
+  EXPECT_EQ(properties->app_context(), config.app_context);
+  EXPECT_THAT(properties->key_retriever(), testing::NotNull());
 }
 
 TEST_F(CryptoFactoryTest, ExternalDecryptionConfigWithInvalidAppContextThrowsException) {
@@ -431,6 +403,77 @@ TEST_F(CryptoFactoryTest, ExternalDecryptionConfigWithInvalidAppContextThrowsExc
   } catch (...) {
     FAIL() << "Caught unexpected exception type";
   }
+}
+
+TEST_F(CryptoFactoryTest, PerColumnExternalProtectWithoutProviderThrowsException) {
+  ExternalEncryptionConfiguration config("kf");
+  ColumnEncryptionAttributes attributes;
+  attributes.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
+  attributes.key_id = "kc1";
+  config.per_column_encryption["col1"] = attributes;
+
+  EXPECT_THAT(
+      [&] {
+        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, nullptr);
+      },
+      ::testing::ThrowsMessage<ParquetException>(
+          HasSubstr("parquet_crypto_provider must be set when column [col1] uses the "
+                    "EXTERNAL_PROTECT_V1 algorithm")));
+}
+
+// A column can opt in to EXTERNAL_PROTECT_V1 while the file-level algorithm stays AES.
+TEST_F(CryptoFactoryTest, PerColumnExternalProtectV1Column) {
+  ExternalEncryptionConfiguration config("kf");
+  config.column_keys = "kc3:col3";
+  ColumnEncryptionAttributes attributes;
+  attributes.parquet_cipher = ParquetCipher::EXTERNAL_PROTECT_V1;
+  attributes.key_id = "kc1";
+  config.per_column_encryption["col1"] = attributes;
+  auto parquet_crypto_provider = std::make_shared<NoOpParquetCryptoProvider>();
+
+  auto properties = crypto_factory_.GetExternalFileEncryptionProperties(
+      kms_config_, config, parquet_crypto_provider);
+
+  EXPECT_EQ(parquet_crypto_provider, properties->parquet_crypto_provider());
+  EXPECT_EQ(ParquetCipher::AES_GCM_V1, properties->algorithm().algorithm);
+  EXPECT_EQ(2, properties->encrypted_columns().size());
+
+  auto external_column = properties->column_encryption_properties("col1");
+  EXPECT_EQ("col1", external_column->column_path());
+  ASSERT_TRUE(external_column->parquet_cipher().has_value());
+  EXPECT_EQ(ParquetCipher::EXTERNAL_PROTECT_V1,
+            external_column->parquet_cipher().value());
+  EXPECT_EQ(16, external_column->key().size());
+  EXPECT_THAT(external_column->key_metadata(), HasSubstr("kc1"));
+
+  auto aes_column = properties->column_encryption_properties("col3");
+  EXPECT_EQ("col3", aes_column->column_path());
+  EXPECT_FALSE(aes_column->parquet_cipher().has_value());
+}
+
+TEST_F(CryptoFactoryTest, InvalidDataKeyLengthThrowsException) {
+  ExternalEncryptionConfiguration config("kf");
+  config.column_keys = "kc1:col1";
+  config.data_key_length_bits = 100;
+
+  EXPECT_THAT(
+      [&] {
+        crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, nullptr);
+      },
+      ::testing::ThrowsMessage<ParquetException>(
+          HasSubstr("Wrong data key length : 100")));
+}
+
+// plaintext_footer only applies to column encryption; uniform encryption always
+// encrypts the footer.
+TEST_F(CryptoFactoryTest, UniformEncryptionIgnoresPlaintextFooter) {
+  ExternalEncryptionConfiguration config("kf");
+  config.uniform_encryption = true;
+  config.plaintext_footer = true;
+
+  auto properties =
+      crypto_factory_.GetExternalFileEncryptionProperties(kms_config_, config, nullptr);
+  EXPECT_TRUE(properties->encrypted_footer());
 }
 
 }  // namespace parquet::encryption::test

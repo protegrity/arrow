@@ -982,7 +982,7 @@ struct ExternalProtectV1 {
    * cipher-agnostic **/
   1: optional binary aad_prefix
 
-  /** Unique file identifier part of AAD suffix. Threaded through so vendor
+  /** Unique file identifier part of AAD suffix. Threaded through so external
    * ciphers with positional binding (e.g. AES-GCM) can reconstruct file_aad
    * on read, mirroring AesGcmV1/AesGcmCtrV1 **/
   2: optional binary aad_file_unique

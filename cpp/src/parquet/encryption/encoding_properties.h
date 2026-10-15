@@ -22,12 +22,15 @@
 #include <optional>
 #include <string>
 
-#include "arrow/util/compression.h"
-#include "parquet/column_page.h"
-#include "parquet/encoding.h"
-#include "parquet/metadata.h"
 #include "parquet/platform.h"
+#include "parquet/type_fwd.h"
 #include "parquet/types.h"
+
+namespace parquet {
+
+class Page;
+
+}  // namespace parquet
 
 namespace parquet::encryption {
 
@@ -177,17 +180,6 @@ class PARQUET_EXPORT EncodingProperties {
   // Private constructor for builder
   explicit EncodingProperties(const Builder& builder);
 
-  EncodingProperties(std::optional<std::string> column_path,
-                     std::optional<parquet::Type::type> physical_type,
-                     std::optional<::arrow::Compression::type> compression_codec,
-                     std::int64_t fixed_length_bytes, parquet::PageType::type page_type,
-                     parquet::Encoding::type page_encoding, int64_t data_page_num_values,
-                     parquet::Encoding::type page_v1_definition_level_encoding,
-                     parquet::Encoding::type page_v1_repetition_level_encoding,
-                     int32_t page_v2_definition_levels_byte_length,
-                     int32_t page_v2_repetition_levels_byte_length,
-                     int32_t page_v2_num_nulls, bool page_v2_is_compressed);
-
   //--------------------------------
   // from column metadata. does not change across chunks nor data pages.
   std::optional<std::string> column_path_;
@@ -243,109 +235,9 @@ class PARQUET_EXPORT EncodingProperties {
 };  // class EncodingProperties
 
 //--------------------------------
-// Enum to string helpers
-// Kept inline in the header for convenient reuse and zero-link overhead.
-inline std::string EnumToString(parquet::Type::type t) {
-  switch (t) {
-    case parquet::Type::BOOLEAN:
-      return "BOOLEAN";
-    case parquet::Type::INT32:
-      return "INT32";
-    case parquet::Type::INT64:
-      return "INT64";
-    case parquet::Type::INT96:
-      return "INT96";
-    case parquet::Type::FLOAT:
-      return "FLOAT";
-    case parquet::Type::DOUBLE:
-      return "DOUBLE";
-    case parquet::Type::BYTE_ARRAY:
-      return "BYTE_ARRAY";
-    case parquet::Type::FIXED_LEN_BYTE_ARRAY:
-      return "FIXED_LEN_BYTE_ARRAY";
-    case parquet::Type::UNDEFINED:
-      return "UNDEFINED";
-    default:
-      throw std::invalid_argument(std::string("Unknown parquet Type:: ") +
-                                  std::to_string(t));
-  }
-}
-
-inline std::string EnumToString(::arrow::Compression::type t) {
-  // Use uppercase names for consistency with other enums
-  switch (t) {
-    case ::arrow::Compression::UNCOMPRESSED:
-      return "UNCOMPRESSED";
-    case ::arrow::Compression::SNAPPY:
-      return "SNAPPY";
-    case ::arrow::Compression::GZIP:
-      return "GZIP";
-    case ::arrow::Compression::BROTLI:
-      return "BROTLI";
-    case ::arrow::Compression::ZSTD:
-      return "ZSTD";
-    case ::arrow::Compression::LZ4:
-      return "LZ4";
-    case ::arrow::Compression::LZ4_FRAME:
-      return "LZ4_FRAME";
-    case ::arrow::Compression::LZO:
-      return "LZO";
-    case ::arrow::Compression::BZ2:
-      return "BZ2";
-    case ::arrow::Compression::LZ4_HADOOP:
-      return "LZ4_HADOOP";
-    default:
-      throw std::invalid_argument(std::string("Unknown arrow Compression::type:: ") +
-                                  std::to_string(t));
-  }
-}
-
-inline std::string EnumToString(parquet::Encoding::type t) {
-  switch (t) {
-    case parquet::Encoding::PLAIN:
-      return "PLAIN";
-    case parquet::Encoding::PLAIN_DICTIONARY:
-      return "PLAIN_DICTIONARY";
-    case parquet::Encoding::RLE:
-      return "RLE";
-    case parquet::Encoding::BIT_PACKED:
-      return "BIT_PACKED";
-    case parquet::Encoding::DELTA_BINARY_PACKED:
-      return "DELTA_BINARY_PACKED";
-    case parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY:
-      return "DELTA_LENGTH_BYTE_ARRAY";
-    case parquet::Encoding::DELTA_BYTE_ARRAY:
-      return "DELTA_BYTE_ARRAY";
-    case parquet::Encoding::RLE_DICTIONARY:
-      return "RLE_DICTIONARY";
-    case parquet::Encoding::BYTE_STREAM_SPLIT:
-      return "BYTE_STREAM_SPLIT";
-    case parquet::Encoding::UNDEFINED:
-      return "UNDEFINED";
-    case parquet::Encoding::UNKNOWN:
-      return "UNKNOWN";
-    default:
-      throw std::invalid_argument(std::string("Unknown parquet Encoding::type:: ") +
-                                  std::to_string(t));
-  }
-}
-
-inline std::string EnumToString(parquet::PageType::type t) {
-  switch (t) {
-    case parquet::PageType::DATA_PAGE:
-      return "DATA_PAGE_V1";
-    case parquet::PageType::DATA_PAGE_V2:
-      return "DATA_PAGE_V2";
-    case parquet::PageType::DICTIONARY_PAGE:
-      return "DICTIONARY_PAGE";
-    case parquet::PageType::INDEX_PAGE:
-      return "INDEX_PAGE";
-    case parquet::PageType::UNDEFINED:
-      return "UNDEFINED";
-    default:
-      throw std::invalid_argument(std::string("Unknown parquet PageType::type:: ") +
-                                  std::to_string(t));
-  }
-}
+// Parquet has no PageType-to-string helper (unlike Type, Encoding and Compression, see
+// TypeToString(), EncodingToString() and Codec::GetCodecAsString()).
+// Throws ParquetException for a value outside the enum.
+PARQUET_EXPORT std::string EnumToString(parquet::PageType::type t);
 
 }  // namespace parquet::encryption

@@ -55,6 +55,15 @@ void AppendLengthPrefixedPayload(std::span<const uint8_t> payload,
   out->insert(out->end(), payload.begin(), payload.end());
 }
 
+// The page buffer length is an int32 in the Parquet page header, and a provider is
+// free to make its output larger than its input.
+int32_t CheckedInt32Size(size_t size) {
+  if (size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+    throw ParquetException("Encrypted page size overflows INT32_MAX. Size: ", size);
+  }
+  return static_cast<int32_t>(size);
+}
+
 // Returns the payload length encoded in `buf`'s leading 4-byte prefix (NOT
 // including the prefix itself). Throws if `buf` is too short to even hold the
 // prefix, or if the prefix claims more payload than `buf` actually has.
@@ -141,7 +150,7 @@ int32_t ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer(
   } else {
     // aad is the module AAD Encryptor::UpdateAad() already computed via
     // CreateModuleAad()/QuickUpdatePageAad() -- the same per-page positional binding
-    // Internal PME uses for AES-GCM -- forwarded straight through to the provider.
+    // the AES-GCM encryptors use -- forwarded straight through to the provider.
     std::vector<uint8_t> block_payload;
     PARQUET_ASSIGN_OR_THROW(block_payload,
                             provider_->EncryptBlock(plaintext, ctx_, aad, dek));
@@ -151,7 +160,7 @@ int32_t ParquetCryptoProviderEncryptorAdapter::EncryptWithManagedBuffer(
   PARQUET_THROW_NOT_OK(ciphertext->Resize(static_cast<int64_t>(result_bytes.size()),
                                           /*shrink_to_fit=*/false));
   std::memcpy(ciphertext->mutable_data(), result_bytes.data(), result_bytes.size());
-  return static_cast<int32_t>(result_bytes.size());
+  return CheckedInt32Size(result_bytes.size());
 }
 
 int32_t ParquetCryptoProviderEncryptorAdapter::SignedFooterEncrypt(
@@ -237,7 +246,7 @@ int32_t ParquetCryptoProviderDecryptorAdapter::DecryptWithManagedBuffer(
     uint32_t payload_len = ReadLengthPrefix(ciphertext);
     std::span<const uint8_t> payload = ciphertext.subspan(kLengthPrefixSize, payload_len);
     // aad is the module AAD Decryptor::UpdateAad() already computed -- the same
-    // per-page positional binding Internal PME uses for AES-GCM -- forwarded
+    // per-page positional binding the AES-GCM decryptors use -- forwarded
     // straight through to the provider.
     PARQUET_ASSIGN_OR_THROW(result_bytes,
                             provider_->DecryptBlock(payload, ctx_, aad, dek));
@@ -246,7 +255,7 @@ int32_t ParquetCryptoProviderDecryptorAdapter::DecryptWithManagedBuffer(
   PARQUET_THROW_NOT_OK(plaintext->Resize(static_cast<int64_t>(result_bytes.size()),
                                          /*shrink_to_fit=*/false));
   std::memcpy(plaintext->mutable_data(), result_bytes.data(), result_bytes.size());
-  return static_cast<int32_t>(result_bytes.size());
+  return CheckedInt32Size(result_bytes.size());
 }
 
 bool ParquetCryptoProviderDecryptorAdapter::VerifyFooterSignature(

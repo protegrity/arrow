@@ -17,12 +17,14 @@
 
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 
 #include <gtest/gtest.h>
 
 #include "parquet/column_page.h"
 #include "parquet/encryption/encoding_properties.h"
+#include "parquet/exception.h"
 #include "parquet/platform.h"
 #include "parquet/properties.h"
 #include "parquet/schema.h"
@@ -52,14 +54,6 @@ static std::shared_ptr<::parquet::SchemaDescriptor> MakeSingleInt32Schema(
   return descr;
 }
 
-TEST(EncodingPropertiesTest, BuilderRequiresPageType) {
-  auto builder = EncodingProperties::Builder();
-  builder.ColumnPath("a");
-  builder.PhysicalType(Type::INT32);
-  builder.CompressionCodec(::arrow::Compression::SNAPPY);
-  EXPECT_THROW(builder.Build(), std::invalid_argument);
-}
-
 TEST(EncodingPropertiesTest, DictionaryPageSettersAndToMap) {
   auto props = EncodingProperties::Builder()
                    .PageType(PageType::DICTIONARY_PAGE)
@@ -77,7 +71,7 @@ TEST(EncodingPropertiesTest, DictionaryPageSettersAndToMap) {
   auto m = props->ToPropertiesMap();
   ASSERT_EQ(m.at("column_path"), std::string("schema.col"));
   ASSERT_EQ(m.at("physical_type"), std::string("DOUBLE"));
-  ASSERT_EQ(m.at("compression_codec"), std::string("ZSTD"));
+  ASSERT_EQ(m.at("compression_codec"), std::string("zstd"));
   ASSERT_EQ(m.at("page_type"), std::string("DICTIONARY_PAGE"));
   ASSERT_EQ(m.at("page_encoding"), std::string("PLAIN"));
   ASSERT_EQ(m.at("dict_page_num_values"), std::to_string(10));
@@ -103,7 +97,7 @@ TEST(EncodingPropertiesTest, BuilderDataPageV1ValidationSuccessAndMap) {
   auto m = props->ToPropertiesMap();
   ASSERT_EQ(m.at("column_path"), std::string("col"));
   ASSERT_EQ(m.at("physical_type"), std::string("INT32"));
-  ASSERT_EQ(m.at("compression_codec"), std::string("SNAPPY"));
+  ASSERT_EQ(m.at("compression_codec"), std::string("snappy"));
   ASSERT_EQ(m.at("page_type"), std::string("DATA_PAGE_V1"));
   ASSERT_EQ(m.at("page_encoding"), std::string("PLAIN"));
   ASSERT_EQ(m.at("data_page_num_values"), std::to_string(123));
@@ -133,7 +127,7 @@ TEST(EncodingPropertiesTest, BuilderDataPageV2ValidationSuccessAndMap) {
   auto m = props->ToPropertiesMap();
   ASSERT_EQ(m.at("column_path"), std::string("col"));
   ASSERT_EQ(m.at("physical_type"), std::string("BYTE_ARRAY"));
-  ASSERT_EQ(m.at("compression_codec"), std::string("ZSTD"));
+  ASSERT_EQ(m.at("compression_codec"), std::string("zstd"));
   ASSERT_EQ(m.at("page_type"), std::string("DATA_PAGE_V2"));
   ASSERT_EQ(m.at("page_encoding"), std::string("DELTA_LENGTH_BYTE_ARRAY"));
   ASSERT_EQ(m.at("data_page_num_values"), std::to_string(42));
@@ -143,22 +137,6 @@ TEST(EncodingPropertiesTest, BuilderDataPageV2ValidationSuccessAndMap) {
   ASSERT_EQ(m.at("page_v2_repetition_levels_byte_length"), std::to_string(4));
   ASSERT_EQ(m.at("page_v2_num_nulls"), std::to_string(5));
   ASSERT_EQ(m.at("page_v2_is_compressed"), "true");
-}
-
-TEST(EncodingPropertiesTest, BuilderDataPageV2MissingFieldsValidationFails) {
-  auto props = EncodingProperties::Builder()
-                   .ColumnPath("col")
-                   .PhysicalType(Type::INT32)
-                   .CompressionCodec(::arrow::Compression::GZIP)
-                   .PageType(PageType::DATA_PAGE_V2)
-                   .PageEncoding(Encoding::DELTA_BINARY_PACKED)
-                   .DataPageNumValues(10)
-                   .PageV2DefinitionLevelsByteLength(4)
-                   .PageV2RepetitionLevelsByteLength(4)
-                   // Intentionally omit PageV2NumNulls and PageV2IsCompressed
-                   .Build();
-
-  EXPECT_THROW(props->validate(), std::invalid_argument);
 }
 
 TEST(EncodingPropertiesTest, FixedLengthBytesWrongUsageThrows) {
@@ -175,7 +153,69 @@ TEST(EncodingPropertiesTest, FixedLengthBytesWrongUsageThrows) {
 
   // Set a fixed length while physical type is not FIXED_LEN_BYTE_ARRAY
   props->set_physical_type(Type::INT32, std::optional<std::int64_t>(16));
-  EXPECT_THROW(props->validate(), std::invalid_argument);
+  EXPECT_THROW(props->validate(), ParquetException);
+}
+
+TEST(EncodingPropertiesTest, ToPropertiesMapContainsOnlyKeysOfThePageType) {
+  const std::set<std::string> common = {
+      "column_path", "physical_type", "compression_codec", "page_type", "page_encoding"};
+  auto keys_of = [](const std::map<std::string, std::string>& m) {
+    std::set<std::string> keys;
+    for (const auto& entry : m) keys.insert(entry.first);
+    return keys;
+  };
+  auto with = [&](std::set<std::string> extra) {
+    extra.insert(common.begin(), common.end());
+    return extra;
+  };
+
+  auto v1 = EncodingProperties::Builder()
+                .ColumnPath("col")
+                .PhysicalType(Type::INT32)
+                .CompressionCodec(::arrow::Compression::SNAPPY)
+                .PageType(PageType::DATA_PAGE)
+                .PageEncoding(Encoding::PLAIN)
+                .DataPageNumValues(1)
+                .PageV1DefinitionLevelEncoding(Encoding::RLE)
+                .PageV1RepetitionLevelEncoding(Encoding::RLE)
+                .DataPageMaxDefinitionLevel(0)
+                .DataPageMaxRepetitionLevel(0)
+                .Build();
+  EXPECT_EQ(with({"data_page_num_values", "data_page_max_definition_level",
+                  "data_page_max_repetition_level", "page_v1_definition_level_encoding",
+                  "page_v1_repetition_level_encoding"}),
+            keys_of(v1->ToPropertiesMap()));
+
+  auto v2 = EncodingProperties::Builder()
+                .ColumnPath("col")
+                .PhysicalType(Type::INT32)
+                .CompressionCodec(::arrow::Compression::SNAPPY)
+                .PageType(PageType::DATA_PAGE_V2)
+                .PageEncoding(Encoding::PLAIN)
+                .DataPageNumValues(1)
+                .PageV2DefinitionLevelsByteLength(0)
+                .PageV2RepetitionLevelsByteLength(0)
+                .PageV2NumNulls(0)
+                .PageV2IsCompressed(false)
+                .DataPageMaxDefinitionLevel(0)
+                .DataPageMaxRepetitionLevel(0)
+                .Build();
+  EXPECT_EQ(
+      with({"data_page_num_values", "data_page_max_definition_level",
+            "data_page_max_repetition_level", "page_v2_definition_levels_byte_length",
+            "page_v2_repetition_levels_byte_length", "page_v2_num_nulls",
+            "page_v2_is_compressed"}),
+      keys_of(v2->ToPropertiesMap()));
+
+  auto dictionary = EncodingProperties::Builder()
+                        .ColumnPath("col")
+                        .PhysicalType(Type::INT32)
+                        .CompressionCodec(::arrow::Compression::SNAPPY)
+                        .PageType(PageType::DICTIONARY_PAGE)
+                        .PageEncoding(Encoding::PLAIN)
+                        .DictPageNumValues(1)
+                        .Build();
+  EXPECT_EQ(with({"dict_page_num_values"}), keys_of(dictionary->ToPropertiesMap()));
 }
 
 TEST(EncodingPropertiesTest, DictionaryPageIsSortedIsOptional) {
@@ -211,6 +251,8 @@ TEST(EncodingPropertiesTest, BuilderOptionalFixedLengthBytesAndToMap) {
   ASSERT_EQ(m.at("fixed_length_bytes"), std::to_string(16));
 }
 
+// The dictionary sequence below fails on the missing column path first, so the missing
+// page encoding needs a test of its own.
 TEST(EncodingPropertiesTest, MissingPageEncodingThrows) {
   auto props = EncodingProperties::Builder()
                    .PageType(PageType::DICTIONARY_PAGE)
@@ -218,7 +260,7 @@ TEST(EncodingPropertiesTest, MissingPageEncodingThrows) {
                    .Build();
   props->set_column_path("schema.col");
 
-  EXPECT_THROW(props->validate(), std::invalid_argument);
+  EXPECT_THROW(props->validate(), ParquetException);
 }
 
 TEST(EncodingPropertiesTest, MakeFromMetadataDataPageV1) {
@@ -242,7 +284,7 @@ TEST(EncodingPropertiesTest, MakeFromMetadataDataPageV1) {
   auto m = props->ToPropertiesMap();
   ASSERT_EQ(m.at("column_path"), std::string("col"));
   ASSERT_EQ(m.at("physical_type"), std::string("INT32"));
-  ASSERT_EQ(m.at("compression_codec"), std::string("SNAPPY"));
+  ASSERT_EQ(m.at("compression_codec"), std::string("snappy"));
   ASSERT_EQ(m.at("page_type"), std::string("DATA_PAGE_V1"));
   ASSERT_EQ(m.at("page_encoding"), std::string("PLAIN"));
   ASSERT_EQ(m.at("data_page_num_values"), std::to_string(7));
@@ -270,7 +312,7 @@ TEST(EncodingPropertiesTest, MakeFromMetadataDictionaryPage) {
   auto m = props->ToPropertiesMap();
   ASSERT_EQ(m.at("column_path"), std::string("col"));
   ASSERT_EQ(m.at("physical_type"), std::string("INT32"));
-  ASSERT_EQ(m.at("compression_codec"), std::string("GZIP"));
+  ASSERT_EQ(m.at("compression_codec"), std::string("gzip"));
   ASSERT_EQ(m.at("page_type"), std::string("DICTIONARY_PAGE"));
   ASSERT_EQ(m.at("page_encoding"), std::string("RLE_DICTIONARY"));
   ASSERT_EQ(m.at("dict_page_num_values"), std::to_string(4));
@@ -299,7 +341,7 @@ TEST(EncodingPropertiesTest, MakeFromMetadataDataPageV2ValidationAndMap) {
   auto m = props->ToPropertiesMap();
   ASSERT_EQ(m.at("column_path"), std::string("col"));
   ASSERT_EQ(m.at("physical_type"), std::string("INT32"));
-  ASSERT_EQ(m.at("compression_codec"), std::string("ZSTD"));
+  ASSERT_EQ(m.at("compression_codec"), std::string("zstd"));
   ASSERT_EQ(m.at("page_type"), std::string("DATA_PAGE_V2"));
   ASSERT_EQ(m.at("page_encoding"), std::string("DELTA_BYTE_ARRAY"));
   ASSERT_EQ(m.at("data_page_num_values"), std::to_string(5));
@@ -325,7 +367,7 @@ TEST(EncodingPropertiesTest, MakeFromMetadataUnknownPageTypeThrows) {
 
   EXPECT_THROW(
       EncodingProperties::MakeFromMetadata(descr, writer_props.get(), index_page),
-      std::invalid_argument);
+      ParquetException);
 }
 
 TEST(EncodingPropertiesTest, MakeFromMetadataFixedLenByteArrayPropagatesLength) {
@@ -362,24 +404,10 @@ TEST(EncodingPropertiesTest, MakeFromMetadataFixedLenByteArrayPropagatesLength) 
   auto m = props->ToPropertiesMap();
   ASSERT_EQ(m.at("column_path"), std::string("col"));
   ASSERT_EQ(m.at("physical_type"), std::string("FIXED_LEN_BYTE_ARRAY"));
-  ASSERT_EQ(m.at("compression_codec"), std::string("SNAPPY"));
+  ASSERT_EQ(m.at("compression_codec"), std::string("snappy"));
   ASSERT_EQ(m.at("page_type"), std::string("DATA_PAGE_V1"));
   ASSERT_EQ(m.at("page_encoding"), std::string("PLAIN"));
   ASSERT_EQ(m.at("fixed_length_bytes"), std::to_string(16));
-}
-
-TEST(EncodingPropertiesTest, DataPageV1MissingNumValuesThrows) {
-  auto props = EncodingProperties::Builder()
-                   .ColumnPath("col")
-                   .PhysicalType(Type::DOUBLE)
-                   .CompressionCodec(::arrow::Compression::SNAPPY)
-                   .PageType(PageType::DATA_PAGE)
-                   .PageEncoding(Encoding::PLAIN)
-                   .PageV1DefinitionLevelEncoding(Encoding::RLE)
-                   .PageV1RepetitionLevelEncoding(Encoding::RLE)
-                   .Build();
-
-  EXPECT_THROW(props->validate(), std::invalid_argument);
 }
 
 TEST(EncodingPropertiesTest, SequentialFailuresForDataPageV1RequiredFields) {
@@ -392,23 +420,23 @@ TEST(EncodingPropertiesTest, SequentialFailuresForDataPageV1RequiredFields) {
                      .PageEncoding(Encoding::PLAIN);
 
   auto props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing num_values
+  EXPECT_THROW(props->validate(), ParquetException);  // missing num_values
 
   builder.DataPageNumValues(10);
   props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing max def level
+  EXPECT_THROW(props->validate(), ParquetException);  // missing max def level
 
   builder.DataPageMaxDefinitionLevel(0);
   props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing max rep level
+  EXPECT_THROW(props->validate(), ParquetException);  // missing max rep level
 
   builder.DataPageMaxRepetitionLevel(0);
   props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing V1 deflvl encoding
+  EXPECT_THROW(props->validate(), ParquetException);  // missing V1 deflvl encoding
 
   builder.PageV1DefinitionLevelEncoding(Encoding::RLE);
   props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing V1 replvl encoding
+  EXPECT_THROW(props->validate(), ParquetException);  // missing V1 replvl encoding
 
   builder.PageV1RepetitionLevelEncoding(Encoding::RLE);
   props = builder.Build();
@@ -425,31 +453,31 @@ TEST(EncodingPropertiesTest, SequentialFailuresForDataPageV2RequiredFields) {
                      .PageEncoding(Encoding::DELTA_BINARY_PACKED);
 
   auto props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing num_values
+  EXPECT_THROW(props->validate(), ParquetException);  // missing num_values
 
   builder.DataPageNumValues(5);
   props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing max def level
+  EXPECT_THROW(props->validate(), ParquetException);  // missing max def level
 
   builder.DataPageMaxDefinitionLevel(0);
   props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing max rep level
+  EXPECT_THROW(props->validate(), ParquetException);  // missing max rep level
 
   builder.DataPageMaxRepetitionLevel(0);
   props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing v2 num_nulls
+  EXPECT_THROW(props->validate(), ParquetException);  // missing v2 num_nulls
 
   builder.PageV2NumNulls(2);
   props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing v2 deflvl bytes
+  EXPECT_THROW(props->validate(), ParquetException);  // missing v2 deflvl bytes
 
   builder.PageV2DefinitionLevelsByteLength(3);
   props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing v2 replvl bytes
+  EXPECT_THROW(props->validate(), ParquetException);  // missing v2 replvl bytes
 
   builder.PageV2RepetitionLevelsByteLength(2);
   props = builder.Build();
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing v2 is_compressed
+  EXPECT_THROW(props->validate(), ParquetException);  // missing v2 is_compressed
 
   builder.PageV2IsCompressed(true);
   props = builder.Build();
@@ -462,26 +490,40 @@ TEST(EncodingPropertiesTest, SequentialFailuresForDictionaryPageRequiredFields) 
   auto builder = EncodingProperties::Builder();
 
   // Missing everything => Build should throw because page type is required at build time
-  EXPECT_THROW(builder.Build(), std::invalid_argument);
+  EXPECT_THROW(builder.Build(), ParquetException);
 
   builder.PageType(PageType::DICTIONARY_PAGE);
   auto props = builder.Build();
   // Now validation fails due to missing encoding
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing encoding
+  EXPECT_THROW(props->validate(), ParquetException);  // missing encoding
 
   builder.PageEncoding(Encoding::RLE_DICTIONARY);
   props = builder.Build();
   // Still missing column path
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing column path
+  EXPECT_THROW(props->validate(), ParquetException);  // missing column path
 
   props->set_column_path("schema.col");
   // Still missing dict_page_num_values
-  EXPECT_THROW(props->validate(), std::invalid_argument);  // missing num_values
+  EXPECT_THROW(props->validate(), ParquetException);  // missing num_values
 
   builder.DictPageNumValues(10);
   props = builder.Build();
   props->set_column_path("schema.col");
   EXPECT_NO_THROW(props->validate());
+}
+
+// Status-returning APIs rely on PARQUET_CATCH_NOT_OK, which only converts
+// ParquetException into a Status.
+TEST(EncodingPropertiesTest, MissingPageTypeBecomesIOErrorStatus) {
+  EncodingProperties::Builder builder;
+  auto build = [&]() -> ::arrow::Status {
+    PARQUET_CATCH_NOT_OK(builder.Build());
+    return ::arrow::Status::OK();
+  };
+
+  ::arrow::Status status = build();
+  ASSERT_TRUE(status.IsIOError()) << status.ToString();
+  EXPECT_NE(status.message().find("PageType is required"), std::string::npos);
 }
 
 }  // namespace parquet::encryption::test

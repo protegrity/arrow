@@ -44,6 +44,7 @@
 #include "parquet/encryption/crypto_factory.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/kms_client.h"
+#include "parquet/exception.h"
 #include "parquet/file_reader.h"
 #include "parquet/properties.h"
 #include "parquet/statistics.h"
@@ -744,7 +745,7 @@ Result<std::shared_ptr<FileWriter>> ParquetFileFormat::MakeWriter(
   if (parquet_encrypt_config != nullptr) {
     if (parquet_encrypt_config->encryption_config != nullptr &&
         parquet_encrypt_config->external_encryption_config != nullptr) {
-      throw parquet::ParquetException(
+      return Status::Invalid(
           "Cannot set both encryption_config and external_encryption_config");
     }
 
@@ -756,16 +757,20 @@ Result<std::shared_ptr<FileWriter>> ParquetFileFormat::MakeWriter(
               *parquet_encrypt_config->encryption_config, destination_locator.path,
               destination_locator.filesystem);
     } else if (parquet_encrypt_config->external_encryption_config != nullptr) {
+      // MakeWriter() runs on a worker thread, where an escaping exception would
+      // terminate the process, so a misconfiguration is reported as a Status.
+      BEGIN_PARQUET_CATCH_EXCEPTIONS
       file_encryption_prop =
           parquet_encrypt_config->crypto_factory->GetExternalFileEncryptionProperties(
               *parquet_encrypt_config->kms_connection_config,
               *parquet_encrypt_config->external_encryption_config,
               parquet_encrypt_config->parquet_crypto_provider, destination_locator.path,
               destination_locator.filesystem);
+      END_PARQUET_CATCH_EXCEPTIONS
     }
 
     if (file_encryption_prop == nullptr) {
-      throw parquet::ParquetException("Failed to get file encryption properties");
+      return Status::Invalid("Failed to get file encryption properties");
     }
 
     auto writer_properties =

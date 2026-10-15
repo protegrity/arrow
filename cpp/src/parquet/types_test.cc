@@ -230,19 +230,6 @@ TEST(TestInt96Timestamp, Decoding) {
   check(2547339, 0xffffffffffffffffULL);
 }
 
-TEST(TestIsParquetCipherSupported, SupportedCiphers) {
-  // ParquetCipher::type values are sequential from 0; EXTERNAL_PROTECT_V1 is the last.
-  // If a new cipher is added, update IsParquetCipherSupported() and this test.
-  constexpr std::size_t kExpectedCipherCount = 3;
-  EXPECT_EQ(kExpectedCipherCount,
-            static_cast<std::size_t>(ParquetCipher::EXTERNAL_PROTECT_V1) + 1U)
-      << "Expected 3 parquet cipher types";
-
-  ASSERT_TRUE(IsParquetCipherSupported(ParquetCipher::AES_GCM_V1));
-  ASSERT_TRUE(IsParquetCipherSupported(ParquetCipher::AES_GCM_CTR_V1));
-  ASSERT_TRUE(IsParquetCipherSupported(ParquetCipher::EXTERNAL_PROTECT_V1));
-}
-
 #if !(defined(_WIN32) || defined(__CYGWIN__))
 #  pragma GCC diagnostic pop
 #elif _MSC_VER

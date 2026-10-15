@@ -17,6 +17,7 @@
 
 #include "parquet/metadata.h"
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "arrow/util/key_value_metadata.h"
@@ -271,6 +272,36 @@ TEST(Metadata, TestBuildAccess) {
   f_accessor_1 = f_accessor_2->Subset({0});
   f_accessor_1->AppendRowGroups(*f_accessor->Subset({0}));
   ASSERT_TRUE(f_accessor_1->Equals(*f_accessor->Subset({2, 0})));
+}
+
+// ColumnChunkMetaData::descr() is how the reader hands a column's descriptor to the
+// decryptor factories, and ColumnChunkMetaDataBuilder::properties() is how the writer
+// hands the writer properties to an encryptor that needs them. Both have to be the
+// objects the metadata was created from, and plain metadata carries no encryption.
+TEST(Metadata, ColumnChunkExposesDescriptorAndWriterProperties) {
+  parquet::schema::NodeVector fields;
+  fields.push_back(parquet::schema::Int32("int_col", Repetition::REQUIRED));
+  fields.push_back(parquet::schema::Float("float_col", Repetition::REQUIRED));
+  parquet::SchemaDescriptor schema;
+  schema.Init(parquet::schema::GroupNode::Make("schema", Repetition::REPEATED, fields));
+  auto props = WriterProperties::Builder().version(ParquetVersion::PARQUET_2_6)->build();
+
+  auto builder = ColumnChunkMetaDataBuilder::Make(props, schema.Column(1));
+  EXPECT_EQ(schema.Column(1), builder->descr());
+  EXPECT_EQ(props.get(), builder->properties());
+
+  auto f_accessor = GenerateTableMetaData(schema, props, 1000, EncodedStatistics(),
+                                          EncodedStatistics());
+  EXPECT_FALSE(f_accessor->is_encryption_algorithm_set());
+  auto row_group = f_accessor->RowGroup(0);
+  for (int i = 0; i < 2; ++i) {
+    auto column_chunk = row_group->ColumnChunk(i);
+    ASSERT_NE(nullptr, column_chunk->descr());
+    EXPECT_EQ(f_accessor->schema()->Column(i), column_chunk->descr());
+    EXPECT_EQ(schema.Column(i)->path()->ToDotString(),
+              column_chunk->descr()->path()->ToDotString());
+    EXPECT_EQ(nullptr, column_chunk->crypto_metadata());
+  }
 }
 
 namespace {
@@ -836,6 +867,55 @@ TEST(ApplicationVersion, FullWithSpaces) {
   ASSERT_EQ("ab", version.version.unknown);
   ASSERT_EQ("cdh5.5.0", version.version.pre_release);
   ASSERT_EQ("cd", version.version.build_info);
+}
+
+TEST(EncryptionAlgorithmThrift, RoundTripsEachCipher) {
+  AadMetadata aad{"prefix", "file_unique", true};
+  for (auto cipher : {ParquetCipher::AES_GCM_V1, ParquetCipher::AES_GCM_CTR_V1,
+                      ParquetCipher::EXTERNAL_PROTECT_V1}) {
+    format::EncryptionAlgorithm thrift = ToThrift(EncryptionAlgorithm{cipher, aad});
+    EXPECT_EQ(cipher == ParquetCipher::AES_GCM_V1, thrift.__isset.AES_GCM_V1);
+    EXPECT_EQ(cipher == ParquetCipher::AES_GCM_CTR_V1, thrift.__isset.AES_GCM_CTR_V1);
+    EXPECT_EQ(cipher == ParquetCipher::EXTERNAL_PROTECT_V1,
+              thrift.__isset.EXTERNAL_PROTECT_V1);
+
+    EncryptionAlgorithm decoded = FromThrift(thrift);
+    EXPECT_EQ(cipher, decoded.algorithm);
+    EXPECT_EQ("prefix", decoded.aad.aad_prefix);
+    EXPECT_EQ("file_unique", decoded.aad.aad_file_unique);
+    EXPECT_TRUE(decoded.aad.supply_aad_prefix);
+  }
+}
+
+TEST(EncryptionAlgorithmThrift, UnknownCipherThrows) {
+  EncryptionAlgorithm unknown{static_cast<ParquetCipher::type>(99), AadMetadata{}};
+  EXPECT_THAT([&] { ToThrift(unknown); },
+              ::testing::ThrowsMessage<ParquetException>(
+                  ::testing::HasSubstr("Unsupported algorithm")));
+}
+
+// An empty aad_prefix is left out of the file, while the file-unique AAD and the
+// supply_aad_prefix flag are always written, as for the AES ciphers.
+TEST(EncryptionAlgorithmThrift, ExternalProtectOmitsEmptyAadPrefix) {
+  format::EncryptionAlgorithm thrift = ToThrift(EncryptionAlgorithm{
+      ParquetCipher::EXTERNAL_PROTECT_V1, AadMetadata{"", "file_unique", true}});
+  const auto& external = thrift.EXTERNAL_PROTECT_V1;
+  EXPECT_FALSE(external.__isset.aad_prefix);
+  EXPECT_TRUE(external.__isset.aad_file_unique);
+  EXPECT_TRUE(external.__isset.supply_aad_prefix);
+
+  EncryptionAlgorithm decoded = FromThrift(thrift);
+  EXPECT_EQ(ParquetCipher::EXTERNAL_PROTECT_V1, decoded.algorithm);
+  EXPECT_TRUE(decoded.aad.aad_prefix.empty());
+  EXPECT_EQ("file_unique", decoded.aad.aad_file_unique);
+  EXPECT_TRUE(decoded.aad.supply_aad_prefix);
+}
+
+// A union with no cipher set cannot be interpreted.
+TEST(EncryptionAlgorithmThrift, EmptyUnionThrows) {
+  EXPECT_THAT([] { FromThrift(format::EncryptionAlgorithm{}); },
+              ::testing::ThrowsMessage<ParquetException>(
+                  ::testing::HasSubstr("Unsupported algorithm")));
 }
 
 }  // namespace metadata

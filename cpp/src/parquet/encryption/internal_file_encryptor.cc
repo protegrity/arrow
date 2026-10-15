@@ -92,10 +92,6 @@ std::vector<uint8_t> Encryptor::ComputeFooterSignature(std::span<const uint8_t> 
                                                      key_.as_span());
 }
 
-std::shared_ptr<KeyValueMetadata> Encryptor::GetKeyValueMetadata(int8_t module_type) {
-  return encryptor_instance_->GetKeyValueMetadata(module_type);
-}
-
 // InternalFileEncryptor
 InternalFileEncryptor::InternalFileEncryptor(FileEncryptionProperties* properties,
                                              ::arrow::MemoryPool* pool)
