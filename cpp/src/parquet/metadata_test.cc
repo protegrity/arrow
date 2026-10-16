@@ -888,7 +888,10 @@ TEST(EncryptionAlgorithmThrift, RoundTripsEachCipher) {
 }
 
 TEST(EncryptionAlgorithmThrift, UnknownCipherThrows) {
-  EncryptionAlgorithm unknown{static_cast<ParquetCipher::type>(99), AadMetadata{}};
+  // One past the last cipher: a representable value (no UB) that is not supported.
+  EncryptionAlgorithm unknown{
+      static_cast<ParquetCipher::type>(ParquetCipher::EXTERNAL_PROTECT_V1 + 1),
+      AadMetadata{}};
   EXPECT_THAT([&] { ToThrift(unknown); },
               ::testing::ThrowsMessage<ParquetException>(
                   ::testing::HasSubstr("Unsupported algorithm")));

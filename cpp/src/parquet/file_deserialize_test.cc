@@ -1563,7 +1563,9 @@ TEST_F(EncodingPropertiesSerdeTest, UnknownEncodingInPageHeaderBecomesUndefined)
 #ifndef PARQUET_REQUIRE_ENCRYPTION
   GTEST_SKIP() << "Test requires OpenSSL encryption support";
 #endif
-  data_page_header_.encoding = static_cast<format::Encoding::type>(99);
+  // One past the last encoding: representable, so no undefined behaviour, but unknown.
+  data_page_header_.encoding =
+      static_cast<format::Encoding::type>(format::Encoding::BYTE_STREAM_SPLIT + 1);
   const int data_size = 16;
   ASSERT_NO_FATAL_FAILURE(WriteDataPageHeader(/*max_serialized_len=*/1024, data_size,
                                               /*compressed_size=*/data_size));
