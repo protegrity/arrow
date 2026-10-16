@@ -584,6 +584,7 @@ cdef class ParquetCryptoProvider(_Weakrefable):
     (sign_footer/verify_footer_signature) are currently exposed; typed-value
     (cell) callbacks are not yet bound to Python.
     """
+
     def __init__(self):
         self.init()
 

@@ -1092,7 +1092,7 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
   ::arrow::Compression::type compression_codec_;
 };
 
-static std::shared_ptr<::parquet::SchemaDescriptor> MakeSingleInt32Schema(
+std::shared_ptr<::parquet::SchemaDescriptor> MakeSingleInt32Schema(
     const std::string& col_name = "col") {
   using ::parquet::schema::GroupNode;
   using ::parquet::schema::NodePtr;
@@ -1109,8 +1109,7 @@ static std::shared_ptr<::parquet::SchemaDescriptor> MakeSingleInt32Schema(
   return descr;
 }
 
-static std::shared_ptr<::parquet::SchemaDescriptor>
-MakeNestedOptionalRepeatedIntSchema() {
+std::shared_ptr<::parquet::SchemaDescriptor> MakeNestedOptionalRepeatedIntSchema() {
   using ::parquet::schema::GroupNode;
   using ::parquet::schema::NodePtr;
   using ::parquet::schema::NodeVector;
@@ -1464,6 +1463,9 @@ class PresetPageTestDecryptor : public parquet::encryption::DecryptorInterface {
 // check decompression against the size the decryptor reports, or it rejects a
 // valid page ("Page didn't decompress to expected size").
 TEST_F(EncodingPropertiesSerdeTest, ReaderUsesUncompressedSizeReportedByDecryptor) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   ::arrow::Compression::type codec_type = ::arrow::Compression::UNCOMPRESSED;
   for (auto candidate : {::arrow::Compression::SNAPPY, ::arrow::Compression::GZIP,
                          ::arrow::Compression::ZSTD, ::arrow::Compression::LZ4}) {
@@ -1558,6 +1560,9 @@ TEST_F(EncodingPropertiesSerdeTest, ReaderUsesUncompressedSizeReportedByDecrypto
 // Like the rest of the reader, an out-of-range encoding is mapped to UNDEFINED instead of
 // being passed on as an invalid enum value; the decoder rejects it when the page is read.
 TEST_F(EncodingPropertiesSerdeTest, UnknownEncodingInPageHeaderBecomesUndefined) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   data_page_header_.encoding = static_cast<format::Encoding::type>(99);
   const int data_size = 16;
   ASSERT_NO_FATAL_FAILURE(WriteDataPageHeader(/*max_serialized_len=*/1024, data_size,

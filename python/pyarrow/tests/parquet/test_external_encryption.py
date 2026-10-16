@@ -40,6 +40,11 @@ from pyarrow.tests.parquet.crypto_provider_utils import (  # noqa: E402
 
 kms_client_factory = xor_kms_client_factory
 
+pytestmark = [
+    pytest.mark.parquet_encryption,
+    pytest.mark.parquet
+]
+
 APP_CONTEXT = {"user_id": "Picard1701", "location": "Presidio"}
 
 # Columns that reach the provider; every other column is AES encrypted or plain.

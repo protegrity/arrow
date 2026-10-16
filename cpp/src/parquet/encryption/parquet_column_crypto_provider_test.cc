@@ -687,9 +687,11 @@ TEST_F(ParquetColumnCryptoProviderTest, LegacyVerifySignatureRejectsExternalProt
 
   // The pointer is never dereferenced: the algorithm check fails first.
   const uint8_t unused_signature[1] = {0};
+  ARROW_SUPPRESS_DEPRECATION_WARNING
   EXPECT_THAT([&] { file_md->VerifySignature(unused_signature); },
               ::testing::ThrowsMessage<ParquetException>(
                   ::testing::HasSubstr("EXTERNAL_PROTECT_V1")));
+  ARROW_UNSUPPRESS_DEPRECATION_WARNING
   file_reader->Close();
 }
 

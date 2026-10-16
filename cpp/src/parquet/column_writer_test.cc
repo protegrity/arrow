@@ -2270,6 +2270,9 @@ std::string PageTypeName(PageType::type type) { return encryption::EnumToString(
 // parquet_column_crypto_provider_test.cc covers the adapters with hand-built
 // properties; neither shows what the writer actually hands to an encryptor.
 TEST_F(TestInt32WriterWithEncryptor, EncryptorReceivesDataPageV1EncodingProperties) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   CapturingTestEncryptor capture;
   ColumnProperties column_properties;
   column_properties.set_encoding(Encoding::PLAIN);
@@ -2300,6 +2303,9 @@ TEST_F(TestInt32WriterWithEncryptor, EncryptorReceivesDataPageV1EncodingProperti
 }
 
 TEST_F(TestInt32WriterWithEncryptor, EncryptorReceivesDataPageV2EncodingProperties) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   // OPTIONAL column with some nulls, so that the definition-level properties are
   // non-trivial. Constant values keep every codec's output smaller than its input,
   // which DataPageV2 needs to mark the page as compressed.
@@ -2343,6 +2349,9 @@ TEST_F(TestInt32WriterWithEncryptor, EncryptorReceivesDataPageV2EncodingProperti
 }
 
 TEST_F(TestInt32WriterWithEncryptor, EncryptorReceivesDictionaryThenDataPageProperties) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   constexpr int kDistinctValues = 10;
   this->GenerateData(SMALL_SIZE);
   for (int i = 0; i < SMALL_SIZE; ++i) {
@@ -2376,6 +2385,9 @@ TEST_F(TestInt32WriterWithEncryptor, EncryptorReceivesDictionaryThenDataPageProp
 
 TEST_F(TestFLBAWriterWithEncryptor,
        EncryptorReceivesFixedLengthBytesInEncodingProperties) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   CapturingTestEncryptor capture;
   ColumnProperties column_properties;
   column_properties.set_encoding(Encoding::PLAIN);
@@ -2398,6 +2410,9 @@ TEST_F(TestFLBAWriterWithEncryptor,
 // PageHeadersDescribeEncryptedOutput below, because PageReader does not expose the
 // dictionary page header's size.
 TEST_F(TestInt32WriterWithEncryptor, PageHeaderUsesUncompressedSizeReportedByEncryptor) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   constexpr int64_t kSizeGrowth = 7;
   this->GenerateData(SMALL_SIZE);
 
@@ -2436,6 +2451,9 @@ TEST_F(TestInt32WriterWithEncryptor, PageHeaderUsesUncompressedSizeReportedByEnc
 // uncompressed_page_size is the size the encryptor reported. The headers are parsed from
 // the raw bytes so that the dictionary page is covered as well.
 TEST_F(TestInt32WriterWithEncryptor, PageHeadersDescribeEncryptedOutput) {
+#ifndef PARQUET_REQUIRE_ENCRYPTION
+  GTEST_SKIP() << "Test requires OpenSSL encryption support";
+#endif
   constexpr int64_t kSizeGrowth = 7;
   constexpr int64_t kExtraBytes = 11;
   constexpr int kDistinctValues = 10;

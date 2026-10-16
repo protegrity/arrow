@@ -157,7 +157,7 @@ class WrongKeyProvider : public XorBlockCryptoProvider {
 
 }  // namespace
 
-TEST_F(PerColumnEncryption, CTR_WriteRead) {
+TEST_F(PerColumnEncryption, CtrWriteRead) {
   // Build encryption properties: two columns and the footer with different keys,
   // using AES_GCM_CTR_V1.
   std::map<std::string, std::shared_ptr<parquet::ColumnEncryptionProperties>>
@@ -209,8 +209,8 @@ TEST_F(PerColumnEncryption, CTR_WriteRead) {
   EXPECT_NO_THROW(decryptor_.DecryptPageIndex(file_path, dec_props_3));
 }
 
-TEST_F(PerColumnEncryption, EXTERNAL_PROTECT_V1_WriteRead) {
-  // Same shape as CTR_WriteRead above, but the boolean column is routed to a
+TEST_F(PerColumnEncryption, ExternalProtectV1WriteRead) {
+  // Same shape as CtrWriteRead above, but the boolean column is routed to a
   // external ParquetCryptoProvider (EXTERNAL_PROTECT_V1) instead of an AES key,
   // built directly through ExternalFileEncryptionProperties::Builder/
   // ExternalFileDecryptionProperties::Builder -- no CryptoFactory involved.
@@ -289,7 +289,7 @@ TEST_F(PerColumnEncryption, EXTERNAL_PROTECT_V1_WriteRead) {
 // With a plaintext footer, FileMetaData carries the file-level algorithm in the clear,
 // so a reader can see which cipher the file uses without any key. It must be the
 // configured algorithm, not a fixed one.
-TEST_F(PerColumnEncryption, PlaintextFooter_RecordsConfiguredFileAlgorithm) {
+TEST_F(PerColumnEncryption, PlaintextFooterRecordsConfiguredFileAlgorithm) {
   for (auto algorithm :
        {parquet::ParquetCipher::AES_GCM_V1, parquet::ParquetCipher::AES_GCM_CTR_V1}) {
     SCOPED_TRACE(algorithm == parquet::ParquetCipher::AES_GCM_V1 ? "AES_GCM_V1"
@@ -335,7 +335,7 @@ TEST_F(PerColumnEncryption, PlaintextFooter_RecordsConfiguredFileAlgorithm) {
 // A column with its own EXTERNAL_PROTECT_V1 cipher in a plaintext-footer file records
 // that algorithm in its ColumnCryptoMetaData, together with the file-wide AAD fields,
 // while the file-level algorithm stays the one configured for the file.
-TEST_F(PerColumnEncryption, PlaintextFooter_PerColumnExternalRecordsAlgorithmAndAad) {
+TEST_F(PerColumnEncryption, PlaintextFooterPerColumnExternalRecordsAlgorithmAndAad) {
   for (bool store_aad_prefix : {true, false}) {
     SCOPED_TRACE(store_aad_prefix ? "aad_prefix stored in file"
                                   : "aad_prefix supplied by reader");
@@ -388,7 +388,7 @@ TEST_F(PerColumnEncryption, PlaintextFooter_PerColumnExternalRecordsAlgorithmAnd
 // The provider must only ever see the column that opted in to EXTERNAL_PROTECT_V1,
 // never the AES columns next to it, and the file-level algorithm may be AES_GCM_V1
 // (the CryptoFactory default) as well as AES_GCM_CTR_V1.
-TEST_F(PerColumnEncryption, ExternalColumnIsIsolatedFromAesColumns_BlockPath) {
+TEST_F(PerColumnEncryption, ExternalColumnIsIsolatedFromAesColumnsBlockPath) {
   for (auto file_algorithm :
        {parquet::ParquetCipher::AES_GCM_V1, parquet::ParquetCipher::AES_GCM_CTR_V1}) {
     SCOPED_TRACE(file_algorithm == parquet::ParquetCipher::AES_GCM_V1 ? "AES_GCM_V1"
@@ -424,7 +424,7 @@ TEST_F(PerColumnEncryption, ExternalColumnIsIsolatedFromAesColumns_BlockPath) {
   }
 }
 
-TEST_F(PerColumnEncryption, ExternalColumnIsIsolatedFromAesColumns_CellPath) {
+TEST_F(PerColumnEncryption, ExternalColumnIsIsolatedFromAesColumnsCellPath) {
   for (ParquetDataPageVersion page_version :
        {ParquetDataPageVersion::V1, ParquetDataPageVersion::V2}) {
     SCOPED_TRACE(page_version == ParquetDataPageVersion::V2 ? "DataPageV2"
@@ -509,7 +509,7 @@ TEST_F(PerColumnEncryption, ReadingAesColumnsDoesNotRequireProvider) {
 
 // Every encrypted column is EXTERNAL_PROTECT_V1 (no AES data column); columns that were
 // not configured stay in plaintext.
-TEST_F(PerColumnEncryption, AllEncryptedColumnsExternal_WriteRead) {
+TEST_F(PerColumnEncryption, AllEncryptedColumnsExternalWriteRead) {
   auto provider = std::make_shared<XorBlockCryptoProvider>();
   ColumnPropertiesMap columns;
   columns[kDoubleFieldName] =
@@ -549,7 +549,7 @@ TEST_F(PerColumnEncryption, AllEncryptedColumnsExternal_WriteRead) {
 
 // The block path hands the provider compressed pages; the cell path has to decompress
 // and recompress around the provider call.
-TEST_F(PerColumnEncryption, CompressedPages_BlockAndCellPath) {
+TEST_F(PerColumnEncryption, CompressedPagesBlockAndCellPath) {
   int codecs_tested = 0;
   for (auto codec : {Compression::GZIP, Compression::ZSTD, Compression::SNAPPY}) {
     if (!::arrow::util::Codec::IsAvailable(codec)) continue;
@@ -591,7 +591,7 @@ TEST_F(PerColumnEncryption, CompressedPages_BlockAndCellPath) {
 // A plaintext footer with a provider column, for each file-level algorithm and both
 // paths. The footer stays readable without keys and the provider is only used for the
 // opted-in column.
-TEST_F(PerColumnEncryption, PlaintextFooter_ExternalColumn_AllFileAlgorithmsAndPaths) {
+TEST_F(PerColumnEncryption, PlaintextFooterExternalColumnAllFileAlgorithmsAndPaths) {
   for (auto algorithm :
        {parquet::ParquetCipher::AES_GCM_V1, parquet::ParquetCipher::AES_GCM_CTR_V1}) {
     for (bool cell_path : {false, true}) {
@@ -662,7 +662,7 @@ TEST_F(PerColumnEncryption, ProviderWithWrongKeyFailsToReadCompressedPages) {
 }
 
 // When the AAD prefix is not stored in the file, the reader has to supply the same one.
-TEST_F(PerColumnEncryption, UnstoredAadPrefix_MissingOrWrongPrefixFailsTheRead) {
+TEST_F(PerColumnEncryption, UnstoredAadPrefixMissingOrWrongPrefixFailsTheRead) {
   auto provider = std::make_shared<XorBlockCryptoProvider>();
   parquet::ExternalFileEncryptionProperties::Builder file_encryption_builder(
       kFooterEncryptionKey);

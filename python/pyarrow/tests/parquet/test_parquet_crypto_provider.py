@@ -33,6 +33,11 @@ ppe = pytest.importorskip(
 from pyarrow.tests.parquet.crypto_provider_utils import (  # noqa: E402
     XorKmsClient, XorParquetCryptoProvider)
 
+pytestmark = [
+    pytest.mark.parquet_encryption,
+    pytest.mark.parquet
+]
+
 
 def _get_table():
     return pyarrow.Table.from_pydict({

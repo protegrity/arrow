@@ -180,7 +180,7 @@ TEST_F(CryptoFactoryTest, BasicEncryptionConfig) {
   EXPECT_FALSE(column_properties_2->parquet_cipher().has_value());
 }
 
-TEST_F(CryptoFactoryTest, EncryptionConfigWithExternalDbpaAlgorithmThrowsException) {
+TEST_F(CryptoFactoryTest, EncryptionConfigWithExternalProtectV1AlgorithmThrowsException) {
   EncryptionConfiguration config("kf");
   config.encryption_algorithm = ParquetCipher::EXTERNAL_PROTECT_V1;
 
