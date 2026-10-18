@@ -400,11 +400,9 @@ AesEncryptor::AesEncryptor(ParquetCipher::type alg_id, int32_t key_len, bool met
 uint64_t AesEncryptorFactory::MakeCacheKey(ParquetCipher::type alg_id, int32_t key_len,
                                            bool metadata) {
   uint64_t key = 0;
-  // Set the algorithm id in the most significant 32 bits.
+  // Algorithm id in bits 32 and up, metadata flag in bit 8, key length in bits 0-7.
   key |= static_cast<uint64_t>(static_cast<uint32_t>(alg_id)) << 32;
-  // Set the key length in the next 8 bits.
   key |= static_cast<uint64_t>(static_cast<uint8_t>(key_len));
-  // Set the metadata flag in the next 8 bits.
   key |= static_cast<uint64_t>(metadata ? 1 : 0) << 8;
   return key;
 }

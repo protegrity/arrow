@@ -59,8 +59,6 @@ class PARQUET_EXPORT AesEncryptor : public EncryptorInterface {
 
   ~AesEncryptor();
 
-  /// Start of Encryptor Interface methods.
-
   /// Signal whether the encryptor can calculate a valid ciphertext length
   /// before performing encryption.
   [[nodiscard]] bool CanCalculateCiphertextLength() const override { return true; }
@@ -91,18 +89,14 @@ class PARQUET_EXPORT AesEncryptor : public EncryptorInterface {
                               std::span<const uint8_t> nonce,
                               std::span<uint8_t> encrypted_footer) override;
 
-  /// End of Encryptor Interface methods.
-
  private:
   // PIMPL Idiom
   class AesEncryptorImpl;
   std::unique_ptr<AesEncryptorImpl> impl_;
 };
 
-// AesEncryptor supports only three key lengths: 16, 24, 32 bytes, so at most
-// there could be up to three types of meta_encryptors and data_encryptors.
-// This factory uses a cache to
-// store the encryptors for the different key lengths.
+/// Caches AesEncryptor instances so that columns with the same algorithm, key length
+/// and metadata flag share one. The key length is one of 16, 24 or 32 bytes.
 class AesEncryptorFactory {
  public:
   AesEncryptor* GetMetaAesEncryptor(ParquetCipher::type alg_id, size_t key_size);
@@ -132,8 +126,6 @@ class PARQUET_EXPORT AesDecryptor : public DecryptorInterface {
                                             bool metadata);
 
   ~AesDecryptor();
-
-  /// Start of Decryptor Interface methods.
 
   /// Signal whether the decryptor can calculate a valid plaintext or ciphertext
   /// length before performing decryption or not. If false, a proper sized buffer
@@ -167,11 +159,9 @@ class PARQUET_EXPORT AesDecryptor : public DecryptorInterface {
         "DecryptWithManagedBuffer is not supported in AesDecryptor, use Decrypt instead");
   }
 
-  /// End of Decryptor Interface methods.
-
  private:
-  /// Get the actual ciphertext length, inclusive of the length buffer length,
-  /// and validate that the provided buffer size is large enough.
+  // Get the actual ciphertext length, inclusive of the length buffer length,
+  // and validate that the provided buffer size is large enough.
   [[nodiscard]] int32_t GetCiphertextLength(
       std::span<const uint8_t> ciphertext) const override;
 
