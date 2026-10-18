@@ -440,8 +440,8 @@ bool SerializedPageReader::ShouldSkipPage(EncodedStatistics* data_page_statistic
 
 // Built here rather than in encoding_properties.cc because format::PageHeader is a
 // thrift type that must not appear in a public header.
-// Without a column descriptor the physical type and the max levels stay unset, and
-// EncodingProperties::Builder::Build() rejects a data page built that way.
+// Without a column descriptor the physical type and the max levels stay unset;
+// ParquetPageDecoder::Decompress() rejects such properties.
 std::unique_ptr<EncodingProperties> SerializedPageReader::GetEncodingProperties(
     format::PageHeader& page_header) {
   EncodingProperties::Builder builder;

@@ -497,6 +497,11 @@ std::vector<uint8_t> ParquetPageDecoder::SplitAndDecompressDataPageV2(
 TypedColumnValues ParquetPageDecoder::Decompress(
     std::span<const uint8_t> compressed_page, const encryption::EncodingProperties& props,
     ::arrow::util::Codec* codec) {
+  if (!props.HasPhysicalType()) {
+    throw ParquetException(
+        "ParquetPageDecoder::Decompress: the cell path needs the column's physical "
+        "type, but the EncodingProperties were built without a column descriptor");
+  }
   if (!HasPlainValues(props)) {
     throw ParquetException(
         "ParquetPageDecoder::Decompress: only PLAIN value encoding is currently "

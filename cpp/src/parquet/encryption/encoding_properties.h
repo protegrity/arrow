@@ -129,6 +129,10 @@ class PARQUET_EXPORT EncodingProperties {
 
   void validate();
 
+  // False when built without a column descriptor, which leaves the physical type and
+  // the max levels unset.
+  [[nodiscard]] bool HasPhysicalType() const { return physical_type_.has_value(); }
+
   std::map<std::string, std::string> ToPropertiesMap() const;
 
   // Lightweight accessors to avoid building a map when only one field is needed.

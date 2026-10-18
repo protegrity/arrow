@@ -535,6 +535,22 @@ TEST(ParquetPageDecoderTest, DecompressRejectsUnsupportedPhysicalType) {
   EXPECT_THROW(ParquetPageDecoder::Decompress(values, *props), ParquetException);
 }
 
+// What SerializedPageReader builds when it has no column descriptor.
+TEST(ParquetPageDecoderTest, DecompressRejectsPropertiesWithoutPhysicalType) {
+  const std::vector<uint8_t> values = {1, 2, 3, 4};
+  auto props = EncodingProperties::Builder()
+                   .PageType(PageType::DATA_PAGE)
+                   .PageEncoding(Encoding::PLAIN)
+                   .CompressionCodec(::arrow::Compression::UNCOMPRESSED)
+                   .UncompressedPageSize(4)
+                   .DataPageNumValues(1)
+                   .PageV1DefinitionLevelEncoding(Encoding::RLE)
+                   .PageV1RepetitionLevelEncoding(Encoding::RLE)
+                   .Build();
+  ASSERT_FALSE(props->HasPhysicalType());
+  EXPECT_THROW(ParquetPageDecoder::Decompress(values, *props), ParquetException);
+}
+
 TEST(ParquetPageDecoderTest, DecompressBooleanValues) {
   const std::vector<bool> present_values = {true, false, true, true, false};
   std::vector<uint8_t> values = EncodeBooleanValuesPlain(present_values);
