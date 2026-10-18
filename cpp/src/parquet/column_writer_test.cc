@@ -2205,8 +2205,7 @@ class CapturingTestEncryptor : public encryption::EncryptorInterface {
 
   int32_t Encrypt(std::span<const uint8_t> /*plaintext*/,
                   std::span<const uint8_t> /*key*/, std::span<const uint8_t> /*aad*/,
-                  std::span<uint8_t> /*ciphertext*/,
-                  std::unique_ptr<encryption::EncodingProperties> /*props*/) override {
+                  std::span<uint8_t> /*ciphertext*/) override {
     throw ParquetException("Encrypt not supported");
   }
 

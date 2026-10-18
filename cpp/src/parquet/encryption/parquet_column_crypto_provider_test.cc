@@ -39,7 +39,7 @@
 
 #include "parquet/encryption/crypto_factory.h"
 #include "parquet/encryption/encoding_properties.h"
-#include "parquet/encryption/encryption_utils.h"
+#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/parquet_crypto_provider_adapter_internal.h"
 #include "parquet/encryption/test_encryption_util.h"
 #include "parquet/encryption/test_in_memory_kms.h"

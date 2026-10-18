@@ -23,7 +23,6 @@
 #include "arrow/util/secure_string.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
-#include "parquet/encryption/encryption_utils.h"
 #include "parquet/encryption/parquet_crypto_provider_adapter_internal.h"
 #include "parquet/exception.h"
 
@@ -72,10 +71,9 @@ bool Encryptor::CanCalculateCiphertextLength() const {
 }
 
 int32_t Encryptor::Encrypt(std::span<const uint8_t> plaintext,
-                           std::span<uint8_t> ciphertext,
-                           std::unique_ptr<EncodingProperties> encoding_properties) {
+                           std::span<uint8_t> ciphertext) {
   return encryptor_instance_->Encrypt(plaintext, key_.as_span(), str2span(aad_),
-                                      ciphertext, std::move(encoding_properties));
+                                      ciphertext);
 }
 
 int32_t Encryptor::EncryptWithManagedBuffer(

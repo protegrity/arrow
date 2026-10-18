@@ -1042,9 +1042,8 @@ class CapturingTestDecryptor : public parquet::encryption::DecryptorInterface {
   }
 
   int32_t Decrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> /*key*/,
-                  std::span<const uint8_t> /*aad*/, std::span<uint8_t> plaintext,
-                  std::unique_ptr<parquet::encryption::EncodingProperties>
-                      encoding_properties) override {
+                  std::span<const uint8_t> /*aad*/,
+                  std::span<uint8_t> plaintext) override {
     throw ParquetException("Decrypt not supported");
   }
 
@@ -1432,9 +1431,7 @@ class PresetPageTestDecryptor : public parquet::encryption::DecryptorInterface {
 
   int32_t Decrypt(std::span<const uint8_t> /*ciphertext*/,
                   std::span<const uint8_t> /*key*/, std::span<const uint8_t> /*aad*/,
-                  std::span<uint8_t> /*plaintext*/,
-                  std::unique_ptr<parquet::encryption::EncodingProperties>
-                  /*encoding_properties*/) override {
+                  std::span<uint8_t> /*plaintext*/) override {
     throw ParquetException("Decrypt not supported");
   }
 
@@ -1614,8 +1611,7 @@ class LengthPrefixedTestDecryptor : public parquet::encryption::DecryptorInterfa
   }
 
   int32_t Decrypt(std::span<const uint8_t>, std::span<const uint8_t>,
-                  std::span<const uint8_t>, std::span<uint8_t>,
-                  std::unique_ptr<parquet::encryption::EncodingProperties>) override {
+                  std::span<const uint8_t>, std::span<uint8_t>) override {
     throw ParquetException("Decrypt not supported");
   }
 

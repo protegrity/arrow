@@ -64,10 +64,9 @@ class PARQUET_EXPORT DecryptorInterface {
   /// Decrypt the ciphertext and leave the results in the plaintext buffer.
   /// Most implementations will require the key and aad to be provided, but it is up to
   /// each decryptor whether to use them or not.
-  virtual int32_t Decrypt(
-      std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
-      std::span<const uint8_t> aad, std::span<uint8_t> plaintext,
-      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
+  virtual int32_t Decrypt(std::span<const uint8_t> ciphertext,
+                          std::span<const uint8_t> key, std::span<const uint8_t> aad,
+                          std::span<uint8_t> plaintext) = 0;
 
   /// Decrypt the ciphertext and leave the results in the plaintext buffer.
   /// The buffer will be resized to the correct size during decryption. This method

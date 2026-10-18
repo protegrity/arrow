@@ -48,10 +48,9 @@ class PARQUET_EXPORT EncryptorInterface {
   /// Encrypt the plaintext and leave the results in the ciphertext buffer.
   /// Most implementations will require the key and aad to be provided, but it is
   /// up to each encryptor whether to use them or not.
-  virtual int32_t Encrypt(
-      std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
-      std::span<const uint8_t> aad, std::span<uint8_t> ciphertext,
-      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) = 0;
+  virtual int32_t Encrypt(std::span<const uint8_t> plaintext,
+                          std::span<const uint8_t> key, std::span<const uint8_t> aad,
+                          std::span<uint8_t> ciphertext) = 0;
 
   /// Encrypt the plaintext and leave the results in the ciphertext buffer.
   /// The buffer will be resized to the appropriate size by the encryptor during

@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <span>
+#include <string>
 #include <unordered_map>
 
 #include "parquet/encryption/decryptor_interface.h"
@@ -30,22 +31,23 @@ using parquet::ParquetCipher;
 
 namespace parquet::encryption {
 
-class PARQUET_EXPORT AesCryptoContext {
- public:
-  AesCryptoContext(ParquetCipher::type alg_id, int32_t key_len, bool metadata,
-                   bool include_length);
+constexpr int32_t kGcmTagLength = 16;
+constexpr int32_t kNonceLength = 12;
 
-  virtual ~AesCryptoContext() = default;
-
- protected:
-  int32_t aes_mode_;
-  int32_t key_length_;
-  int32_t ciphertext_size_delta_;
-  int32_t length_buffer_length_;
-};
+// Module types
+constexpr int8_t kFooter = 0;
+constexpr int8_t kColumnMetaData = 1;
+constexpr int8_t kDataPage = 2;
+constexpr int8_t kDictionaryPage = 3;
+constexpr int8_t kDataPageHeader = 4;
+constexpr int8_t kDictionaryPageHeader = 5;
+constexpr int8_t kColumnIndex = 6;
+constexpr int8_t kOffsetIndex = 7;
+constexpr int8_t kBloomFilterHeader = 8;
+constexpr int8_t kBloomFilterBitset = 9;
 
 /// Performs AES encryption operations with GCM or CTR ciphers.
-class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInterface {
+class PARQUET_EXPORT AesEncryptor : public EncryptorInterface {
  public:
   /// Can serve one key length only. Possible values: 16, 24, 32 bytes.
   /// If write_length is true, prepend ciphertext length to the ciphertext
@@ -55,7 +57,7 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
   static std::unique_ptr<AesEncryptor> Make(ParquetCipher::type alg_id, int32_t key_len,
                                             bool metadata, bool write_length = true);
 
-  ~AesEncryptor() = default;
+  ~AesEncryptor();
 
   /// Start of Encryptor Interface methods.
 
@@ -68,10 +70,8 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
 
   /// Encrypts plaintext with the key and aad. Key length is passed only for validation.
   /// If different from value in constructor, exception will be thrown.
-  int32_t Encrypt(
-      std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
-      std::span<const uint8_t> aad, std::span<uint8_t> ciphertext,
-      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
+  int32_t Encrypt(std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
+                  std::span<const uint8_t> aad, std::span<uint8_t> ciphertext) override;
 
   /// Encrypt the plaintext and leave the results in the ciphertext buffer. This method is
   /// not supported as we can calculate the ciphertext length before encryption.
@@ -94,12 +94,9 @@ class PARQUET_EXPORT AesEncryptor : public AesCryptoContext, public EncryptorInt
   /// End of Encryptor Interface methods.
 
  private:
-  int32_t GcmEncrypt(std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
-                     std::span<const uint8_t> nonce, std::span<const uint8_t> aad,
-                     std::span<uint8_t> ciphertext);
-
-  int32_t CtrEncrypt(std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
-                     std::span<const uint8_t> nonce, std::span<uint8_t> ciphertext);
+  // PIMPL Idiom
+  class AesEncryptorImpl;
+  std::unique_ptr<AesEncryptorImpl> impl_;
 };
 
 // AesEncryptor supports only three key lengths: 16, 24, 32 bytes, so at most
@@ -120,7 +117,7 @@ class AesEncryptorFactory {
 };
 
 /// Performs AES decryption operations with GCM or CTR ciphers.
-class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInterface {
+class PARQUET_EXPORT AesDecryptor : public DecryptorInterface {
  public:
   /// \brief Construct an AesDecryptor
   ///
@@ -134,7 +131,7 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
   static std::unique_ptr<AesDecryptor> Make(ParquetCipher::type alg_id, int32_t key_len,
                                             bool metadata);
 
-  ~AesDecryptor() = default;
+  ~AesDecryptor();
 
   /// Start of Decryptor Interface methods.
 
@@ -154,10 +151,8 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
   /// validation. If different from value in constructor, exception will be thrown.
   /// The caller is responsible for ensuring that the plaintext buffer is at least as
   /// large as PlaintextLength(ciphertext_len).
-  int32_t Decrypt(
-      std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
-      std::span<const uint8_t> aad, std::span<uint8_t> plaintext,
-      std::unique_ptr<EncodingProperties> encoding_properties = nullptr) override;
+  int32_t Decrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
+                  std::span<const uint8_t> aad, std::span<uint8_t> plaintext) override;
 
   /// Decrypt the ciphertext and leave the results in the plaintext buffer. This
   /// method is not supported as we can calculate the plaintext length before
@@ -180,11 +175,29 @@ class PARQUET_EXPORT AesDecryptor : public AesCryptoContext, public DecryptorInt
   [[nodiscard]] int32_t GetCiphertextLength(
       std::span<const uint8_t> ciphertext) const override;
 
-  int32_t GcmDecrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
-                     std::span<const uint8_t> aad, std::span<uint8_t> plaintext);
-
-  int32_t CtrDecrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
-                     std::span<uint8_t> plaintext);
+  // PIMPL Idiom
+  class AesDecryptorImpl;
+  std::unique_ptr<AesDecryptorImpl> impl_;
 };
+
+std::string CreateModuleAad(const std::string& file_aad, int8_t module_type,
+                            int16_t row_group_ordinal, int16_t column_ordinal,
+                            int32_t page_ordinal);
+
+std::string CreateFooterAad(const std::string& aad_prefix_bytes);
+
+// Update last two bytes of page (or page header) module AAD
+void QuickUpdatePageAad(int32_t new_page_ordinal, std::string* AAD);
+
+// Wraps OpenSSL RAND_bytes function
+void RandBytes(unsigned char* buf, size_t num);
+
+// Ensure OpenSSL is initialized.
+//
+// This is only necessary in specific situations since OpenSSL otherwise
+// initializes itself automatically. For example, under Valgrind, a memory
+// leak will be reported if OpenSSL is initialized for the first time from
+// a worker thread; calling this function from the main thread prevents this.
+void EnsureBackendInitialized();
 
 }  // namespace parquet::encryption

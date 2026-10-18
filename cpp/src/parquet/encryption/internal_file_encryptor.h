@@ -50,8 +50,7 @@ class PARQUET_EXPORT Encryptor {
   [[nodiscard]] bool CanCalculateCiphertextLength() const;
   [[nodiscard]] int32_t CiphertextLength(int64_t plaintext_len) const;
 
-  int32_t Encrypt(std::span<const uint8_t> plaintext, std::span<uint8_t> ciphertext,
-                  std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
+  int32_t Encrypt(std::span<const uint8_t> plaintext, std::span<uint8_t> ciphertext);
 
   int32_t EncryptWithManagedBuffer(
       std::span<const uint8_t> plaintext, ::arrow::ResizableBuffer* ciphertext,
@@ -129,7 +128,7 @@ class InternalFileEncryptor {
   // adapter: ctx is per-column/footer, so instances cannot be shared by (algorithm,
   // key_size) the way AesEncryptor is. Callers already resolved parquet_crypto_provider
   // via GetExternalDispatchInfo, so it isn't re-derived here. dispatch_module_type is one
-  // of parquet::encryption's module-type constants (encryption_utils.h), used only to
+  // of parquet::encryption's module-type constants (encryption_internal.h), used only to
   // gate the adapter's cell-path routing.
   encryption::EncryptorInterface* GetParquetCryptoProviderEncryptor(
       const std::shared_ptr<ParquetCryptoProvider>& parquet_crypto_provider,

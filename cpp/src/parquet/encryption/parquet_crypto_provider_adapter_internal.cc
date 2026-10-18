@@ -22,7 +22,7 @@
 #include <utility>
 
 #include "arrow/buffer.h"
-#include "parquet/encryption/encryption_utils.h"
+#include "parquet/encryption/encryption_internal.h"
 #include "parquet/encryption/parquet_page_decoder_internal.h"
 #include "parquet/exception.h"
 

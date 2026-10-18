@@ -38,8 +38,8 @@ class PARQUET_EXPORT ParquetCryptoProviderEncryptorAdapter
     : public encryption::EncryptorInterface {
  public:
   /// dispatch_module_type is one of parquet::encryption's module-type constants
-  /// (encryption_utils.h) -- the same values CreateModuleAad() uses. Fixed once for this
-  /// adapter's lifetime (one instance per column or footer); used only to gate
+  /// (encryption_internal.h) -- the same values CreateModuleAad() uses. Fixed once for
+  /// this adapter's lifetime (one instance per column or footer); used only to gate
   /// UseCellPath().
   ParquetCryptoProviderEncryptorAdapter(std::shared_ptr<ParquetCryptoProvider> provider,
                                         ParquetCryptoContext ctx,
@@ -60,9 +60,7 @@ class PARQUET_EXPORT ParquetCryptoProviderEncryptorAdapter
 
   /// Unreachable for the same reason as CiphertextLength().
   int32_t Encrypt(std::span<const uint8_t> plaintext, std::span<const uint8_t> key,
-                  std::span<const uint8_t> aad, std::span<uint8_t> ciphertext,
-                  std::unique_ptr<encryption::EncodingProperties> encoding_properties =
-                      nullptr) override {
+                  std::span<const uint8_t> aad, std::span<uint8_t> ciphertext) override {
     throw ParquetException(
         "ParquetCryptoProviderEncryptorAdapter::Encrypt is unreachable: Arrow only calls "
         "the "
@@ -160,9 +158,7 @@ class PARQUET_EXPORT ParquetCryptoProviderDecryptorAdapter
 
   /// Unreachable for the same reason as PlaintextLength().
   int32_t Decrypt(std::span<const uint8_t> ciphertext, std::span<const uint8_t> key,
-                  std::span<const uint8_t> aad, std::span<uint8_t> plaintext,
-                  std::unique_ptr<encryption::EncodingProperties> encoding_properties =
-                      nullptr) override {
+                  std::span<const uint8_t> aad, std::span<uint8_t> plaintext) override {
     throw ParquetException(
         "ParquetCryptoProviderDecryptorAdapter::Decrypt is unreachable: Arrow only "
         "calls the pre-allocated-buffer path when CanCalculateLengths() is true");

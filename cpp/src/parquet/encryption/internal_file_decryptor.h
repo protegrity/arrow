@@ -54,8 +54,7 @@ class PARQUET_EXPORT Decryptor {
   [[nodiscard]] int32_t PlaintextLength(int32_t ciphertext_len) const;
   [[nodiscard]] int32_t CiphertextLength(int32_t plaintext_len) const;
   [[nodiscard]] int32_t GetCiphertextLength(std::span<const uint8_t> ciphertext) const;
-  int32_t Decrypt(std::span<const uint8_t> ciphertext, std::span<uint8_t> plaintext,
-                  std::unique_ptr<EncodingProperties> encoding_properties = nullptr);
+  int32_t Decrypt(std::span<const uint8_t> ciphertext, std::span<uint8_t> plaintext);
   int32_t DecryptWithManagedBuffer(
       std::span<const uint8_t> ciphertext, ::arrow::ResizableBuffer* plaintext,
       std::unique_ptr<EncodingProperties> encoding_properties = nullptr,

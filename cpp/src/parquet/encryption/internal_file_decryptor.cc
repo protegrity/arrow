@@ -24,7 +24,6 @@
 #include "arrow/util/secure_string.h"
 #include "parquet/encryption/encryption.h"
 #include "parquet/encryption/encryption_internal.h"
-#include "parquet/encryption/encryption_utils.h"
 #include "parquet/encryption/parquet_crypto_provider_adapter_internal.h"
 #include "parquet/exception.h"
 #include "parquet/metadata.h"
@@ -85,10 +84,9 @@ int32_t Decryptor::GetCiphertextLength(std::span<const uint8_t> ciphertext) cons
 }
 
 int32_t Decryptor::Decrypt(std::span<const uint8_t> ciphertext,
-                           std::span<uint8_t> plaintext,
-                           std::unique_ptr<EncodingProperties> encoding_properties) {
+                           std::span<uint8_t> plaintext) {
   return decryptor_instance_->Decrypt(ciphertext, key_.as_span(), str2span(aad_),
-                                      plaintext, std::move(encoding_properties));
+                                      plaintext);
 }
 
 int32_t Decryptor::DecryptWithManagedBuffer(

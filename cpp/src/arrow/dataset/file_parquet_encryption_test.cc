@@ -40,7 +40,7 @@
 #include "arrow/util/thread_pool.h"
 #include "parquet/arrow/reader.h"
 #include "parquet/encryption/crypto_factory.h"
-#include "parquet/encryption/encryption_utils.h"  // for EnsureBackendInitialized
+#include "parquet/encryption/encryption_internal.h"  // for EnsureBackendInitialized
 #include "parquet/encryption/kms_client.h"
 #include "parquet/encryption/test_in_memory_kms.h"
 #include "parquet/encryption/test_mock_crypto_providers.h"
