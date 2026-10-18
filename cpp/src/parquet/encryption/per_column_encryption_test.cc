@@ -332,6 +332,72 @@ TEST_F(PerColumnEncryption, PlaintextFooterRecordsConfiguredFileAlgorithm) {
   }
 }
 
+// Data columns that use different AES algorithms, with keys of the same length, must each
+// be encrypted by an encryptor for their own algorithm: sharing one by key length alone
+// would write a column in the wrong mode and it would fail to decrypt.
+TEST_F(PerColumnEncryption, MixedAesAlgorithmsSameKeyLengthWriteRead) {
+  for (auto file_algorithm :
+       {parquet::ParquetCipher::AES_GCM_V1, parquet::ParquetCipher::AES_GCM_CTR_V1}) {
+    const auto column_algorithm = file_algorithm == parquet::ParquetCipher::AES_GCM_V1
+                                      ? parquet::ParquetCipher::AES_GCM_CTR_V1
+                                      : parquet::ParquetCipher::AES_GCM_V1;
+    SCOPED_TRACE("file algorithm " + std::to_string(static_cast<int>(file_algorithm)));
+    ASSERT_EQ(kColumnEncryptionKey1.size(), kColumnEncryptionKey2.size());
+
+    // double_field overrides the file algorithm; float_field follows it.
+    parquet::ColumnEncryptionProperties::Builder col_builder_double(kDoubleFieldName);
+    parquet::ColumnEncryptionProperties::Builder col_builder_float(kFloatFieldName);
+    col_builder_double.key(kColumnEncryptionKey1)
+        ->key_id("kc1")
+        ->parquet_cipher(column_algorithm);
+    col_builder_float.key(kColumnEncryptionKey2)->key_id("kc2");
+    std::map<std::string, std::shared_ptr<parquet::ColumnEncryptionProperties>>
+        encryption_cols;
+    encryption_cols[kDoubleFieldName] = col_builder_double.build();
+    encryption_cols[kFloatFieldName] = col_builder_float.build();
+
+    parquet::FileEncryptionProperties::Builder file_encryption_builder(
+        kFooterEncryptionKey);
+    const std::string file_path = temp_dir_->path().ToString() + "mixed_aes_algorithms_" +
+                                  std::to_string(static_cast<int>(file_algorithm)) +
+                                  ".parquet.encrypted";
+    encryptor_.EncryptFile(file_path, file_encryption_builder.footer_key_metadata("kf")
+                                          ->encrypted_columns(encryption_cols)
+                                          ->algorithm(file_algorithm)
+                                          ->build());
+
+    auto retriever = std::make_shared<parquet::StringKeyIdRetriever>();
+    retriever->PutKey("kf", kFooterEncryptionKey);
+    retriever->PutKey("kc1", kColumnEncryptionKey1);
+    retriever->PutKey("kc2", kColumnEncryptionKey2);
+    parquet::FileDecryptionProperties::Builder dec_builder;
+    auto dec_props = dec_builder.key_retriever(retriever)->build();
+
+    // Only the overriding column records its own algorithm.
+    {
+      PARQUET_ASSIGN_OR_THROW(auto source, ::arrow::io::ReadableFile::Open(file_path));
+      auto reader_properties = parquet::default_reader_properties();
+      reader_properties.file_decryption_properties(dec_props);
+      auto file_reader = parquet::ParquetFileReader::Open(source, reader_properties);
+      auto file_md = file_reader->metadata();
+      auto double_md = file_md->RowGroup(0)->ColumnChunk(
+          file_md->schema()->ColumnIndex(kDoubleFieldName));
+      auto float_md = file_md->RowGroup(0)->ColumnChunk(
+          file_md->schema()->ColumnIndex(kFloatFieldName));
+      ASSERT_NE(double_md->crypto_metadata(), nullptr);
+      ASSERT_NE(float_md->crypto_metadata(), nullptr);
+      ASSERT_TRUE(double_md->crypto_metadata()->is_encryption_algorithm_set());
+      EXPECT_EQ(column_algorithm,
+                double_md->crypto_metadata()->encryption_algorithm().algorithm);
+      EXPECT_FALSE(float_md->crypto_metadata()->is_encryption_algorithm_set());
+      file_reader->Close();
+    }
+
+    EXPECT_NO_THROW(decryptor_.DecryptFile(file_path, dec_props));
+    EXPECT_NO_THROW(decryptor_.DecryptPageIndex(file_path, dec_props));
+  }
+}
+
 // A column with its own EXTERNAL_PROTECT_V1 cipher in a plaintext-footer file records
 // that algorithm in its ColumnCryptoMetaData, together with the file-wide AAD fields,
 // while the file-level algorithm stays the one configured for the file.
