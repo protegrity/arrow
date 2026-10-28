@@ -157,6 +157,7 @@ install_headers(
         'ree_util.h',
         'regex.h',
         'rows_to_batches.h',
+        'secure_string.h',
         'simd.h',
         'small_vector.h',
         'string_util.h',

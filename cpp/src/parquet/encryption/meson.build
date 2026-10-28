@@ -18,7 +18,10 @@
 install_headers(
     [
         'crypto_factory.h',
+        'decryptor_interface.h',
+        'encoding_properties.h',
         'encryption.h',
+        'encryptor_interface.h',
         'file_key_material_store.h',
         'file_key_unwrapper.h',
         'file_key_wrapper.h',
@@ -30,10 +33,13 @@ install_headers(
         'kms_client_factory.h',
         'kms_client.h',
         'local_wrap_kms_client.h',
+        'parquet_crypto_provider.h',
         'test_encryption_util.h',
         'test_in_memory_kms.h',
+        'test_mock_crypto_providers.h',
         'two_level_cache_with_expiration.h',
         'type_fwd.h',
+        'typed_column_values.h',
     ],
     subdir: 'parquet/encryption',
 )
