@@ -188,6 +188,12 @@ InternalFileEncryptor::InternalFileEncryptor::GetColumnEncryptor(
   if (!metadata) {
     // Column data encryption might specify a different algorithm
     if (column_prop->parquet_cipher().has_value()) {
+      // A footer-key column is read back with the file-level algorithm.
+      if (column_prop->is_encrypted_with_footer_key()) {
+        throw ParquetException("Column [" + column_path +
+                               "] is encrypted with the footer key, so it cannot set "
+                               "its own cipher");
+      }
       algorithm = column_prop->parquet_cipher().value();
     }
   }

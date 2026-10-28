@@ -525,6 +525,102 @@ TEST_F(PerColumnEncryption, FileLevelExternalWithGcmCtrAndExternalColumns) {
   }
 }
 
+// A footer-key column that sets its own cipher would be written with that cipher but read
+// back with the file-level one, so writing it throws, for both property classes.
+TEST_F(PerColumnEncryption, CipherOnFooterKeyColumnIsRejectedOnWrite) {
+  for (auto file_algorithm :
+       {parquet::ParquetCipher::AES_GCM_V1, parquet::ParquetCipher::AES_GCM_CTR_V1}) {
+    for (auto column_cipher :
+         {parquet::ParquetCipher::AES_GCM_V1, parquet::ParquetCipher::AES_GCM_CTR_V1}) {
+      SCOPED_TRACE("file " + std::to_string(static_cast<int>(file_algorithm)) +
+                   ", column " + std::to_string(static_cast<int>(column_cipher)));
+      ColumnPropertiesMap columns;
+      // No key and no key metadata: encrypted with the footer key.
+      columns[kDoubleFieldName] =
+          parquet::ColumnEncryptionProperties::Builder(kDoubleFieldName)
+              .parquet_cipher(column_cipher)
+              ->build();
+      const std::string file_path =
+          temp_dir_->path().ToString() + "cipher_on_footer_key_column.parquet.encrypted";
+
+      parquet::FileEncryptionProperties::Builder plain_builder(kFooterEncryptionKey);
+      auto plain_properties = plain_builder.footer_key_metadata("kf")
+                                  ->encrypted_columns(columns)
+                                  ->algorithm(file_algorithm)
+                                  ->build();
+      EXPECT_THAT(
+          [&] { encryptor_.EncryptFile(file_path, plain_properties); },
+          ::testing::ThrowsMessage<ParquetException>(::testing::HasSubstr("footer key")));
+
+      auto external_properties = MakeExternalFileProperties(
+          columns, file_algorithm, std::make_shared<XorBlockCryptoProvider>());
+      EXPECT_THAT(
+          [&] { encryptor_.EncryptFile(file_path, external_properties); },
+          ::testing::ThrowsMessage<ParquetException>(::testing::HasSubstr("footer key")));
+    }
+  }
+}
+
+// With an AES file algorithm and the low-level properties, a column encrypted with the
+// footer key can sit next to a column with its own key and a provider column. The
+// provider only ever sees the provider column.
+TEST_F(PerColumnEncryption, FooterKeyAesColumnNextToExternalColumn) {
+  for (auto algorithm :
+       {parquet::ParquetCipher::AES_GCM_V1, parquet::ParquetCipher::AES_GCM_CTR_V1}) {
+    for (bool plaintext_footer : {false, true}) {
+      SCOPED_TRACE(std::string(algorithm == parquet::ParquetCipher::AES_GCM_V1
+                                   ? "AES_GCM_V1"
+                                   : "AES_GCM_CTR_V1") +
+                   (plaintext_footer ? ", plaintext footer" : ", encrypted footer"));
+      auto provider = std::make_shared<XorBlockCryptoProvider>();
+
+      ColumnPropertiesMap columns;
+      // No key and no key metadata: encrypted with the footer key.
+      columns[kDoubleFieldName] =
+          parquet::ColumnEncryptionProperties::Builder(kDoubleFieldName).build();
+      columns[kFloatFieldName] =
+          MakeAesColumn(kFloatFieldName, kColumnEncryptionKey2, "kc2");
+      columns[kBooleanFieldName] =
+          MakeExternalColumn(kBooleanFieldName, kColumnEncryptionKey1, "kc3");
+
+      const std::string file_path =
+          temp_dir_->path().ToString() + "footer_key_aes_next_to_external_" +
+          std::to_string(static_cast<int>(algorithm)) +
+          (plaintext_footer ? "_plaintext" : "_encrypted") + ".parquet.encrypted";
+      encryptor_.EncryptFile(
+          file_path,
+          MakeExternalFileProperties(columns, algorithm, provider, plaintext_footer));
+
+      auto dec_props = MakeExternalDecryption(provider);
+      {
+        auto file_reader = OpenEncryptedFile(file_path, dec_props);
+        auto file_md = file_reader->metadata();
+        auto crypto_md = [&](const char* column_name) {
+          const int column_index = file_md->schema()->ColumnIndex(column_name);
+          return file_md->RowGroup(0)->ColumnChunk(column_index)->crypto_metadata();
+        };
+        ASSERT_NE(crypto_md(kDoubleFieldName), nullptr);
+        EXPECT_TRUE(crypto_md(kDoubleFieldName)->encrypted_with_footer_key());
+        ASSERT_NE(crypto_md(kFloatFieldName), nullptr);
+        EXPECT_FALSE(crypto_md(kFloatFieldName)->encrypted_with_footer_key());
+        EXPECT_FALSE(crypto_md(kFloatFieldName)->is_encryption_algorithm_set());
+        ASSERT_NE(crypto_md(kBooleanFieldName), nullptr);
+        ASSERT_TRUE(crypto_md(kBooleanFieldName)->is_encryption_algorithm_set());
+        EXPECT_EQ(parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
+                  crypto_md(kBooleanFieldName)->encryption_algorithm().algorithm);
+        file_reader->Close();
+      }
+
+      EXPECT_NO_THROW(decryptor_.DecryptFile(file_path, dec_props));
+      EXPECT_NO_THROW(decryptor_.DecryptPageIndex(file_path, dec_props));
+
+      std::set<std::string> paths;
+      for (const auto& ctx : provider->seen_contexts()) paths.insert(ctx.column_path);
+      EXPECT_EQ(std::set<std::string>{kBooleanFieldName}, paths);
+    }
+  }
+}
+
 // The provider must only ever see the column that opted in to EXTERNAL_PROTECT_V1,
 // never the AES columns next to it, and the file-level algorithm may be AES_GCM_V1
 // (the CryptoFactory default) as well as AES_GCM_CTR_V1.

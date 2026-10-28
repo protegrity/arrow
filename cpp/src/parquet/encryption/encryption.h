@@ -136,6 +136,8 @@ class PARQUET_EXPORT ColumnEncryptionProperties {
     /// This field is declared as optional, present when per column encryption was
     /// used. If the value is not set, then the ParquetCipher declared in the
     /// FileEncryptionProperties will be used.
+    /// Not allowed for a column encrypted with the footer key (no key set); writing
+    /// such a file throws, because a reader would use the file-level cipher.
     Builder* parquet_cipher(ParquetCipher::type parquet_cipher);
 
     std::shared_ptr<ColumnEncryptionProperties> build() {
