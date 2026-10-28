@@ -70,6 +70,13 @@ std::shared_ptr<parquet::ColumnEncryptionProperties> MakeExternalColumn(
       ->build();
 }
 
+std::shared_ptr<parquet::ColumnEncryptionProperties> MakeAesColumnWithCipher(
+    const std::string& name, const ::arrow::util::SecureString& key,
+    const std::string& key_id, parquet::ParquetCipher::type cipher) {
+  parquet::ColumnEncryptionProperties::Builder builder(name);
+  return builder.key(key)->key_id(key_id)->parquet_cipher(cipher)->build();
+}
+
 // double and float use AES; `external_column` is routed to the provider.
 ColumnPropertiesMap MakeMixedColumns(const std::string& external_column) {
   auto make = [&](const char* name, const ::arrow::util::SecureString& key,
@@ -448,6 +455,73 @@ TEST_F(PerColumnEncryption, PlaintextFooterPerColumnExternalRecordsAlgorithmAndA
     EXPECT_NO_THROW(decryptor_.DecryptFile(file_path, dec_props));
     EXPECT_NO_THROW(decryptor_.DecryptPageIndex(file_path, dec_props));
     EXPECT_GT(provider->decrypt_block_calls(), 0);
+  }
+}
+
+// With a file-level EXTERNAL_PROTECT_V1, a column that sets its own AES cipher encrypts
+// its data pages itself and records that cipher; the footer and every column's metadata
+// still go to the provider. This holds for an encrypted and a plaintext footer.
+TEST_F(PerColumnEncryption, FileLevelExternalWithGcmCtrAndExternalColumns) {
+  for (bool plaintext_footer : {false, true}) {
+    SCOPED_TRACE(plaintext_footer ? "plaintext footer" : "encrypted footer");
+    auto provider = std::make_shared<XorBlockCryptoProvider>();
+
+    ColumnPropertiesMap columns;
+    columns[kDoubleFieldName] =
+        MakeAesColumnWithCipher(kDoubleFieldName, kColumnEncryptionKey1, "kc1",
+                                parquet::ParquetCipher::AES_GCM_V1);
+    columns[kFloatFieldName] =
+        MakeAesColumnWithCipher(kFloatFieldName, kColumnEncryptionKey2, "kc2",
+                                parquet::ParquetCipher::AES_GCM_CTR_V1);
+    columns[kBooleanFieldName] =
+        MakeExternalColumn(kBooleanFieldName, kColumnEncryptionKey1, "kc3");
+
+    const std::string file_path =
+        temp_dir_->path().ToString() + "file_level_external_gcm_ctr_external_" +
+        (plaintext_footer ? "plaintext" : "encrypted") + ".parquet.encrypted";
+    encryptor_.EncryptFile(
+        file_path,
+        MakeExternalFileProperties(columns, parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
+                                   provider, plaintext_footer));
+
+    auto dec_props = MakeExternalDecryption(provider);
+    {
+      auto file_reader = OpenEncryptedFile(file_path, dec_props);
+      auto file_md = file_reader->metadata();
+      EXPECT_EQ(plaintext_footer, file_md->is_encryption_algorithm_set());
+      if (plaintext_footer) {
+        EXPECT_EQ(parquet::ParquetCipher::EXTERNAL_PROTECT_V1,
+                  file_md->encryption_algorithm().algorithm);
+      }
+
+      const std::pair<const char*, parquet::ParquetCipher::type> expected[] = {
+          {kDoubleFieldName, parquet::ParquetCipher::AES_GCM_V1},
+          {kFloatFieldName, parquet::ParquetCipher::AES_GCM_CTR_V1},
+          {kBooleanFieldName, parquet::ParquetCipher::EXTERNAL_PROTECT_V1}};
+      for (const auto& [column_name, cipher] : expected) {
+        const int column_index = file_md->schema()->ColumnIndex(column_name);
+        ASSERT_GE(column_index, 0) << column_name;
+        auto crypto_md =
+            file_md->RowGroup(0)->ColumnChunk(column_index)->crypto_metadata();
+        ASSERT_NE(crypto_md, nullptr) << column_name;
+        ASSERT_TRUE(crypto_md->is_encryption_algorithm_set()) << column_name;
+        EXPECT_EQ(cipher, crypto_md->encryption_algorithm().algorithm) << column_name;
+      }
+      file_reader->Close();
+    }
+
+    EXPECT_NO_THROW(decryptor_.DecryptFile(file_path, dec_props));
+    EXPECT_NO_THROW(decryptor_.DecryptPageIndex(file_path, dec_props));
+
+    // All three columns' metadata reach the provider, and so does an encrypted footer
+    // (empty column path). A signed footer goes through SignFooter(), which has no
+    // context to record.
+    std::set<std::string> paths;
+    for (const auto& ctx : provider->seen_contexts()) paths.insert(ctx.column_path);
+    EXPECT_EQ(plaintext_footer ? 0u : 1u, paths.count(""));
+    EXPECT_EQ(1u, paths.count(kDoubleFieldName));
+    EXPECT_EQ(1u, paths.count(kFloatFieldName));
+    EXPECT_EQ(1u, paths.count(kBooleanFieldName));
   }
 }
 

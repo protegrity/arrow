@@ -2217,6 +2217,7 @@ class FileMetaDataBuilder::FileMetaDataBuilderImpl {
       if (!algo.aad.supply_aad_prefix) {
         signing_algorithm.aad.aad_prefix = algo.aad.aad_prefix;
       }
+      // File algorithm, not the signing cipher: readers pick the page cipher from it.
       signing_algorithm.algorithm = algo.algorithm;
 
       metadata_->__set_encryption_algorithm(ToThrift(signing_algorithm));
